@@ -1,14 +1,13 @@
 /*!
- * Liamvtrade — Service Worker & Offline Cache Controller (v2.5)
+ * Liamvtrade — Service Worker & Offline Cache Controller v2.6
  * Copyright (c) 2026 Ilham Maulana Nur Al Rasyid (@xliamvr)
  * Package ID: com.xliamvr.trade — All Rights Reserved.
  */
 
-const CACHE_NAME = 'liamvtrade-v2.5';
-const ASSETS = [
+const CACHE_NAME = 'liamvtrade-cache-v2.6';
+const CORE_ASSETS = [
   './',
   './index.html',
-  './style.css',
   './methods.js',
   './news.js',
   './app.js',
@@ -16,44 +15,78 @@ const ASSETS = [
 ];
 
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
-  );
   self.skipWaiting();
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS)).catch(() => {})
+  );
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(
-        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+    caches
+      .keys()
+      .then((keys) =>
+        Promise.all(
+          keys.map((key) => {
+            if (key !== CACHE_NAME) {
+              return caches.delete(key);
+            }
+          })
+        )
       )
-    )
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
 self.addEventListener('fetch', (event) => {
-  if (event.request.method !== 'GET') return;
+  const req = event.request;
+  if (req.method !== 'GET') return;
+
+  const url = new URL(req.url);
+
+  // Jangan cache API live market, news, atau Supabase
+  if (
+    url.hostname.includes('twelvedata.com') ||
+    url.hostname.includes('cryptocompare.com') ||
+    url.hostname.includes('coingecko.com') ||
+    url.hostname.includes('supabase.co') ||
+    url.hostname.includes('telegram.org')
+  ) {
+    return;
+  }
+
+  // Network-first untuk HTML & JS lokal agar update v2.6 langsung muncul
+  if (url.origin === self.location.origin) {
+    event.respondWith(
+      fetch(req)
+        .then((networkRes) => {
+          const clone = networkRes.clone();
+          caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+          return networkRes;
+        })
+        .catch(() => caches.match(req))
+    );
+    return;
+  }
+
+  // Cache-first untuk font & aset eksternal
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        const clone = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
-        return response;
-      })
-      .catch(() => caches.match(event.request))
+    caches.match(req).then((cached) => cached || fetch(req))
   );
 });
 
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
       for (const client of clientList) {
-        if ('focus' in client) return client.focus();
+        if ('focus' in client) {
+          return client.focus();
+        }
       }
-      if (clients.openWindow) return clients.openWindow('./index.html');
+      if (self.clients.openWindow) {
+        return self.clients.openWindow('./index.html');
+      }
     })
   );
 });
