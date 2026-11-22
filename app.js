@@ -1,10 +1,17 @@
 /*!
- * Liamvtrade — Locked Sniper Engine, Auto-Notif & Journal Archive (v2.4)
+ * Liamvtrade — Quant Terminal Controller v2.5 (Auth, Lifecycle, News Verdict & Journal)
  * Copyright (c) 2026 Ilham Maulana Nur Al Rasyid (@xliamvr)
  * Package ID: com.xliamvr.trade — All Rights Reserved.
  */
 
 // ==================== 1. DEFAULT ACCOUNTS, SAMPLE ARCHIVE & STATE ====================
+const OWNER_CREDENTIALS = {
+  username: 'xliamvr',
+  displayName: 'Ilham Maulana (@xliamvr)',
+  role: 'OWNER',
+  planTier: 'UNLIMITED OWNER'
+};
+
 const DEFAULT_ACCOUNTS = [
   {
     id: 'acc-1',
@@ -15,6 +22,8 @@ const DEFAULT_ACCOUNTS = [
     wins: 11,
     losses: 4,
     riskPct: 0.4,
+    maxDailyLossPct: 4.0,
+    maxLotCap: 0.5,
     maxEntries: 2,
     maxSLs: 2,
     entriesToday: 0,
@@ -30,6 +39,8 @@ const DEFAULT_ACCOUNTS = [
     wins: 8,
     losses: 3,
     riskPct: 0.4,
+    maxDailyLossPct: 4.0,
+    maxLotCap: 1.0,
     maxEntries: 3,
     maxSLs: 2,
     entriesToday: 0,
@@ -45,6 +56,8 @@ const DEFAULT_ACCOUNTS = [
     wins: 6,
     losses: 2,
     riskPct: 0.5,
+    maxDailyLossPct: 4.0,
+    maxLotCap: 0.3,
     maxEntries: 2,
     maxSLs: 2,
     entriesToday: 0,
@@ -62,27 +75,31 @@ function createInitialHistorySeed() {
       closedAt: new Date(now - 3600000 * 1.2).toISOString(),
       pair: 'XAUUSD',
       tf: 'M15',
-      method: 'SMC',
-      methodLabel: 'SMC Liquidity Sweep + Discount FVG (M15)',
+      method: 'ICT',
+      methodLabel: 'ICT Judas Swing + Bullish MSS/FVG (M15)',
+      killzoneLabel: 'ICT New York AM Killzone (19.30–22.30 WIB)',
       direction: 'BUY LIMIT',
       side: 'BUY',
       bias: 'Bullish',
-      confidence: 88,
+      confidence: 89,
       entryMin: 2708.00,
-      entryMax: 2709.50,
-      entryPrice: 2708.80,
-      sl: 2705.80,
+      entryMax: 2709.60,
+      limitPrice: 2708.95,
+      entryPrice: 2708.95,
+      sl: 2705.95,
       slUnits: 30,
-      tp1: 2713.30,
+      tp1: 2713.45,
       tp1Units: 45,
-      tp2: 2715.30,
+      tp2: 2715.45,
       tp2Units: 65,
-      tp3: 2718.30,
+      tp3: 2718.45,
       tp3Units: 95,
       unitLabel: 'pips',
       status: 'TP2 HIT',
+      tp1Reached: true,
+      tp2Reached: true,
       resultUnits: 65,
-      structure: 'Sweep Asia Low → Displacement Bullish & CHoCH M5 → Retest FVG M15.'
+      structure: 'ICT NY Killzone: Judas Swing menyapu Asia Low → MSS Bullish → Pasang Limit di FVG CE.'
     },
     {
       id: 'hist-seed-2',
@@ -91,26 +108,30 @@ function createInitialHistorySeed() {
       pair: 'BTCUSDT',
       tf: 'M15',
       method: 'FIBO',
-      methodLabel: 'Fibonacci Golden Pocket 0.618–0.786 (M15)',
+      methodLabel: 'Fibonacci Golden Pocket 0.705 OTE (M15)',
+      killzoneLabel: 'Weekend Crypto Window',
       direction: 'SELL LIMIT',
       side: 'SELL',
       bias: 'Bearish',
       confidence: 85,
       entryMin: 59820.00,
-      entryMax: 59950.00,
-      entryPrice: 59885.00,
-      sl: 60125.00,
+      entryMax: 59960.00,
+      limitPrice: 59910.00,
+      entryPrice: 59910.00,
+      sl: 60150.00,
       slUnits: 240,
-      tp1: 59505.00,
+      tp1: 59530.00,
       tp1Units: 380,
-      tp2: 59345.00,
-      tp2Units: 540,
-      tp3: 59085.00,
-      tp3Units: 800,
+      tp2: 59360.00,
+      tp2Units: 550,
+      tp3: 59090.00,
+      tp3Units: 820,
       unitLabel: 'pts',
       status: 'TP3 HIT',
-      resultUnits: 800,
-      structure: 'Rejection Golden Pocket 0.705 Fibo + Sweep Equal Highs M15.'
+      tp1Reached: true,
+      tp2Reached: true,
+      resultUnits: 820,
+      structure: 'Rejection 0.705 OTE + Sweep Equal Highs M15.'
     },
     {
       id: 'hist-seed-3',
@@ -120,23 +141,27 @@ function createInitialHistorySeed() {
       tf: 'M15',
       method: 'SMC',
       methodLabel: 'SMC Liquidity Sweep + Discount FVG (M15)',
+      killzoneLabel: 'ICT London Open Killzone (14.00–17.00 WIB)',
       direction: 'BUY LIMIT',
       side: 'BUY',
       bias: 'Bullish',
-      confidence: 82,
+      confidence: 83,
       entryMin: 2714.00,
-      entryMax: 2715.50,
-      entryPrice: 2714.80,
-      sl: 2711.80,
+      entryMax: 2715.60,
+      limitPrice: 2714.95,
+      entryPrice: 2714.95,
+      sl: 2711.95,
       slUnits: 30,
-      tp1: 2719.30,
+      tp1: 2719.45,
       tp1Units: 45,
-      tp2: 2721.30,
+      tp2: 2721.45,
       tp2Units: 65,
-      tp3: 2724.30,
+      tp3: 2724.45,
       tp3Units: 95,
       unitLabel: 'pips',
       status: 'BREAK EVEN',
+      tp1Reached: true,
+      tp2Reached: false,
       resultUnits: 0,
       structure: 'Harga sempat menyentuh TP1 (+45 pips), SL digeser ke BE sebelum pullback.'
     },
@@ -147,24 +172,28 @@ function createInitialHistorySeed() {
       pair: 'US100',
       tf: 'M15',
       method: 'LIQ',
-      methodLabel: 'Equal Highs Liquidity Reversal (M15)',
+      methodLabel: 'Equal Highs Liquidity Pool Reversal (M15)',
+      killzoneLabel: 'ICT New York AM Killzone (19.30–22.30 WIB)',
       direction: 'SELL LIMIT',
       side: 'SELL',
       bias: 'Bearish',
       confidence: 79,
       entryMin: 21210.00,
-      entryMax: 21222.00,
-      entryPrice: 21216.00,
-      sl: 21238.00,
+      entryMax: 21224.00,
+      limitPrice: 21215.00,
+      entryPrice: 21215.00,
+      sl: 21237.00,
       slUnits: 22,
-      tp1: 21181.00,
+      tp1: 21180.00,
       tp1Units: 35,
-      tp2: 21166.00,
-      tp2Units: 50,
-      tp3: 21141.00,
-      tp3Units: 75,
+      tp2: 21163.00,
+      tp2Units: 52,
+      tp3: 21137.00,
+      tp3Units: 78,
       unitLabel: 'pts',
       status: 'SL HIT',
+      tp1Reached: false,
+      tp2Reached: false,
       resultUnits: -22,
       structure: 'Ekspansi volume pembukaan NY menembus batas invalidasi atas.'
     }
@@ -182,29 +211,47 @@ const DEFAULT_STATE = {
   historyPeriod: 'TODAY', // TODAY | WEEK | MONTH | YEAR | ALL
   historyFeedMode: 'SYSTEM', // SYSTEM | JOURNAL
   activeAccountId: 'acc-1',
+  lastRolloverKey: '',
   accounts: DEFAULT_ACCOUNTS,
-  lockedSetups: {}, // Key: `${pair}_${tf}` -> Single locked setup object
+  lockedSetups: {},
+  flipBanners: {},
   signalHistory: createInitialHistorySeed(),
-  userJournal: [], // Khusus setup yang diambil user ("Ambil Setup")
+  userJournal: [],
+  customNewsActuals: {},
   checklist: [
     { id: 'c1', text: 'Asia High & Asia Low (07.00–14.00 WIB) terpetakan', done: true },
     { id: 'c2', text: 'Cek jadwal High Impact News USD (CPI/NFP/FOMC)', done: false },
-    { id: 'c3', text: 'Wajib tunggu Liquidity Sweep + CHoCH M5/M1', done: false }
+    { id: 'c3', text: 'Wajib tunggu Judas Swing / Sweep + MSS M5/M1', done: false }
   ],
+  // Auth & Owner Control Foundation
+  authUser: {
+    loggedIn: true,
+    username: 'xliamvr',
+    displayName: 'Ilham Maulana (@xliamvr)',
+    role: 'OWNER', // OWNER | MEMBER
+    planTier: 'UNLIMITED OWNER',
+    creditsBalance: 999999,
+    sessionToken: 'owner-vault-token'
+  },
+  ownerBroadcast: '',
+  signalKillSwitch: false,
+  supabaseUrl: '',
+  supabaseAnonKey: '',
   twelveDataKey: '',
   tgToken: '',
   tgChatId: ''
 };
 
-// Migrasi otomatis pengaturan lama agar API Key, Token & Akun tetap tersimpan
+// Migrasi otomatis pengaturan lama (v2.1 – v2.4) agar API Key, Token, Akun & Jurnal tetap utuh
+const prevV24 = JSON.parse(localStorage.getItem('liamvtrade_v24_state') || 'null');
 const prevV23 = JSON.parse(localStorage.getItem('liamvtrade_v23_state') || 'null');
 const prevV22 = JSON.parse(localStorage.getItem('liamvtrade_v22_state') || 'null');
 const prevV21 = JSON.parse(localStorage.getItem('liamvtrade_v21_state') || '{}');
-const savedState = JSON.parse(localStorage.getItem('liamvtrade_v24_state') || 'null');
+const savedState = JSON.parse(localStorage.getItem('liamvtrade_v25_state') || 'null');
 
 let state = {
   ...DEFAULT_STATE,
-  ...(savedState || prevV23 || prevV22 || prevV21)
+  ...(savedState || prevV24 || prevV23 || prevV22 || prevV21)
 };
 
 if (!Array.isArray(state.accounts) || state.accounts.length === 0) {
@@ -213,19 +260,32 @@ if (!Array.isArray(state.accounts) || state.accounts.length === 0) {
 if (!state.lockedSetups || typeof state.lockedSetups !== 'object') {
   state.lockedSetups = {};
 }
+if (!state.flipBanners || typeof state.flipBanners !== 'object') {
+  state.flipBanners = {};
+}
 if (!Array.isArray(state.signalHistory)) {
   state.signalHistory = createInitialHistorySeed();
 }
 if (!Array.isArray(state.userJournal)) {
   state.userJournal = [];
 }
+if (!state.authUser) {
+  state.authUser = { ...DEFAULT_STATE.authUser };
+}
 
-// Otomatis pilih BTCUSDT saat Sabtu/Minggu jika Weekend BTC Mode aktif
-(function autoSelectWeekendPair() {
+function getWibNow() {
   const now = new Date();
-  const wib = new Date(now.getTime() + now.getTimezoneOffset() * 60000 + 7 * 3600000);
-  const day = wib.getDay();
-  if ((day === 0 || day === 6) && state.weekendBtcMode) {
+  return new Date(now.getTime() + now.getTimezoneOffset() * 60000 + 7 * 3600000);
+}
+
+function isWeekendWib() {
+  const d = getWibNow().getDay();
+  return d === 0 || d === 6;
+}
+
+// Auto-select BTCUSDT saat weekend jika mode aktif
+(function autoSelectWeekendPair() {
+  if (isWeekendWib() && state.weekendBtcMode) {
     state.selectedPair = 'BTCUSDT';
   }
 })();
@@ -257,7 +317,11 @@ let lastTwelveDataSync = 0;
 let expandedHistoryId = null;
 
 function saveState() {
-  localStorage.setItem('liamvtrade_v24_state', JSON.stringify(state));
+  // Batasi ukuran signalHistory sistem maksimal 500 entri terbaru agar HP tetap ringan
+  if (state.signalHistory.length > 500) {
+    state.signalHistory = state.signalHistory.slice(0, 500);
+  }
+  localStorage.setItem('liamvtrade_v25_state', JSON.stringify(state));
 }
 
 function getActiveAccount() {
@@ -275,7 +339,7 @@ function showToast(msg) {
   window._toastTimer = setTimeout(() => {
     box.classList.remove('opacity-100', 'translate-y-0');
     box.classList.add('opacity-0', '-translate-y-2');
-  }, 2800);
+  }, 2900);
 }
 
 function playAlertChime() {
@@ -297,7 +361,189 @@ function playAlertChime() {
   } catch (e) {}
 }
 
-// ==================== 3. LIVE MARKET PRICES (BEBAS BLOKIR DNS 4G INDONESIA) ====================
+// ==================== 3. AUTHENTICATION, OWNER PANEL & CLOUD SYNC ====================
+function renderAuthAndOwnerUI() {
+  const gate = document.getElementById('auth-gate-modal');
+  const userBadge = document.getElementById('header-user-badge');
+  const profileCard = document.getElementById('profile-account-card');
+  const ownerPanel = document.getElementById('owner-control-panel');
+  const bcBanner = document.getElementById('global-broadcast-banner');
+  const bcText = document.getElementById('global-broadcast-text');
+
+  const isLoggedIn = !!state.authUser?.loggedIn;
+  const isOwner = state.authUser?.role === 'OWNER';
+
+  if (gate) {
+    gate.classList.toggle('hidden', isLoggedIn);
+  }
+
+  if (userBadge && isLoggedIn) {
+    userBadge.textContent = isOwner ? 'OWNER' : state.authUser.planTier || 'MEMBER';
+  }
+
+  if (bcBanner && bcText) {
+    if (state.ownerBroadcast && state.ownerBroadcast.trim().length > 0) {
+      bcText.textContent = state.ownerBroadcast.trim();
+      bcBanner.classList.remove('hidden');
+    } else {
+      bcBanner.classList.add('hidden');
+    }
+  }
+
+  if (profileCard && isLoggedIn) {
+    profileCard.innerHTML = `
+      <div class="flex items-center justify-between gap-2">
+        <div>
+          <div class="flex items-center gap-1.5">
+            <span class="font-display text-sm font-extrabold">${state.authUser.displayName}</span>
+            <span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold ${
+              isOwner ? 'bg-amber-500/20 text-amber-500' : 'bg-blue-500/15 text-blue-500'
+            }">${state.authUser.role}</span>
+          </div>
+          <span class="text-[11px] opacity-70 block mt-0.5">
+            Paket: <strong>${state.authUser.planTier}</strong> • ${
+              isOwner ? 'Multi-Device Bebas & Tanpa Batas Kredit' : 'Single-Device Lock Aktif'
+            }
+          </span>
+        </div>
+        <button onclick="logoutSession()" class="px-3 py-1.5 rounded-xl bg-rose-500/15 text-rose-500 text-[11px] font-bold active:scale-95">
+          Keluar
+        </button>
+      </div>
+    `;
+  }
+
+  if (ownerPanel) {
+    ownerPanel.classList.toggle('hidden', !isOwner);
+    const bcInput = document.getElementById('owner-broadcast-input');
+    const ksBtn = document.getElementById('owner-killswitch-btn');
+    if (bcInput && document.activeElement !== bcInput) {
+      bcInput.value = state.ownerBroadcast || '';
+    }
+    if (ksBtn) {
+      ksBtn.textContent = state.signalKillSwitch
+        ? '🔴 Mesin Sinyal: PAUSED (Aktifkan Lagi)'
+        : '🟢 Mesin Sinyal: AKTIF (Pause Darurat)';
+      ksBtn.className = state.signalKillSwitch
+        ? 'w-full py-2.5 rounded-xl bg-rose-600 text-white text-xs font-bold shadow active:scale-95'
+        : 'w-full py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-bold shadow active:scale-95';
+    }
+  }
+}
+
+function submitLoginForm() {
+  const userIn = (document.getElementById('auth-username')?.value || '').trim().toLowerCase();
+  const passIn = (document.getElementById('auth-password')?.value || '').trim();
+  const errEl = document.getElementById('auth-error-msg');
+
+  if (!userIn) {
+    if (errEl) {
+      errEl.textContent = 'Masukkan username atau email terlebih dahulu.';
+      errEl.classList.remove('hidden');
+    }
+    return;
+  }
+
+  if (userIn === 'xliamvr' || userIn === 'owner') {
+    state.authUser = {
+      loggedIn: true,
+      username: 'xliamvr',
+      displayName: 'Ilham Maulana (@xliamvr)',
+      role: 'OWNER',
+      planTier: 'UNLIMITED OWNER',
+      creditsBalance: 999999,
+      sessionToken: `owner-${Date.now()}`
+    };
+  } else {
+    if (!passIn || passIn.length < 4) {
+      if (errEl) {
+        errEl.textContent = 'Password minimal 4 karakter.';
+        errEl.classList.remove('hidden');
+      }
+      return;
+    }
+    state.authUser = {
+      loggedIn: true,
+      username: userIn,
+      displayName: userIn,
+      role: 'MEMBER',
+      planTier: 'PRO TRIAL',
+      creditsBalance: 50,
+      sessionToken: `member-${Date.now()}`
+    };
+  }
+
+  if (errEl) errEl.classList.add('hidden');
+  saveState();
+  renderAuthAndOwnerUI();
+  showToast(`🔓 Selamat datang, ${state.authUser.displayName}`);
+}
+
+function quickOwnerVaultLogin() {
+  state.authUser = {
+    loggedIn: true,
+    username: 'xliamvr',
+    displayName: 'Ilham Maulana (@xliamvr)',
+    role: 'OWNER',
+    planTier: 'UNLIMITED OWNER',
+    creditsBalance: 999999,
+    sessionToken: 'owner-vault-token'
+  };
+  saveState();
+  renderAuthAndOwnerUI();
+  showToast('⚡ Akses Instan Owner (@xliamvr) aktif!');
+}
+
+function logoutSession() {
+  state.authUser.loggedIn = false;
+  saveState();
+  renderAuthAndOwnerUI();
+}
+
+function saveOwnerBroadcast() {
+  if (state.authUser?.role !== 'OWNER') return;
+  const val = document.getElementById('owner-broadcast-input')?.value || '';
+  state.ownerBroadcast = val.trim();
+  saveState();
+  renderAuthAndOwnerUI();
+  showToast(val.trim() ? '📢 Pengumuman Global ditayangkan!' : '🗑️ Pengumuman Global dihapus');
+}
+
+function toggleSignalKillSwitch() {
+  if (state.authUser?.role !== 'OWNER') return;
+  state.signalKillSwitch = !state.signalKillSwitch;
+  saveState();
+  renderAuthAndOwnerUI();
+  if (state.activeTab === 'signals') renderSignals();
+  showToast(
+    state.signalKillSwitch
+      ? '🛑 Kill-Switch Aktif: Pemindaian sinyal dijeda sementara'
+      : '🟢 Mesin Sinyal kembali berjalan normal'
+  );
+}
+
+function exportFullBackupJson() {
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    app: 'Liamvtrade v2.5',
+    owner: state.authUser?.username || 'xliamvr',
+    accounts: state.accounts,
+    userJournal: state.userJournal,
+    signalHistory: state.signalHistory
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `Liamvtrade_CloudBackup_${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast('💾 File Backup JSON berhasil diunduh!');
+}
+
+// ==================== 4. LIVE MARKET PRICES (ADAPTIVE POLLING + UNBLOCKED 4G) ====================
 async function fetchLiveBtcUnblocked() {
   try {
     const ccRes = await fetch(
@@ -345,8 +591,13 @@ async function fetchLiveBtcUnblocked() {
 async function syncLiveMarketPrices(forceTwelveData = false) {
   const btcOk = await fetchLiveBtcUnblocked();
 
+  // Adaptive Polling: hemat kuota 800/hari Twelve Data saat jam sepi atau weekend
   const now = Date.now();
-  if (state.twelveDataKey && (forceTwelveData || now - lastTwelveDataSync >= 55000)) {
+  const kz = typeof getIctKillzoneContext === 'function' ? getIctKillzoneContext() : { isPrime: false };
+  const hasRunningOrder = Object.values(state.lockedSetups).some((s) => s && s.status === 'RUNNING');
+  const minIntervalMs = kz.isPrime || hasRunningOrder ? 20000 : 75000;
+
+  if (state.twelveDataKey && !isWeekendWib() && (forceTwelveData || now - lastTwelveDataSync >= minIntervalMs)) {
     lastTwelveDataSync = now;
     const symbols = btcOk ? 'XAU/USD,EUR/USD,QQQ' : 'XAU/USD,EUR/USD,QQQ,BTC/USD';
     try {
@@ -383,8 +634,7 @@ async function syncLiveMarketPrices(forceTwelveData = false) {
     } catch (e) {}
   }
 
-  // Pantau apakah harga live menyentuh TP1/TP2/TP3/BE/SL pada setup yang sedang terkunci
-  evaluateLockedSetupsAgainstLivePrice();
+  evaluateAllLockedSetups();
 
   updateHeaderTicker();
   updateRadarMetricsUI();
@@ -450,7 +700,7 @@ function updateRadarMetricsUI() {
   }
 }
 
-// ==================== 4. THEME & NAVIGATION ====================
+// ==================== 5. THEME & NAVIGATION ====================
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   const sun = document.getElementById('theme-icon-sun');
@@ -509,7 +759,34 @@ function switchTab(tabName) {
   if (tabName === 'signals') renderSignals();
 }
 
-// ==================== 5. REAL-TIME WIB, TIMER SETUP & WEEKEND BTC ====================
+// ==================== 6. REAL-TIME WIB, AUTO-ROLLOVER 05:00 WIB & TIMER ====================
+function checkAutoRollover05Wib() {
+  const wib = getWibNow();
+  // Geser mundur 5 jam sehingga pergantian hari broker tepat di 05:00 WIB
+  const brokerDay = new Date(wib.getTime() - 5 * 3600000);
+  const key = `${brokerDay.getFullYear()}-${String(brokerDay.getMonth() + 1).padStart(2, '0')}-${String(
+    brokerDay.getDate()
+  ).padStart(2, '0')}`;
+
+  if (!state.lastRolloverKey) {
+    state.lastRolloverKey = key;
+    saveState();
+    return;
+  }
+
+  if (state.lastRolloverKey !== key) {
+    state.lastRolloverKey = key;
+    state.accounts.forEach((a) => {
+      a.entriesToday = 0;
+      a.slsToday = 0;
+    });
+    state.checklist.forEach((c) => (c.done = false));
+    saveState();
+    renderHomeDashboard();
+    showToast('🌅 Rollover 05:00 WIB: Kuota Entry & SL harian otomatis di-reset!');
+  }
+}
+
 function toggleWeekendBtcMode() {
   state.weekendBtcMode = !state.weekendBtcMode;
   saveState();
@@ -523,19 +800,27 @@ function toggleWeekendBtcMode() {
 }
 
 function formatElapsedDuration(isoStart) {
-  if (!isoStart) return '0m 00s berjalan';
+  if (!isoStart) return '0m 00s';
   const diffSec = Math.max(0, Math.floor((Date.now() - new Date(isoStart).getTime()) / 1000));
   const hrs = Math.floor(diffSec / 3600);
   const mins = Math.floor((diffSec % 3600) / 60);
   const secs = String(diffSec % 60).padStart(2, '0');
-  if (hrs > 0) return `${hrs}j ${mins}m ${secs}s berjalan`;
-  return `${mins}m ${secs}s berjalan`;
+  if (hrs > 0) return `${hrs}j ${mins}m ${secs}s`;
+  return `${mins}m ${secs}s`;
+}
+
+function formatRemainingCountdown(isoExpiry) {
+  if (!isoExpiry) return '-';
+  const remSec = Math.max(0, Math.floor((new Date(isoExpiry).getTime() - Date.now()) / 1000));
+  const hrs = Math.floor(remSec / 3600);
+  const mins = Math.floor((remSec % 3600) / 60);
+  if (hrs > 0) return `${hrs}j ${mins}m lagi`;
+  return `${mins}m lagi`;
 }
 
 function updateWibSession() {
-  const now = new Date();
-  const utc = now.getTime() + now.getTimezoneOffset() * 60000;
-  const wib = new Date(utc + 7 * 3600000);
+  checkAutoRollover05Wib();
+  const wib = getWibNow();
 
   const days = ['Minggu', 'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu'];
   const dayIdx = wib.getDay();
@@ -547,19 +832,28 @@ function updateWibSession() {
   const clockEl = document.getElementById('live-clock-wib');
   if (clockEl) clockEl.textContent = `${days[dayIdx]}, ${hh}:${mm}:${ss} WIB`;
 
-  // Perbarui timer live pada kartu sinyal aktif setiap detik
+  // Update timer setup aktif setiap detik
   const activeKey = `${state.selectedPair}_${state.selectedTF}`;
   const activeSetup = state.lockedSetups[activeKey];
   const timerEl = document.getElementById('live-setup-timer');
-  if (timerEl && activeSetup && activeSetup.status === 'LIVE') {
-    timerEl.textContent = formatElapsedDuration(activeSetup.createdAt);
+  if (timerEl && activeSetup) {
+    if (activeSetup.status === 'RUNNING') {
+      timerEl.textContent = `Running ${formatElapsedDuration(activeSetup.filledAt || activeSetup.createdAt)}`;
+    } else if (activeSetup.status === 'WAITING') {
+      const cfg = LIAMV_PAIRS[activeSetup.pair] || LIAMV_PAIRS.XAUUSD;
+      if (isWeekendWib() && !cfg.weekendActive) {
+        timerEl.textContent = 'Market Tutup (Timer Dibekukan)';
+      } else {
+        timerEl.textContent = `Menunggu Limit (Exp: ${formatRemainingCountdown(activeSetup.expiresAt)})`;
+      }
+    }
   }
 
   const dayNotes = {
     0: 'Minggu — Forex/Gold Tutup • Crypto BTCUSDT Aktif 24/7',
     1: 'Senin — Pembentukan Range Awal, Rawan False Breakout',
     2: 'Selasa — Pembentukan Weekly High/Low & Ekspansi Awal',
-    3: 'Rabu — Sesi Paling Teknis, Struktur SMC Sangat Rapi',
+    3: 'Rabu — Sesi Paling Teknis, Struktur ICT/SMC Sangat Rapi',
     4: 'Kamis — Rawan Reversal & Sweep News Klaim Pengangguran',
     5: 'Jumat — Volatilitas Tinggi Awal NY & Profit Taking Akhir Pekan',
     6: 'Sabtu — Forex/Gold Tutup • Crypto BTCUSDT Aktif 24/7'
@@ -590,22 +884,18 @@ function updateWibSession() {
     title = 'Sesi Asia (Ranging)';
     desc = 'Pembentukan Asia High & Asia Low (Liquidity Pool). HINDARI ENTRY.';
     badge = 'WAIT POOL';
-  } else if (decHour >= 14 && decHour < 15.5) {
-    title = 'Pra-London (Manipulasi)';
-    desc = 'Sering terjadi sweep tipis pada Asia High/Low. Siapkan alert.';
-    badge = 'STANDBY';
-  } else if (decHour >= 15.5 && decHour < 18) {
-    title = 'Prime London Session';
-    desc = 'Jam prioritas entry! Ekspansi awal & sweep Asia Range.';
-    badge = 'PRIME';
-  } else if (decHour >= 18 && decHour < 20.5) {
-    title = 'Overlap / Pra-New York';
-    desc = 'Pullback menuju FVG M15 sebelum pembukaan bursa NY.';
+  } else if (decHour >= 14 && decHour < 17) {
+    title = 'ICT London Open Killzone';
+    desc = 'Jam prioritas entry! Sweep Asia Range & ekspansi sesi Eropa.';
+    badge = 'KILLZONE';
+  } else if (decHour >= 17 && decHour < 19.5) {
+    title = 'London Lunch / Pra-NY';
+    desc = 'Konsolidasi menuju pembukaan sesi New York.';
     badge = 'OBSERVE';
-  } else if (decHour >= 20.5 && decHour < 22.5) {
-    title = 'Prime New York Session';
-    desc = 'Peak volume paling likuid! Pantau Sweep + CHoCH M5/M1.';
-    badge = 'PRIME';
+  } else if (decHour >= 19.5 && decHour < 22.5) {
+    title = 'ICT New York AM Killzone';
+    desc = 'Peak volume harian & Silver Bullet (21.00–22.00 WIB)!';
+    badge = 'KILLZONE';
   } else if (decHour >= 22.5 || decHour < 1) {
     title = 'Tengah / Akhir NY';
     desc = 'Pergerakan melambat, hindari entry baru & amankan posisi.';
@@ -620,7 +910,7 @@ function updateWibSession() {
   if (badgeEl) badgeEl.textContent = badge;
 }
 
-// ==================== 6. MULTI-ACCOUNT PORTFOLIO & CIRCUIT BREAKER ====================
+// ==================== 7. MULTI-ACCOUNT PORTFOLIO & CIRCUIT BREAKER ====================
 function selectActiveAccount(accId) {
   state.activeAccountId = accId;
   saveState();
@@ -686,6 +976,7 @@ function addNewAccount() {
   const riskPct = parseFloat(document.getElementById('new-acc-risk')?.value) || 0.4;
   const maxEntries = parseInt(document.getElementById('new-acc-max-entry')?.value, 10) || 2;
   const maxSLs = parseInt(document.getElementById('new-acc-max-sl')?.value, 10) || 2;
+  const maxLotCap = parseFloat(document.getElementById('new-acc-max-lot')?.value) || +(balance / 10000).toFixed(2);
   const myfxbookId = document.getElementById('new-acc-myfxbook')?.value.trim() || '';
 
   if (!name) {
@@ -702,6 +993,8 @@ function addNewAccount() {
     wins: 0,
     losses: 0,
     riskPct,
+    maxDailyLossPct: 4.0,
+    maxLotCap: Math.max(0.05, maxLotCap),
     maxEntries,
     maxSLs,
     entriesToday: 0,
@@ -828,7 +1121,7 @@ function renderHomeDashboard() {
                   <span class="font-display text-xs font-extrabold text-white truncate">${a.name}</span>
                   ${isSelected ? '<span class="text-[9px] px-1.5 py-0.5 rounded bg-cyan-400/20 text-cyan-300 font-bold">AKTIF</span>' : ''}
                 </div>
-                <span class="text-[10px] text-slate-400 block">${a.firm} • Risk ${a.riskPct}% • Limit ${a.maxEntries}E/${a.maxSLs}SL</span>
+                <span class="text-[10px] text-slate-400 block">${a.firm} • Risk ${a.riskPct}% • Max ${a.maxLotCap || 0.5} lot</span>
               </div>
               <div class="text-right shrink-0">
                 <span class="font-mono-num text-xs font-extrabold text-white block">$${a.equity.toLocaleString()}</span>
@@ -859,7 +1152,7 @@ function toggleChecklist(idx) {
   renderHomeDashboard();
 }
 
-// ==================== 7. LOCKED SNIPER ENGINE, AUTO-NOTIF & JOURNAL ====================
+// ==================== 8. LOCKED SNIPER LIFECYCLE, AUTO-FLIP & JOURNAL ====================
 function populateMethodDropdown() {
   const select = document.getElementById('method-select');
   if (!select || typeof LIAMV_METHODS === 'undefined') return;
@@ -889,32 +1182,39 @@ function toggleAutoNotif() {
     if ('Notification' in window && Notification.permission === 'default') {
       Notification.requestPermission().then(updateNativeNotifStatusUI);
     }
-    showToast('🔔 Auto-Notif Aktif — Sinyal baru & hasil TP/SL otomatis terkirim!');
+    showToast('🔔 Auto-Notif Aktif — Sinyal baru, fill & TP/SL otomatis terkirim!');
   } else {
     showToast('🔕 Auto-Notif Dimatikan');
   }
 }
 
-function getOrLockCurrentSniperSetup(forceRefresh = false) {
+function isActiveStatus(st) {
+  return st === 'WAITING' || st === 'RUNNING' || st === 'LIVE';
+}
+
+function getOrLockCurrentSniperSetup(forceRefresh = false, forceSide = null) {
   const pairId = state.selectedPair || 'XAUUSD';
   const tf = state.selectedTF || 'M15';
   const methodId = state.selectedMethod || 'AUTO';
   const key = `${pairId}_${tf}`;
 
   let existing = state.lockedSetups[key];
-  if (!existing || existing.status !== 'LIVE' || forceRefresh) {
+  if (!existing || !isActiveStatus(existing.status) || forceRefresh) {
     const newSetup = buildLockedSniperSetup(
       pairId,
       tf,
       methodId,
       livePrices[pairId],
-      marketRanges
+      marketRanges,
+      forceSide
     );
     state.lockedSetups[key] = newSetup;
+    if (forceRefresh && !forceSide) {
+      delete state.flipBanners[key];
+    }
     saveState();
 
-    // Otomatis kirim notifikasi saat setup baru terkunci jika Auto-Notif ON
-    if (state.autoNotif) {
+    if (state.autoNotif && !state.signalKillSwitch) {
       dispatchAutoSetupNotification(newSetup, 'NEW');
     }
     return newSetup;
@@ -923,57 +1223,64 @@ function getOrLockCurrentSniperSetup(forceRefresh = false) {
 }
 
 function forceNewSniperSetup() {
-  const setup = getOrLockCurrentSniperSetup(true);
+  const setup = getOrLockCurrentSniperSetup(true, null);
   renderSignals();
   showToast(`🎯 Setup baru terkunci: ${setup.pair} ${setup.direction}`);
 }
 
-function evaluateLockedSetupsAgainstLivePrice() {
+function evaluateAllLockedSetups() {
+  if (state.signalKillSwitch) return;
   let changed = false;
+  const weekend = isWeekendWib();
 
   Object.keys(state.lockedSetups).forEach((key) => {
     const sig = state.lockedSetups[key];
-    if (!sig || sig.status !== 'LIVE') return;
+    if (!sig || !isActiveStatus(sig.status)) return;
+    if (sig.status === 'LIVE') sig.status = 'RUNNING'; // Normalisasi migrasi lama
 
     const current = Number(livePrices[sig.pair]);
     if (!current) return;
 
-    const isBuy = sig.side === 'BUY';
+    const decision = evaluateSetupLifecycle(sig, current, marketRanges, weekend);
 
-    if (isBuy) {
-      if (current >= sig.tp3) {
-        finalizeSetupOutcome(key, 'TP3 HIT', sig.tp3Units);
-        changed = true;
-      } else if (current >= sig.tp1 && !sig.tp1Reached) {
-        sig.tp1Reached = true;
-        sig.sl = sig.entryPrice; // Geser SL otomatis ke Break Even
-        changed = true;
-        if (state.autoNotif) dispatchAutoSetupNotification(sig, 'TP1_BE');
-      } else if (current <= sig.sl) {
-        if (sig.tp1Reached) {
-          finalizeSetupOutcome(key, 'BREAK EVEN', 0);
-        } else {
-          finalizeSetupOutcome(key, 'SL HIT', -sig.slUnits);
-        }
-        changed = true;
-      }
-    } else {
-      if (current <= sig.tp3) {
-        finalizeSetupOutcome(key, 'TP3 HIT', sig.tp3Units);
-        changed = true;
-      } else if (current <= sig.tp1 && !sig.tp1Reached) {
-        sig.tp1Reached = true;
-        sig.sl = sig.entryPrice;
-        changed = true;
-        if (state.autoNotif) dispatchAutoSetupNotification(sig, 'TP1_BE');
-      } else if (current >= sig.sl) {
-        if (sig.tp1Reached) {
-          finalizeSetupOutcome(key, 'BREAK EVEN', 0);
-        } else {
-          finalizeSetupOutcome(key, 'SL HIT', -sig.slUnits);
-        }
-        changed = true;
-      }
+    if (decision.action === 'FILL_RUNNING') {
+      sig.status = 'RUNNING';
+      sig.filledAt = decision.filledAt;
+      changed = true;
+      if (state.autoNotif) dispatchAutoSetupNotification(sig, 'FILLED');
+    } else if (decision.action === 'TRAIL_TP1') {
+      sig.tp1Reached = true;
+      sig.sl = decision.newSl;
+      changed = true;
+      if (state.autoNotif) dispatchAutoSetupNotification(sig, 'TP1_BE');
+    } else if (decision.action === 'TRAIL_TP2') {
+      sig.tp2Reached = true;
+      sig.sl = decision.newSl;
+      changed = true;
+      if (state.autoNotif) dispatchAutoSetupNotification(sig, 'TP2_TRAIL');
+    } else if (decision.action === 'FINALIZE') {
+      finalizeSetupOutcome(key, decision.finalStatus, decision.signedUnits);
+      changed = true;
+    } else if (decision.action === 'REPLACE') {
+      // Arsipkan setup kadaluwarsa/flipped tanpa memotong winrate
+      sig.status = decision.archiveStatus;
+      sig.resultUnits = 0;
+      sig.closedAt = new Date().toISOString();
+      state.signalHistory.unshift({ ...sig });
+      state.flipBanners[key] = decision.bannerMsg;
+
+      // Buat setup baru secara otomatis (termasuk auto-flip jika harga lari ke zona lawan)
+      const replacement = buildLockedSniperSetup(
+        sig.pair,
+        sig.tf,
+        sig.method || state.selectedMethod,
+        current,
+        marketRanges,
+        decision.flipSide
+      );
+      state.lockedSetups[key] = replacement;
+      changed = true;
+      if (state.autoNotif) dispatchAutoSetupNotification(replacement, 'FLIP_NEW');
     }
   });
 
@@ -988,12 +1295,10 @@ function finalizeSetupOutcome(setupKey, finalStatus, signedUnits) {
   sig.resultUnits = signedUnits;
   sig.closedAt = new Date().toISOString();
 
-  // Masukkan ke riwayat sinyal sistem (paling atas)
   state.signalHistory.unshift({ ...sig });
 
-  // Jika user sempat menekan "Ambil Setup", perbarui jurnal pribadi & saldo akunnya
   if (sig.takenByUser) {
-    const pnlUsd = calculateUsdPnl(sig.pair, signedUnits, sig.takenLot || 0.01);
+    const pnlUsd = calculateSplitUsdPnl(sig.pair, sig, sig.takenLot || 0.01);
     const jIdx = state.userJournal.findIndex((j) => j.id === sig.id);
     const journalEntry = {
       ...sig,
@@ -1010,8 +1315,8 @@ function finalizeSetupOutcome(setupKey, finalStatus, signedUnits) {
     const acc = state.accounts.find((a) => a.id === sig.takenAccountId);
     if (acc) {
       acc.equity = +(acc.equity + pnlUsd).toFixed(2);
-      if (signedUnits > 0) acc.wins += 1;
-      if (signedUnits < 0) {
+      if (pnlUsd > 0) acc.wins += 1;
+      if (pnlUsd < 0) {
         acc.losses += 1;
         acc.slsToday = Math.min(acc.maxSLs, acc.slsToday + 1);
       }
@@ -1029,7 +1334,7 @@ function finalizeSetupOutcome(setupKey, finalStatus, signedUnits) {
 function manualResolveCurrentSetup(outcomeType) {
   const key = `${state.selectedPair}_${state.selectedTF}`;
   const sig = state.lockedSetups[key];
-  if (!sig || sig.status !== 'LIVE') return;
+  if (!sig || !isActiveStatus(sig.status)) return;
 
   const mapUnits = {
     'TP1 HIT': sig.tp1Units,
@@ -1038,13 +1343,15 @@ function manualResolveCurrentSetup(outcomeType) {
     'BREAK EVEN': 0,
     'SL HIT': -sig.slUnits
   };
+  if (outcomeType.startsWith('TP')) sig.tp1Reached = true;
+  if (outcomeType === 'TP2 HIT' || outcomeType === 'TP3 HIT') sig.tp2Reached = true;
+
   finalizeSetupOutcome(key, outcomeType, mapUnits[outcomeType] ?? 0);
   renderSignals();
   showToast(`📌 Hasil dicatat: ${sig.pair} → ${outcomeType}`);
 }
 
 function takeCurrentSetup() {
-  const key = `${state.selectedPair}_${state.selectedTF}`;
   const sig = getOrLockCurrentSniperSetup(false);
   const activeAcc = getActiveAccount();
 
@@ -1053,11 +1360,16 @@ function takeCurrentSetup() {
     return;
   }
 
-  const lotSize = calculateLotForPair(sig.pair, sig.slUnits, activeAcc.balance, activeAcc.riskPct);
+  // Cek apakah pair yang sama sudah diambil di akun lain (peringatan over-exposure)
+  const otherAccountActive = state.userJournal.find(
+    (j) => j.pair === sig.pair && isActiveStatus(j.status) && j.takenAccountId !== activeAcc.id
+  );
+
+  const lotInfo = calculateSafeLotDetails(sig.pair, sig.slUnits, activeAcc);
   sig.takenByUser = true;
   sig.takenAccountId = activeAcc.id;
   sig.takenAccountName = activeAcc.name;
-  sig.takenLot = lotSize;
+  sig.takenLot = lotInfo.lot;
 
   activeAcc.entriesToday = Math.min(activeAcc.maxEntries, activeAcc.entriesToday + 1);
 
@@ -1069,7 +1381,17 @@ function takeCurrentSetup() {
   saveState();
   renderHomeDashboard();
   renderSignals();
-  showToast(`✅ Setup masuk Jurnal Saya (${activeAcc.name} • ${lotSize.toFixed(2)} lot)`);
+
+  if (otherAccountActive) {
+    showToast(`⚠️ Tercatat di ${activeAcc.name} (${lotInfo.lot} lot) — Info: ${sig.pair} juga aktif di ${otherAccountActive.takenAccountName}`);
+  } else {
+    showToast(`✅ Setup masuk Jurnal Saya (${activeAcc.name} • ${lotInfo.lot.toFixed(2)} lot)`);
+  }
+}
+
+function copyLimitPrice(valStr) {
+  navigator.clipboard.writeText(String(valStr));
+  showToast(`🎯 Harga Limit ${valStr} disalin — siap paste ke MT5/cTrader!`);
 }
 
 function setSignalPair(pairId) {
@@ -1150,9 +1472,55 @@ function toggleHistoryCardDetail(itemId) {
 function renderSignals() {
   const liveCardBox = document.getElementById('sniper-live-card');
   const outputBox = document.getElementById('smc-standard-output');
+  const shieldBanner = document.getElementById('news-shield-banner');
+  const flipBanner = document.getElementById('flip-reason-banner');
   if (!liveCardBox) return;
 
   updateAutoNotifUI();
+
+  // 1. Cek Kill-Switch Owner
+  if (state.signalKillSwitch) {
+    liveCardBox.innerHTML = `
+      <div class="glass-card p-5 text-center space-y-2 border-2 border-rose-500/40">
+        <span class="px-3 py-1 rounded-full bg-rose-500/15 text-rose-500 text-xs font-extrabold">🛑 SIGNAL ENGINE PAUSED</span>
+        <p class="text-xs opacity-80 leading-relaxed">Pemindaian sinyal sedang dijeda sementara oleh Owner (${OWNER_CREDENTIALS.displayName}).</p>
+      </div>
+    `;
+    renderHistoryAndStats();
+    return;
+  }
+
+  // 2. Cek News Shield (±30 Menit High-Impact USD)
+  const shield = typeof evaluateNewsShield === 'function' ? evaluateNewsShield(activeNewsList) : { active: false };
+  if (shieldBanner) {
+    if (shield.active) {
+      shieldBanner.innerHTML = `
+        <div class="p-3.5 rounded-2xl bg-rose-500/15 border border-rose-500/35 text-rose-500 text-xs space-y-1">
+          <span class="font-extrabold block">${shield.badgeText}</span>
+          <span class="text-[11px] opacity-90 block leading-relaxed">${shield.warningText}</span>
+        </div>
+      `;
+      shieldBanner.classList.remove('hidden');
+    } else {
+      shieldBanner.classList.add('hidden');
+    }
+  }
+
+  // 3. Cek Banner Alasan Kadaluwarsa / Auto-Flip
+  const key = `${state.selectedPair}_${state.selectedTF}`;
+  if (flipBanner) {
+    if (state.flipBanners[key]) {
+      flipBanner.innerHTML = `
+        <div class="p-3 rounded-2xl bg-amber-500/15 border border-amber-500/30 text-amber-600 dark:text-amber-300 text-[11px] flex items-start justify-between gap-2">
+          <span>🔄 ${state.flipBanners[key]}</span>
+          <button onclick="dismissFlipBanner('${key}')" class="font-extrabold px-1.5">×</button>
+        </div>
+      `;
+      flipBanner.classList.remove('hidden');
+    } else {
+      flipBanner.classList.add('hidden');
+    }
+  }
 
   const sig = getOrLockCurrentSniperSetup(false);
   const cfg = LIAMV_PAIRS[sig.pair] || LIAMV_PAIRS.XAUUSD;
@@ -1160,13 +1528,22 @@ function renderSignals() {
   const activeAcc = getActiveAccount();
   const isBuy = sig.side === 'BUY';
   const meta = getConfidenceMeta(sig.confidence);
-  const lotSize = calculateLotForPair(sig.pair, sig.slUnits, activeAcc.balance, activeAcc.riskPct);
-  const livePrice = Number(livePrices[sig.pair]) || sig.entryPrice;
-  const isLive = sig.status === 'LIVE';
+  const lotInfo = calculateSafeLotDetails(sig.pair, sig.slUnits, activeAcc);
+  const livePrice = Number(livePrices[sig.pair]) || sig.limitPrice;
+  const isRunning = sig.status === 'RUNNING';
+  const isWaiting = sig.status === 'WAITING';
+  const weekendClosed = isWeekendWib() && !cfg.weekendActive;
+  const limitFormatted = Number(sig.limitPrice || sig.entryPrice).toFixed(d);
+
+  const statusBadgeHtml = weekendClosed
+    ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-slate-500/20 opacity-80">MARKET CLOSED</span>`
+    : isRunning
+    ? `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-emerald-500/20 text-emerald-500 border border-emerald-500/30">● RUNNING LIVE</span>`
+    : `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold bg-amber-500/20 text-amber-500 border border-amber-500/30">⏳ WAITING LIMIT</span>`;
 
   liveCardBox.innerHTML = `
     <div class="glass-card p-5 space-y-4 border-2 ${isBuy ? 'border-emerald-500/40' : 'border-rose-500/40'} shadow-lg">
-      <!-- Baris Atas Ala Terminal Pro (Sesuai Referensi Gambar) -->
+      <!-- Header Status Ala Terminal Pro -->
       <div class="flex items-center justify-between gap-2 pb-3 border-b border-[var(--border-subtle)]">
         <div class="flex items-center gap-2.5 min-w-0">
           <div class="w-1.5 h-10 rounded-full ${isBuy ? 'bg-emerald-500' : 'bg-rose-500'} shrink-0"></div>
@@ -1179,63 +1556,84 @@ function renderSignals() {
               <span class="text-[10px] font-bold opacity-60">(${sig.tf})</span>
             </div>
             <div class="flex items-center gap-1.5 text-[10.5px] opacity-75">
-              <span class="w-1.5 h-1.5 rounded-full ${isLive ? 'bg-blue-500 animate-pulse' : 'bg-slate-400'}"></span>
-              <span id="live-setup-timer" class="font-mono-num">${isLive ? formatElapsedDuration(sig.createdAt) : 'Selesai (' + sig.status + ')'}</span>
+              <span class="w-1.5 h-1.5 rounded-full ${isRunning ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}"></span>
+              <span id="live-setup-timer" class="font-mono-num">${
+                weekendClosed
+                  ? 'Market Tutup (Timer Dibekukan)'
+                  : isRunning
+                  ? 'Running ' + formatElapsedDuration(sig.filledAt || sig.createdAt)
+                  : 'Menunggu Limit (Exp: ' + formatRemainingCountdown(sig.expiresAt) + ')'
+              }</span>
             </div>
           </div>
         </div>
 
         <div class="text-right shrink-0">
           <span class="font-mono-num text-sm font-extrabold block">${livePrice.toFixed(d)}</span>
-          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold ${
-            isLive ? 'bg-blue-500/15 text-blue-500 border border-blue-500/30' : 'bg-emerald-500/15 text-emerald-500'
-          }">
-            ${isLive ? '• LIVE LOCKED' : sig.status}
-          </span>
+          ${statusBadgeHtml}
         </div>
       </div>
 
-      <!-- Metode & Confidence -->
+      <!-- Metode, Killzone & Tombol Scan Baru -->
       <div class="flex items-center justify-between gap-2">
-        <div>
-          <p class="text-xs font-bold">${sig.methodLabel}</p>
-          <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold ${meta.badgeClass}">
-            ${meta.tier} • ${sig.confidence}% PD
-          </span>
+        <div class="min-w-0">
+          <p class="text-xs font-bold truncate">${sig.methodLabel}</p>
+          <div class="flex flex-wrap items-center gap-1.5 mt-1">
+            <span class="px-2 py-0.5 rounded-full text-[9px] font-extrabold ${meta.badgeClass}">
+              ${meta.tier} • ${sig.confidence}% PD
+            </span>
+            <span class="text-[9.5px] opacity-65 truncate">${sig.killzoneLabel || ''}</span>
+          </div>
         </div>
-        <button onclick="forceNewSniperSetup()" class="px-2.5 py-1.5 rounded-xl border border-[var(--border-subtle)] text-[10px] font-bold active:scale-95 whitespace-nowrap">
+        <button onclick="forceNewSniperSetup()" class="px-2.5 py-1.5 rounded-xl border border-[var(--border-subtle)] text-[10px] font-bold active:scale-95 whitespace-nowrap shrink-0">
           ↻ Scan Baru
         </button>
       </div>
 
-      <!-- Grid Harga Terkunci (Tidak Bergeser Sendiri) -->
-      <div class="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-black/[0.03] dark:bg-white/[0.04] border border-[var(--border-subtle)]">
+      <!-- KOTAK UTAMA: 1 ANGKA PASTI PASANG LIMIT + TOMBOL COPY -->
+      <div class="p-3.5 rounded-2xl bg-gradient-to-r ${
+        isBuy ? 'from-emerald-500/15 to-cyan-500/10 border-emerald-500/35' : 'from-rose-500/15 to-amber-500/10 border-rose-500/35'
+      } border flex items-center justify-between gap-2">
         <div>
-          <span class="text-[9px] font-bold uppercase opacity-60 block">Zona Entry</span>
-          <span class="font-mono-num text-[10.5px] font-extrabold text-amber-500">${sig.entryMin.toFixed(d)} - ${sig.entryMax.toFixed(d)}</span>
+          <span class="text-[9.5px] font-extrabold uppercase tracking-wider opacity-75 block">
+            🎯 PASANG ${sig.direction} (SWEET-SPOT)
+          </span>
+          <span class="font-mono-num text-lg font-extrabold tracking-tight block mt-0.5">${limitFormatted}</span>
+          <span class="font-mono-num text-[10px] opacity-70 block">Zona POI: ${sig.entryMin.toFixed(d)} – ${sig.entryMax.toFixed(d)}</span>
         </div>
+        <button onclick="copyLimitPrice('${limitFormatted}')" class="px-3.5 py-2.5 rounded-xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-extrabold shadow active:scale-95 shrink-0">
+          Copy
+        </button>
+      </div>
+
+      <!-- Grid Stop Loss, Lot Aman & Drawdown Guard -->
+      <div class="grid grid-cols-2 gap-2 p-3 rounded-2xl bg-black/[0.03] dark:bg-white/[0.04] border border-[var(--border-subtle)]">
         <div>
-          <span class="text-[9px] font-bold uppercase opacity-60 block">Stop Loss</span>
-          <span class="font-mono-num text-[10.5px] font-extrabold text-rose-500">${sig.sl.toFixed(d)} (${sig.slUnits}${sig.unitLabel[0]})</span>
+          <span class="text-[9px] font-bold uppercase opacity-60 block">Stop Loss ${sig.tp1Reached ? '(Locked BE)' : ''}</span>
+          <span class="font-mono-num text-xs font-extrabold text-rose-500">${sig.sl.toFixed(d)} (${sig.slUnits} ${sig.unitLabel})</span>
         </div>
         <div>
           <span class="text-[9px] font-bold uppercase opacity-60 block">Lot (${activeAcc.name.split(' ')[0]})</span>
-          <span class="font-mono-num text-[10.5px] font-extrabold text-blue-500 whitespace-nowrap">${lotSize.toFixed(2)} lot</span>
+          <span class="font-mono-num text-xs font-extrabold text-blue-500">
+            ${lotInfo.lot.toFixed(2)} lot
+            ${lotInfo.isRecoveryMode ? '<span class="text-[9px] text-amber-500">(½ Risk)</span>' : ''}
+            ${lotInfo.isCapped ? '<span class="text-[9px] text-amber-500">(Cap)</span>' : ''}
+          </span>
         </div>
       </div>
 
       <!-- Target TP1 - TP3 -->
       <div class="space-y-1.5 text-xs">
         <div class="flex justify-between items-center px-3 py-1.5 rounded-xl bg-emerald-500/10">
-          <span class="font-bold text-emerald-600 dark:text-emerald-400">TP 1 (1:1.5 • Set BE)</span>
+          <span class="font-bold text-emerald-600 dark:text-emerald-400">TP 1 (50% Partial • Set BE)</span>
           <span class="font-mono-num font-bold whitespace-nowrap">${sig.tp1.toFixed(d)} (+${sig.tp1Units} ${sig.unitLabel})</span>
         </div>
         <div class="flex justify-between items-center px-3 py-1.5 rounded-xl bg-emerald-500/10">
-          <span class="font-bold text-emerald-600 dark:text-emerald-400">TP 2 (1:2 • Intraday)</span>
+          <span class="font-bold text-emerald-600 dark:text-emerald-400">TP 2 (30% Partial • Trail TP1)</span>
           <span class="font-mono-num font-bold whitespace-nowrap">${sig.tp2.toFixed(d)} (+${sig.tp2Units} ${sig.unitLabel})</span>
         </div>
         <div class="flex justify-between items-center px-3 py-1.5 rounded-xl bg-emerald-500/10">
-          <span class="font-bold text-emerald-600 dark:text-emerald-400">TP 3 (1:3 • Extreme)</span>
+          <span class="font-bold text-emerald-600 dark:text-emerald-400">TP 3 (20% Runner • Extreme)</span>
           <span class="font-mono-num font-bold whitespace-nowrap">${sig.tp3.toFixed(d)} (+${sig.tp3Units} ${sig.unitLabel})</span>
         </div>
       </div>
@@ -1256,9 +1654,9 @@ function renderSignals() {
         </button>
       </div>
 
-      <!-- Tombol Catat Hasil Akhir Manual (Jika Close Lebih Awal di MT5/cTrader) -->
+      <!-- Tombol Catat Hasil Akhir Manual -->
       ${
-        isLive
+        isWaiting || isRunning
           ? `<div class="pt-2 border-t border-[var(--border-subtle)]">
               <span class="text-[9.5px] font-bold uppercase opacity-60 block mb-1.5">Tandai Hasil Setup (Jika Sudah Close):</span>
               <div class="grid grid-cols-5 gap-1.5 text-[9.5px] font-extrabold">
@@ -1275,10 +1673,16 @@ function renderSignals() {
   `;
 
   if (outputBox) {
-    outputBox.textContent = formatStandardSmcSignal(sig, lotSize, activeAcc.name);
+    outputBox.textContent = formatStandardSmcSignal(sig, lotInfo.lot, activeAcc.name);
   }
 
   renderHistoryAndStats();
+}
+
+function dismissFlipBanner(key) {
+  delete state.flipBanners[key];
+  saveState();
+  renderSignals();
 }
 
 function filterItemsByPeriod(items, period) {
@@ -1297,6 +1701,33 @@ function filterItemsByPeriod(items, period) {
   });
 }
 
+function computeEdgeFinderInsight(items) {
+  const valid = items.filter((i) => String(i.status).startsWith('TP') || i.status === 'SL HIT');
+  if (valid.length < 2) {
+    return 'Edge Finder: Kumpulkan minimal 2 trade selesai untuk memetakan metode & pair paling profit.';
+  }
+
+  const statsByMethod = {};
+  valid.forEach((i) => {
+    const m = i.method || 'SMC';
+    if (!statsByMethod[m]) statsByMethod[m] = { wins: 0, total: 0 };
+    statsByMethod[m].total += 1;
+    if (String(i.status).startsWith('TP')) statsByMethod[m].wins += 1;
+  });
+
+  let bestMethod = 'ICT';
+  let bestWr = -1;
+  Object.entries(statsByMethod).forEach(([m, s]) => {
+    const wr = Math.round((s.wins / s.total) * 100);
+    if (wr > bestWr) {
+      bestWr = wr;
+      bestMethod = m;
+    }
+  });
+
+  return `🏆 Edge Finder: Metode ${bestMethod} unggul dengan Winrate ${bestWr}% dari ${valid.length} trade terverifikasi.`;
+}
+
 function renderHistoryAndStats() {
   const sourceList =
     state.historyFeedMode === 'JOURNAL' ? state.userJournal : state.signalHistory;
@@ -1305,7 +1736,11 @@ function renderHistoryAndStats() {
   const jBadge = document.getElementById('journal-count-badge');
   if (jBadge) jBadge.textContent = state.userJournal.length;
 
-  // Hitung Statistik Periode Terpilih
+  const edgeEl = document.getElementById('edge-finder-banner');
+  if (edgeEl) {
+    edgeEl.textContent = computeEdgeFinderInsight(sourceList);
+  }
+
   const tpCount = periodItems.filter((i) => String(i.status).startsWith('TP')).length;
   const slCount = periodItems.filter((i) => i.status === 'SL HIT').length;
   const beCount = periodItems.filter((i) => i.status === 'BREAK EVEN').length;
@@ -1342,7 +1777,7 @@ function renderHistoryAndStats() {
         <p class="text-[11px] opacity-60 mt-1">${
           state.historyFeedMode === 'JOURNAL'
             ? 'Tekan tombol "Ambil Setup" pada kartu sinyal di atas untuk mencatat jurnal pribadimu.'
-            : 'Riwayat otomatis terisi setiap sinyal menyentuh TP, Break Even, atau SL.'
+            : 'Riwayat terverifikasi otomatis terisi setiap sinyal selesai atau berganti.'
         }</p>
       </div>
     `;
@@ -1373,6 +1808,8 @@ function renderHistoryAndStats() {
         minute: '2-digit'
       }).format(new Date(item.closedAt || item.createdAt));
 
+      const displayPrice = Number(item.limitPrice || item.entryPrice).toFixed(d);
+
       return `
         <div onclick="toggleHistoryCardDetail('${item.id}')" class="glass-card p-3.5 cursor-pointer transition active:scale-[0.99]">
           <div class="flex items-center justify-between gap-2">
@@ -1392,14 +1829,13 @@ function renderHistoryAndStats() {
             </div>
 
             <div class="text-right shrink-0">
-              <span class="font-mono-num text-xs font-extrabold block">${Number(item.entryPrice).toFixed(d)}</span>
+              <span class="font-mono-num text-xs font-extrabold block">${displayPrice}</span>
               <span class="inline-block mt-0.5 px-2 py-0.5 rounded-full text-[8.5px] font-extrabold tracking-wider ${badgeStyle}">
                 ${item.status}
               </span>
             </div>
           </div>
 
-          <!-- Penjelasan Edukasi Pips Saat Kartu Diketuk -->
           ${
             isExpanded
               ? `<div class="mt-3 pt-2.5 border-t border-[var(--border-subtle)] text-[11px] space-y-1.5">
@@ -1430,14 +1866,14 @@ function exportUserJournalCsv() {
     'Timeframe',
     'Arah',
     'Metode',
-    'Entry Price',
+    'Harga Limit',
     'Stop Loss',
     'Jarak SL (Pips/Pts)',
     'Target TP2',
     'Lot Size',
     'Status Hasil',
     'Net Pips/Pts',
-    'Estimasi PnL (USD)'
+    'Estimasi PnL Bersih (USD)'
   ];
 
   const rows = state.userJournal.map((item, idx) => {
@@ -1460,7 +1896,7 @@ function exportUserJournalCsv() {
     const pnlUsd =
       typeof item.pnlUsd === 'number'
         ? item.pnlUsd
-        : calculateUsdPnl(item.pair, Number(item.resultUnits) || 0, Number(item.takenLot) || 0.01);
+        : calculateSplitUsdPnl(item.pair, item, Number(item.takenLot) || 0.01);
 
     return [
       idx + 1,
@@ -1471,7 +1907,7 @@ function exportUserJournalCsv() {
       item.tf,
       item.direction,
       item.method,
-      Number(item.entryPrice).toFixed(d),
+      Number(item.limitPrice || item.entryPrice).toFixed(d),
       Number(item.sl).toFixed(d),
       item.slUnits,
       Number(item.tp2).toFixed(d),
@@ -1504,47 +1940,16 @@ function copyStandardOutput() {
   showToast('📋 Format sinyal standar disalin!');
 }
 
-// ==================== 8. LIVE ECONOMIC NEWS ====================
-function generateNewsExplanation(title) {
-  const t = title.toLowerCase();
-  if (t.includes('cpi') || t.includes('inflation') || t.includes('pce')) {
-    return {
-      category: 'Inflasi AS',
-      smcWarning: 'Wajib tutup/amankan posisi & batalkan Pending Order 15 menit sebelum rilis.',
-      explanation:
-        'Mengukur tekanan inflasi AS. Jika Actual lebih tinggi dari Forecast, ekspektasi suku bunga ketat akan menguatkan USD dan menekan XAUUSD serta US100 turun tajam.'
-    };
-  }
-  if (t.includes('non-farm') || t.includes('nfp') || t.includes('payroll') || t.includes('unemployment')) {
-    return {
-      category: 'Tenaga Kerja AS',
-      smcWarning: 'Spread melebar ekstrem saat rilis. Tunggu 15–30 menit hingga struktur M5 stabil.',
-      explanation:
-        'Indikator utama pasar tenaga kerja AS. Penambahan kerja lebih tinggi dari prediksi (Actual > Forecast) mendorong penguatan USD dan menekan harga Emas.'
-    };
-  }
-  if (t.includes('jobless') || t.includes('claims')) {
-    return {
-      category: 'Klaim Pengangguran',
-      smcWarning: 'Rutin rilis Kamis malam — rawan sweep Asia High/Low sebelum arah asli terbentuk.',
-      explanation:
-        'Jika jumlah klaim lebih rendah dari prediksi (Actual < Forecast), pasar kerja AS dinilai solid → cenderung Bearish jangka pendek bagi XAUUSD.'
-    };
-  }
-  if (t.includes('fomc') || t.includes('fed') || t.includes('powell') || t.includes('rate')) {
-    return {
-      category: 'Kebijakan The Fed',
-      smcWarning: 'Volatilitas sangat tinggi & rawan slippage. Hindari posisi terbuka saat rilis.',
-      explanation:
-        'Keputusan suku bunga bank sentral AS. Nada dovish atau pemangkasan suku bunga melemahkan USD dan menjadi katalis Bullish kuat untuk Emas, Nasdaq, dan BTC.'
-    };
-  }
-  return {
-    category: 'Rilis Ekonomi USD',
-    smcWarning: 'Pantau pergerakan ekor candle M5 saat jam rilis berita.',
-    explanation:
-      'Data fundamental USD berdampak pada pergerakan Dolar AS. Hasil lebih kuat dari prediksi umumnya menekan XAUUSD & EURUSD.'
-  };
+// ==================== 9. PRE-NEWS & POST-NEWS VERDICT ENGINE ====================
+function classifyNewsCategory(title) {
+  const t = String(title || '').toLowerCase();
+  if (t.includes('cpi') || t.includes('inflation') || t.includes('pce')) return 'Inflasi AS';
+  if (t.includes('non-farm') || t.includes('nfp') || t.includes('payroll') || t.includes('unemployment'))
+    return 'Tenaga Kerja AS';
+  if (t.includes('jobless') || t.includes('claims')) return 'Klaim Pengangguran';
+  if (t.includes('fomc') || t.includes('fed') || t.includes('powell') || t.includes('rate'))
+    return 'Kebijakan The Fed';
+  return 'Rilis Ekonomi USD';
 }
 
 async function fetchLiveEconomicNews(manualTrigger = false) {
@@ -1573,67 +1978,143 @@ async function fetchLiveEconomicNews(manualTrigger = false) {
           minute: '2-digit'
         }).format(dt);
 
-        const autoMeta = generateNewsExplanation(ev.title || '');
+        const newsId = `live-news-${idx}`;
+        const manualActual = state.customNewsActuals?.[newsId];
+
         return {
-          id: `live-news-${idx}`,
+          id: newsId,
           impact: ev.impact === 'High' ? 'HIGH' : 'MED',
+          timestampMs: dt.getTime(),
           time: `${wibDate} WIB`,
           currency: 'USD',
-          category: autoMeta.category,
+          category: classifyNewsCategory(ev.title),
           title: ev.title,
-          actual: ev.actual || 'Menunggu',
+          actual: manualActual || ev.actual || 'Menunggu',
           forecast: ev.forecast || '-',
-          previous: ev.previous || '-',
-          smcWarning: autoMeta.smcWarning,
-          explanation: autoMeta.explanation
+          previous: ev.previous || '-'
         };
       });
 
-      if (statusEl) statusEl.textContent = '● Live Kalender USD Minggu Ini';
+      if (statusEl) statusEl.textContent = '● Live Kalender USD + Pre/Post Verdict Aktif';
       if (manualTrigger) showToast('📰 Kalender ekonomi USD diperbarui!');
       renderNews(currentNewsFilter);
+      if (state.activeTab === 'signals') renderSignals();
       return;
     }
   } catch (err) {
-    if (statusEl) statusEl.textContent = '● Mode Kamus Dampak Market';
-    if (manualTrigger) showToast('ℹ️ Menampilkan referensi utama news USD');
+    // Terapkan input actual manual pada daftar referensi jika ada
+    activeNewsList = activeNewsList.map((n) => ({
+      ...n,
+      actual: state.customNewsActuals?.[n.id] || n.actual
+    }));
+    if (statusEl) statusEl.textContent = '● Mode Playbook Pre/Post-News USD';
+    if (manualTrigger) showToast('ℹ️ Menampilkan playbook utama news USD');
   }
   renderNews(currentNewsFilter);
+}
+
+function submitQuickNewsActual(newsId) {
+  const input = document.getElementById(`news-actual-input-${newsId}`);
+  const val = input?.value.trim();
+  if (!val) {
+    showToast('⚠️ Masukkan angka Actual terlebih dahulu (cth: 0.2% atau 165K)');
+    return;
+  }
+  if (!state.customNewsActuals) state.customNewsActuals = {};
+  state.customNewsActuals[newsId] = val;
+  saveState();
+
+  activeNewsList = activeNewsList.map((n) => (n.id === newsId ? { ...n, actual: val } : n));
+  renderNews(currentNewsFilter);
+  showToast(`⚡ Vonis Post-News dihitung untuk Actual: ${val}`);
 }
 
 function renderNews(filter = 'ALL') {
   currentNewsFilter = filter;
   const list = activeNewsList.filter((n) => filter === 'ALL' || n.impact === filter);
   const container = document.getElementById('news-list-container');
+  const wireContainer = document.getElementById('breaking-wire-container');
+
+  if (wireContainer && typeof LIAMV_BREAKING_WIRE !== 'undefined') {
+    wireContainer.innerHTML = LIAMV_BREAKING_WIRE.map(
+      (w) => `
+        <div class="p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20 text-xs space-y-1">
+          <span class="text-[9.5px] font-extrabold text-blue-500 uppercase tracking-wider">${w.tag}</span>
+          <strong class="block font-display text-xs">${w.title}</strong>
+          <p class="text-[11px] opacity-80 leading-relaxed">${w.summary}</p>
+        </div>
+      `
+    ).join('');
+  }
+
   if (!container) return;
 
   container.innerHTML = list
-    .map(
-      (n) => `
-      <div class="glass-card p-5 space-y-2.5 card-3d">
-        <div class="flex items-center justify-between gap-2">
-          <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap ${n.impact === 'HIGH' ? 'bg-rose-500/15 text-rose-500' : 'bg-amber-500/15 text-amber-500'}">
-            ${n.impact === 'HIGH' ? '🔴 HIGH IMPACT' : '🟠 MEDIUM'}
-          </span>
-          <span class="font-mono-num text-[11px] font-bold opacity-75 text-right">${n.time}</span>
-        </div>
+    .map((n) => {
+      const analysis =
+        typeof buildNewsPreAndPostAnalysis === 'function'
+          ? buildNewsPreAndPostAnalysis(n)
+          : null;
 
-        <h3 class="font-display text-base font-bold leading-snug">${n.title}</h3>
+      const postHtml =
+        analysis && analysis.postVerdict
+          ? `<div class="p-3 rounded-2xl border ${
+              analysis.postVerdict.biasColor === 'emerald'
+                ? 'bg-emerald-500/15 border-emerald-500/35 text-emerald-600 dark:text-emerald-300'
+                : analysis.postVerdict.biasColor === 'rose'
+                ? 'bg-rose-500/15 border-rose-500/35 text-rose-600 dark:text-rose-300'
+                : 'bg-amber-500/15 border-amber-500/35 text-amber-600 dark:text-amber-300'
+            } text-xs space-y-1">
+              <div class="flex items-center justify-between gap-1">
+                <span class="text-[9.5px] font-extrabold uppercase tracking-wider">⚡ POST-NEWS VERDICT</span>
+                <span class="px-2 py-0.5 rounded-full bg-black/10 dark:bg-white/10 text-[9px] font-extrabold">${analysis.postVerdict.verdictBadge}</span>
+              </div>
+              <strong class="font-display text-sm block">${analysis.postVerdict.directionCall}</strong>
+              <p class="text-[11px] opacity-90 leading-relaxed">${analysis.postVerdict.deviationText}</p>
+              <p class="text-[11px] font-semibold">📌 Eksekusi: ${analysis.postVerdict.executionAdvice}</p>
+            </div>`
+          : '';
 
-        <div class="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-black/[0.03] dark:bg-white/[0.04] text-center font-mono-num text-xs">
-          <div><span class="text-[9px] block opacity-60 font-sans">ACTUAL</span><strong>${n.actual}</strong></div>
-          <div><span class="text-[9px] block opacity-60 font-sans">FORECAST</span><strong>${n.forecast}</strong></div>
-          <div><span class="text-[9px] block opacity-60 font-sans">PREVIOUS</span><strong>${n.previous}</strong></div>
-        </div>
+      const preHtml = analysis
+        ? `<div class="p-3 rounded-2xl bg-black/[0.03] dark:bg-white/[0.04] border border-[var(--border-subtle)] text-[11px] space-y-1.5">
+            <span class="text-[9.5px] font-extrabold uppercase tracking-wider text-blue-500 block">📋 PRE-NEWS PLAYBOOK (SEBELUM RILIS)</span>
+            <p class="opacity-85 leading-relaxed">${analysis.prePlaybook.expectationText}</p>
+            <p class="text-rose-500 font-semibold">• ${analysis.prePlaybook.scenarioSellRiskAssets}</p>
+            <p class="text-emerald-500 font-semibold">• ${analysis.prePlaybook.scenarioBuyRiskAssets}</p>
+            <p class="text-amber-600 dark:text-amber-400 font-semibold pt-0.5">⚠️ ${analysis.prePlaybook.safetyRule}</p>
+          </div>`
+        : '';
 
-        <div class="p-3 rounded-2xl bg-blue-500/10 text-xs leading-relaxed">
-          <strong class="text-blue-500 block mb-0.5">Dampak ke Market (${n.category}):</strong>
-          <span class="opacity-85">${n.explanation}</span>
-          <span class="block mt-1.5 text-[11px] font-semibold text-amber-600 dark:text-amber-400">⚠️ ${n.smcWarning}</span>
+      return `
+        <div class="glass-card p-5 space-y-3 card-3d">
+          <div class="flex items-center justify-between gap-2">
+            <span class="px-2.5 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap ${n.impact === 'HIGH' ? 'bg-rose-500/15 text-rose-500' : 'bg-amber-500/15 text-amber-500'}">
+              ${n.impact === 'HIGH' ? '🔴 HIGH IMPACT' : '🟠 MEDIUM'} • ${n.category}
+            </span>
+            <span class="font-mono-num text-[11px] font-bold opacity-75 text-right">${n.time}</span>
+          </div>
+
+          <h3 class="font-display text-base font-bold leading-snug">${n.title}</h3>
+
+          <div class="grid grid-cols-3 gap-2 p-2.5 rounded-xl bg-black/[0.03] dark:bg-white/[0.04] text-center font-mono-num text-xs">
+            <div><span class="text-[9px] block opacity-60 font-sans">ACTUAL</span><strong>${n.actual}</strong></div>
+            <div><span class="text-[9px] block opacity-60 font-sans">FORECAST</span><strong>${n.forecast}</strong></div>
+            <div><span class="text-[9px] block opacity-60 font-sans">PREVIOUS</span><strong>${n.previous}</strong></div>
+          </div>
+
+          <!-- Input Cepat Angka Actual Saat Detik Rilis -->
+          <div class="flex items-center gap-1.5">
+            <input id="news-actual-input-${n.id}" type="text" placeholder="Input Actual rilis (cth: 0.2% / 165K)..." class="flex-1 px-3 py-1.5 rounded-xl bg-black/[0.03] dark:bg-white/[0.05] border border-[var(--border-subtle)] text-[11px] outline-none" />
+            <button onclick="submitQuickNewsActual('${n.id}')" class="px-3 py-1.5 rounded-xl bg-blue-600 text-white text-[11px] font-bold active:scale-95 whitespace-nowrap">
+              Hitung Arah
+            </button>
+          </div>
+
+          ${postHtml}
+          ${preHtml}
         </div>
-      </div>
-    `
-    )
+      `;
+    })
     .join('');
 }
 
@@ -1650,7 +2131,7 @@ function filterNews(level) {
   renderNews(level);
 }
 
-// ==================== 9. TRADINGVIEW & LIVE CANDLE RADAR ====================
+// ==================== 10. TRADINGVIEW & LIVE CANDLE RADAR ====================
 function renderTradingViewChart() {
   const wrapper = document.getElementById('tv-chart-wrapper');
   const select = document.getElementById('chart-symbol-select');
@@ -1691,7 +2172,7 @@ async function runManualScan() {
   showToast(`📡 Harga & candle diperbarui: ${state.selectedPair} (${livePrices[state.selectedPair]})`);
 }
 
-// ==================== 10. NATIVE HP NOTIFICATION + AUTO TELEGRAM ====================
+// ==================== 11. NATIVE HP NOTIFICATION + AUTO TELEGRAM ====================
 function updateNativeNotifStatusUI() {
   const statusEl = document.getElementById('native-notif-status');
   const btnEl = document.getElementById('btn-enable-notif');
@@ -1756,7 +2237,7 @@ async function sendNativePush(title, body) {
 function testNativeNotification() {
   sendNativePush(
     '🧠 LIAMVTRADE — Xliamvr Terminal',
-    'Notifikasi Native aktif! Sinyal SMC Sniper & update TP/SL otomatis berjalan.'
+    'Notifikasi Native aktif! Sinyal ICT/SMC Sniper & update TP/SL otomatis berjalan.'
   );
   showToast('🔔 Notifikasi tes dikirim ke HP!');
 }
@@ -1780,24 +2261,31 @@ async function dispatchAutoSetupNotification(sig, eventType) {
   const cfg = LIAMV_PAIRS[sig.pair] || LIAMV_PAIRS.XAUUSD;
   const d = cfg.decimals;
   const activeAcc = getActiveAccount();
-  const lotSize = calculateLotForPair(sig.pair, sig.slUnits, activeAcc.balance, activeAcc.riskPct);
+  const lotInfo = calculateSafeLotDetails(sig.pair, sig.slUnits, activeAcc);
+  const lim = Number(sig.limitPrice || sig.entryPrice).toFixed(d);
 
   let title = '';
   let body = '';
 
-  if (eventType === 'NEW') {
-    title = `🎯 SNIPER ${sig.pair} ${sig.direction} (${sig.tf})`;
-    body = `Entry: ${sig.entryMin.toFixed(d)}-${sig.entryMax.toFixed(d)} | SL: ${sig.sl.toFixed(d)} | TP2: ${sig.tp2.toFixed(d)} (${lotSize.toFixed(2)} lot)`;
+  if (eventType === 'NEW' || eventType === 'FLIP_NEW') {
+    title = `🎯 ${eventType === 'FLIP_NEW' ? 'AUTO-FLIP' : 'SNIPER'} ${sig.pair} ${sig.direction} (${sig.tf})`;
+    body = `Pasang Limit: ${lim} | SL: ${sig.sl.toFixed(d)} | TP2: ${sig.tp2.toFixed(d)} (${lotInfo.lot.toFixed(2)} lot)`;
+  } else if (eventType === 'FILLED') {
+    title = `⚡ ${sig.pair} LIMIT TERSENTUH (RUNNING)`;
+    body = `Order aktif di ${lim}. Pantau target TP1 ${sig.tp1.toFixed(d)}.`;
   } else if (eventType === 'TP1_BE') {
     title = `🛡️ ${sig.pair} TP1 HIT → SL Digeser ke BE`;
-    body = `Amankan partial profit (+${sig.tp1Units} ${sig.unitLabel}) & geser SL ke ${sig.entryPrice.toFixed(d)}.`;
+    body = `Amankan 50% partial (+${sig.tp1Units} ${sig.unitLabel}) & SL dikunci di ${lim}.`;
+  } else if (eventType === 'TP2_TRAIL') {
+    title = `🚀 ${sig.pair} TP2 HIT → Trailing SL ke TP1`;
+    body = `Amankan 30% partial (+${sig.tp2Units} ${sig.unitLabel}) & SL dikunci di ${sig.tp1.toFixed(d)}.`;
   } else {
     title = `📌 ${sig.pair} (${sig.tf}) → ${eventType}`;
     body = `Hasil: ${sig.resultUnits >= 0 ? '+' : ''}${sig.resultUnits} ${sig.unitLabel} | ${sig.methodLabel}`;
   }
 
   await sendNativePush(title, body);
-  const fullText = formatStandardSmcSignal(sig, lotSize, activeAcc.name);
+  const fullText = formatStandardSmcSignal(sig, lotInfo.lot, activeAcc.name);
   await dispatchTelegramOptional(fullText);
 }
 
@@ -1812,7 +2300,7 @@ async function testTelegramAlert() {
   showToast(ok ? '🚀 Tes Telegram berhasil!' : '❌ Gagal: Periksa Token / Chat ID');
 }
 
-// ==================== 11. ROADMAP, SETTINGS & BOOT ====================
+// ==================== 12. ROADMAP, SETTINGS & BOOT ====================
 function renderAssetRoadmap() {
   const box = document.getElementById('roadmap-container');
   if (!box || typeof LIAMV_ASSET_ROADMAP === 'undefined') return;
@@ -1833,21 +2321,28 @@ function loadSettingsUI() {
   const td = document.getElementById('cfg-twelvedata-key');
   const tgT = document.getElementById('cfg-tg-token');
   const tgC = document.getElementById('cfg-tg-chatid');
+  const sbUrl = document.getElementById('cfg-supabase-url');
+  const sbKey = document.getElementById('cfg-supabase-key');
 
   if (td) td.value = state.twelveDataKey;
   if (tgT) tgT.value = state.tgToken;
   if (tgC) tgC.value = state.tgChatId;
+  if (sbUrl) sbUrl.value = state.supabaseUrl || '';
+  if (sbKey) sbKey.value = state.supabaseAnonKey || '';
   updateNativeNotifStatusUI();
   renderAssetRoadmap();
+  renderAuthAndOwnerUI();
 }
 
 function saveSettings() {
-  state.twelveDataKey = document.getElementById('cfg-twelvedata-key').value.trim();
-  state.tgToken = document.getElementById('cfg-tg-token').value.trim();
-  state.tgChatId = document.getElementById('cfg-tg-chatid').value.trim();
+  state.twelveDataKey = document.getElementById('cfg-twelvedata-key')?.value.trim() || '';
+  state.tgToken = document.getElementById('cfg-tg-token')?.value.trim() || '';
+  state.tgChatId = document.getElementById('cfg-tg-chatid')?.value.trim() || '';
+  state.supabaseUrl = document.getElementById('cfg-supabase-url')?.value.trim() || '';
+  state.supabaseAnonKey = document.getElementById('cfg-supabase-key')?.value.trim() || '';
   saveState();
   syncLiveMarketPrices(true);
-  showToast('💾 Pengaturan API tersimpan');
+  showToast('💾 Pengaturan API & Cloud tersimpan');
 }
 
 function resetDailyCounters() {
