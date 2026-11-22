@@ -1,13 +1,13 @@
 {
-  "name": "Liamvtrade — Xliamvr Terminal",
+  "name": "Liamvtrade — Xliamvr Quant Terminal",
   "short_name": "LiamvTrade",
   "id": "com.xliamvr.trade",
-  "description": "Personal SMC, Liquidity & Multi-Timeframe Trading Signal Terminal by Xliamvr",
+  "description": "Personal SMC, Liquidity & Multi-Timeframe Trading Signal Terminal by Ilham Maulana Nur Al Rasyid (@xliamvr)",
   "start_url": "./index.html",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#070B14",
-  "theme_color": "#070B14",
+  "background_color": "#060911",
+  "theme_color": "#060911",
   "icons": [
     {
       "src": "data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'><defs><radialGradient id='bg' cx='50%25' cy='35%25' r='70%25'><stop offset='0%25' stop-color='%23272A30'/><stop offset='100%25' stop-color='%230E1013'/></radialGradient><filter id='glow' x='-25%25' y='-25%25' width='150%25' height='150%25'><feGaussianBlur stdDeviation='10' result='blur'/><feMerge><feMergeNode in='blur'/><feMergeNode in='SourceGraphic'/></feMerge></filter></defs><rect width='512' height='512' rx='118' fill='url(%23bg)'/><g filter='url(%23glow)' fill='%2316181D' stroke='%23FFFFFF' stroke-width='11' stroke-linejoin='round'><path d='M165 215c-32 0-56 26-52 58 3 26 24 46 50 48 16 1 32-8 44-16 14-9 22-24 14-42-8-18-30-48-56-48z'/><path d='M220 142c-36 0-66 26-66 56 0 18 14 28 32 34 22 7 44 12 62-4 14-12 16-38 4-58-8-14-18-28-32-28z'/><path d='M298 134c-26 0-42 22-42 48 0 24 12 46 34 54 22 8 48-2 58-24 10-22 2-52-20-66-10-7-19-12-30-12z'/><path d='M364 198c-22-4-46 14-50 38-4 24 10 48 34 54 26 6 54-12 58-38 4-24-16-49-42-54z'/><path d='M242 252c-32 4-62 24-66 48-4 22 14 36 42 38 36 2 84 4 114-12 22-12 28-36 12-52-18-18-66-26-102-22z'/><path d='M286 346c-14 0-24 12-18 24 8 16 26 32 42 30 14-2 22-18 28-32 6-14-4-24-20-24-12 0-20 2-32 2z'/></g></svg>",
