@@ -1,5 +1,5 @@
 /*!
- * Liamvtrade — Core Application Engine, Multi-Account & Live Market Feed (v2.2)
+ * Liamvtrade — Core Application Engine, Multi-Account & Live Market Feed (v2.3)
  * Copyright (c) 2026 Ilham Maulana Nur Al Rasyid (@xliamvr)
  * Package ID: com.xliamvr.trade — All Rights Reserved.
  */
@@ -72,19 +72,20 @@ const DEFAULT_STATE = {
 };
 
 // Migrasi otomatis pengaturan lama agar API Key & Token tetap tersimpan
-const legacyState = JSON.parse(localStorage.getItem('liamvtrade_v21_state') || '{}');
-const savedState = JSON.parse(localStorage.getItem('liamvtrade_v22_state') || 'null');
+const prevV22 = JSON.parse(localStorage.getItem('liamvtrade_v22_state') || 'null');
+const prevV21 = JSON.parse(localStorage.getItem('liamvtrade_v21_state') || '{}');
+const savedState = JSON.parse(localStorage.getItem('liamvtrade_v23_state') || 'null');
 
 let state = {
   ...DEFAULT_STATE,
-  ...(savedState || legacyState)
+  ...(savedState || prevV22 || prevV21)
 };
 
 if (!Array.isArray(state.accounts) || state.accounts.length === 0) {
   state.accounts = [...DEFAULT_ACCOUNTS];
 }
 
-// Otomatis pilih BTCUSDT jika hari ini Sabtu/Minggu & Weekend BTC Mode aktif
+// Otomatis pilih BTCUSDT saat Sabtu/Minggu jika Weekend BTC Mode aktif
 (function autoSelectWeekendPair() {
   const now = new Date();
   const wib = new Date(now.getTime() + now.getTimezoneOffset() * 60000 + 7 * 3600000);
@@ -97,7 +98,7 @@ if (!Array.isArray(state.accounts) || state.accounts.length === 0) {
 let livePrices = {
   XAUUSD: 2712.50,
   US100: 21180.00,
-  BTCUSDT: 97450.00,
+  BTCUSDT: 59350.00,
   EURUSD: 1.05450
 };
 
@@ -111,15 +112,16 @@ let priceFeedStatus = {
 let marketRanges = {
   XAUUSD: { high: 2718.00, low: 2705.20 },
   US100: { high: 21240.00, low: 21110.00 },
-  BTCUSDT: { high: 98100.00, low: 96650.00 },
+  BTCUSDT: { high: 60250.00, low: 59150.00 },
   EURUSD: { high: 1.05680, low: 1.05210 }
 };
 
 let activeNewsList = typeof LIAMV_NEWS !== 'undefined' ? [...LIAMV_NEWS] : [];
 let currentNewsFilter = 'ALL';
+let lastTwelveDataSync = 0;
 
 function saveState() {
-  localStorage.setItem('liamvtrade_v22_state', JSON.stringify(state));
+  localStorage.setItem('liamvtrade_v23_state', JSON.stringify(state));
 }
 
 function getActiveAccount() {
@@ -159,27 +161,46 @@ function playAlertChime() {
   } catch (e) {}
 }
 
-// ==================== 3. LIVE MARKET PRICES (BEBAS BLOKIR 4G INDONESIA) ====================
-async function fetchLiveBtcFromCoinbaseOrKraken() {
-  // Jalur 1: Coinbase Public Spot API (Terbuka di semua operator 4G Indonesia & tanpa API key)
+// ==================== 3. LIVE MARKET PRICES (BEBAS BLOKIR DNS 4G INDONESIA) ====================
+async function fetchLiveBtcUnblocked() {
+  // Jalur 1: CryptoCompare Public API (Analytics domain — terbuka penuh di 4G Indonesia + CORS *)
   try {
-    const cbRes = await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot', { cache: 'no-store' });
-    const cbJson = await cbRes.json();
-    if (cbJson?.data?.amount) {
-      livePrices.BTCUSDT = parseFloat(cbJson.data.amount);
+    const ccRes = await fetch(
+      'https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=32&aggregate=15',
+      { cache: 'no-store' }
+    );
+    const ccJson = await ccRes.json();
+    const candles = ccJson?.Data?.Data;
+    if (Array.isArray(candles) && candles.length > 0) {
+      const latest = candles[candles.length - 1];
+      livePrices.BTCUSDT = parseFloat(latest.close);
       priceFeedStatus.BTCUSDT = 'LIVE';
+
+      const highs = candles.map((c) => parseFloat(c.high));
+      const lows = candles.map((c) => parseFloat(c.low));
+      marketRanges.BTCUSDT = {
+        high: Math.max(...highs),
+        low: Math.min(...lows)
+      };
       return true;
     }
   } catch (e) {}
 
-  // Jalur 2: Kraken Public Ticker API (Cadangan 24/7)
+  // Jalur 2: CoinGecko Public API (Cadangan — juga terbuka penuh di jaringan 4G Indonesia)
   try {
-    const krRes = await fetch('https://api.kraken.com/0/public/Ticker?pair=XBTUSD', { cache: 'no-store' });
-    const krJson = await krRes.json();
-    const pairKey = krJson?.result ? Object.keys(krJson.result)[0] : null;
-    if (pairKey && krJson.result[pairKey]?.c?.[0]) {
-      livePrices.BTCUSDT = parseFloat(krJson.result[pairKey].c[0]);
+    const cgRes = await fetch(
+      'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_high=true&include_24hr_low=true',
+      { cache: 'no-store' }
+    );
+    const cgJson = await cgRes.json();
+    if (cgJson?.bitcoin?.usd) {
+      const p = parseFloat(cgJson.bitcoin.usd);
+      livePrices.BTCUSDT = p;
       priceFeedStatus.BTCUSDT = 'LIVE';
+      marketRanges.BTCUSDT = {
+        high: parseFloat(cgJson.bitcoin.usd_24h_high) || +(p + 450).toFixed(2),
+        low: parseFloat(cgJson.bitcoin.usd_24h_low) || +(p - 450).toFixed(2)
+      };
       return true;
     }
   } catch (e) {}
@@ -187,63 +208,51 @@ async function fetchLiveBtcFromCoinbaseOrKraken() {
   return false;
 }
 
-async function fetchLiveBtcCandles() {
-  try {
-    const res = await fetch('https://api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=15', { cache: 'no-store' });
-    const json = await res.json();
-    const pairKey = json?.result ? Object.keys(json.result).find((k) => k !== 'last') : null;
-    if (pairKey && Array.isArray(json.result[pairKey])) {
-      const recent = json.result[pairKey].slice(-32);
-      const highs = recent.map((c) => parseFloat(c[2]));
-      const lows = recent.map((c) => parseFloat(c[3]));
-      marketRanges.BTCUSDT = {
-        high: Math.max(...highs),
-        low: Math.min(...lows)
-      };
-      return marketRanges.BTCUSDT;
-    }
-  } catch (e) {}
-  return marketRanges.BTCUSDT;
-}
+async function syncLiveMarketPrices(forceTwelveData = false) {
+  // 1. BTCUSDT Live 24/7 (CryptoCompare / CoinGecko)
+  const btcOk = await fetchLiveBtcUnblocked();
 
-async function syncLiveMarketPrices() {
-  // 1. BTCUSDT Live 24/7 (Coinbase / Kraken)
-  const btcOk = await fetchLiveBtcFromCoinbaseOrKraken();
-  if (btcOk) {
-    await fetchLiveBtcCandles();
-  }
+  // 2. Twelve Data API (Aman dari rate-limit 8 kredit/menit)
+  const now = Date.now();
+  if (state.twelveDataKey && (forceTwelveData || now - lastTwelveDataSync >= 55000)) {
+    lastTwelveDataSync = now;
+    const symbols = btcOk ? 'XAU/USD,EUR/USD,QQQ' : 'XAU/USD,EUR/USD,QQQ,BTC/USD';
+    try {
+      const r = await fetch(
+        `https://api.twelvedata.com/price?symbol=${encodeURIComponent(symbols)}&apikey=${state.twelveDataKey}`,
+        { cache: 'no-store' }
+      );
+      const data = await r.json();
 
-  // 2. XAUUSD, US100, EURUSD & BTC Fallback via Twelve Data
-  if (state.twelveDataKey) {
-    const tdTargets = [
-      { pairId: 'XAUUSD', sym: 'XAU/USD' },
-      { pairId: 'EURUSD', sym: 'EUR/USD' },
-      { pairId: 'US100', sym: 'QQQ' }
-    ];
-    if (!btcOk) {
-      tdTargets.push({ pairId: 'BTCUSDT', sym: 'BTC/USD' });
-    }
-
-    await Promise.all(
-      tdTargets.map(async (item) => {
-        try {
-          const r = await fetch(
-            `https://api.twelvedata.com/price?symbol=${encodeURIComponent(item.sym)}&apikey=${state.twelveDataKey}`,
-            { cache: 'no-store' }
-          );
-          const d = await r.json();
-          if (d && d.price) {
-            // Jika menggunakan proxy QQQ untuk Nasdaq, konversi ke skala indeks NDX (~42x)
-            const rawVal = parseFloat(d.price);
-            livePrices[item.pairId] = item.sym === 'QQQ' ? +(rawVal * 42.15).toFixed(2) : rawVal;
-            priceFeedStatus[item.pairId] = 'LIVE';
-          }
-        } catch (e) {}
-      })
-    );
+      if (data['XAU/USD']?.price) {
+        const p = parseFloat(data['XAU/USD'].price);
+        livePrices.XAUUSD = p;
+        priceFeedStatus.XAUUSD = 'LIVE';
+        marketRanges.XAUUSD = { high: +(p + 6.5).toFixed(2), low: +(p - 6.5).toFixed(2) };
+      }
+      if (data['EUR/USD']?.price) {
+        const p = parseFloat(data['EUR/USD'].price);
+        livePrices.EURUSD = p;
+        priceFeedStatus.EURUSD = 'LIVE';
+        marketRanges.EURUSD = { high: +(p + 0.0022).toFixed(5), low: +(p - 0.0022).toFixed(5) };
+      }
+      if (data['QQQ']?.price) {
+        const p = +(parseFloat(data['QQQ'].price) * 42.15).toFixed(2);
+        livePrices.US100 = p;
+        priceFeedStatus.US100 = 'LIVE';
+        marketRanges.US100 = { high: +(p + 65).toFixed(2), low: +(p - 65).toFixed(2) };
+      }
+      if (!btcOk && data['BTC/USD']?.price) {
+        const p = parseFloat(data['BTC/USD'].price);
+        livePrices.BTCUSDT = p;
+        priceFeedStatus.BTCUSDT = 'LIVE';
+        marketRanges.BTCUSDT = { high: +(p + 450).toFixed(2), low: +(p - 450).toFixed(2) };
+      }
+    } catch (e) {}
   }
 
   updateHeaderTicker();
+  updateRadarMetricsUI();
   if (state.activeTab === 'signals') renderSignals();
 }
 
@@ -269,6 +278,40 @@ function updateHeaderTicker() {
     stsEl.className = `relative inline-flex rounded-full h-2 w-2 ${
       status === 'LIVE' ? 'bg-emerald-500' : 'bg-amber-400'
     }`;
+  }
+}
+
+function updateRadarMetricsUI() {
+  const select = document.getElementById('chart-symbol-select');
+  const modeLabel = document.getElementById('scanner-engine-mode');
+  const hiEl = document.getElementById('radar-asia-high');
+  const loEl = document.getElementById('radar-asia-low');
+  const rngEl = document.getElementById('radar-day-range');
+  if (!select || !hiEl || !loEl || !rngEl) return;
+
+  const [, apiSym] = select.value.split('|');
+  const mapSymToPair = {
+    'XAU/USD': 'XAUUSD',
+    NDX: 'US100',
+    BTCUSDT: 'BTCUSDT',
+    'EUR/USD': 'EURUSD'
+  };
+  const pairId = mapSymToPair[apiSym] || 'BTCUSDT';
+  const dec = pairId === 'EURUSD' ? 5 : 2;
+  const rng = marketRanges[pairId] || { high: 0, low: 0 };
+
+  hiEl.textContent = rng.high.toFixed(dec);
+  loEl.textContent = rng.low.toFixed(dec);
+  rngEl.textContent =
+    pairId === 'EURUSD'
+      ? `${Math.round((rng.high - rng.low) * 10000)} pips`
+      : `$${(rng.high - rng.low).toFixed(2)}`;
+
+  if (modeLabel) {
+    modeLabel.textContent =
+      priceFeedStatus[pairId] === 'LIVE'
+        ? `Live ${pairId} Feed Terhubung (${livePrices[pairId].toFixed(dec)})`
+        : `${pairId} Referensi (Market Tutup / Menunggu Sesi)`;
   }
 }
 
@@ -326,7 +369,7 @@ function switchTab(tabName) {
       chartSel.value = 'BINANCE:BTCUSDT|BTCUSDT';
     }
     renderTradingViewChart();
-    runManualScan();
+    updateRadarMetricsUI();
   }
   if (tabName === 'signals') renderSignals();
 }
@@ -712,7 +755,7 @@ function renderSignals() {
     container.innerHTML = `
       <div class="glass-card p-6 text-center">
         <p class="font-display font-bold text-sm">Memperbarui Engine Sinyal...</p>
-        <p class="text-xs opacity-65 mt-1">Tutup dan buka ulang aplikasi agar cache terbaru termuat.</p>
+        <p class="text-xs opacity-65 mt-1">Tarik layar ke bawah untuk memuat ulang cache.</p>
       </div>
     `;
     return;
@@ -1032,48 +1075,8 @@ function changeChartSymbol() {
 }
 
 async function runManualScan() {
-  const select = document.getElementById('chart-symbol-select');
-  const modeLabel = document.getElementById('scanner-engine-mode');
-  if (!select || !modeLabel) return;
-
-  const [, apiSym] = select.value.split('|');
-
-  if (apiSym === 'BTCUSDT') {
-    const rng = await fetchLiveBtcCandles();
-    document.getElementById('radar-asia-high').textContent = rng.high.toFixed(2);
-    document.getElementById('radar-asia-low').textContent = rng.low.toFixed(2);
-    document.getElementById('radar-day-range').textContent = `$${(rng.high - rng.low).toFixed(2)}`;
-    modeLabel.textContent = 'Live Kraken/Coinbase 15m Candles (24/7 Aktif)';
-    showToast('📡 Scan live candle BTC berhasil!');
-    return;
-  }
-
-  if (state.twelveDataKey) {
-    try {
-      const tdQuery = apiSym === 'NDX' ? 'QQQ' : apiSym;
-      const res = await fetch(
-        `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdQuery)}&interval=15min&outputsize=30&apikey=${state.twelveDataKey}`,
-        { cache: 'no-store' }
-      );
-      const data = await res.json();
-      if (data.values) {
-        const mult = tdQuery === 'QQQ' ? 42.15 : 1;
-        const highs = data.values.map((c) => parseFloat(c.high) * mult);
-        const lows = data.values.map((c) => parseFloat(c.low) * mult);
-        const hi = Math.max(...highs);
-        const lo = Math.min(...lows);
-        document.getElementById('radar-asia-high').textContent = hi.toFixed(2);
-        document.getElementById('radar-asia-low').textContent = lo.toFixed(2);
-        document.getElementById('radar-day-range').textContent = `$${(hi - lo).toFixed(2)}`;
-        modeLabel.textContent = `Live Twelve Data API (${apiSym}) Terhubung`;
-        showToast(`📡 Scan live ${apiSym} berhasil!`);
-        return;
-      }
-    } catch (e) {}
-  }
-
-  modeLabel.textContent = 'BTCUSDT Live 24/7 • XAU/US100/EUR Menunggu Sesi Senin';
-  showToast('📡 Radar memindai struktur likuiditas...');
+  await syncLiveMarketPrices(true);
+  showToast(`📡 Harga & candle diperbarui: ${state.selectedPair} (${livePrices[state.selectedPair]})`);
 }
 
 // ==================== 10. NATIVE HP NOTIFICATION + OPTIONAL TELEGRAM ====================
@@ -1233,7 +1236,7 @@ function saveSettings() {
   state.tgToken = document.getElementById('cfg-tg-token').value.trim();
   state.tgChatId = document.getElementById('cfg-tg-chatid').value.trim();
   saveState();
-  syncLiveMarketPrices();
+  syncLiveMarketPrices(true);
   showToast('💾 Pengaturan API tersimpan');
 }
 
@@ -1288,7 +1291,7 @@ window.addEventListener('DOMContentLoaded', () => {
   fetchLiveEconomicNews(false);
   setSignalPair(state.selectedPair);
   setSignalTF(state.selectedTF);
-  syncLiveMarketPrices();
-  setInterval(syncLiveMarketPrices, 12000);
+  syncLiveMarketPrices(true);
+  setInterval(() => syncLiveMarketPrices(false), 15000);
   switchTab(state.activeTab);
 });
