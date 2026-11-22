@@ -1,10 +1,10 @@
 /*!
- * Liamvtrade — Service Worker & Native Notification Handler (v2.0)
+ * Liamvtrade — Service Worker & Cache Controller (v2.2)
  * Copyright (c) 2026 Ilham Maulana Nur Al Rasyid (@xliamvr)
  * Package ID: com.xliamvr.trade — All Rights Reserved.
  */
 
-const CACHE_NAME = 'liamvtrade-v2';
+const CACHE_NAME = 'liamvtrade-v2.2';
 const ASSETS = [
   './',
   './index.html',
@@ -46,7 +46,6 @@ self.addEventListener('fetch', (event) => {
   );
 });
 
-// Membuka aplikasi otomatis saat Notifikasi Native di bar atas HP diketuk
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   event.waitUntil(
