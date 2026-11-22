@@ -1,10 +1,10 @@
 /*!
- * Liamvtrade — Core Application Engine, Multi-Account & Live Market Feed (v2.3)
+ * Liamvtrade — Locked Sniper Engine, Auto-Notif & Journal Archive (v2.4)
  * Copyright (c) 2026 Ilham Maulana Nur Al Rasyid (@xliamvr)
  * Package ID: com.xliamvr.trade — All Rights Reserved.
  */
 
-// ==================== 1. DEFAULT ACCOUNTS & STATE ====================
+// ==================== 1. DEFAULT ACCOUNTS, SAMPLE ARCHIVE & STATE ====================
 const DEFAULT_ACCOUNTS = [
   {
     id: 'acc-1',
@@ -53,14 +53,139 @@ const DEFAULT_ACCOUNTS = [
   }
 ];
 
+function createInitialHistorySeed() {
+  const now = Date.now();
+  return [
+    {
+      id: 'hist-seed-1',
+      createdAt: new Date(now - 3600000 * 2).toISOString(),
+      closedAt: new Date(now - 3600000 * 1.2).toISOString(),
+      pair: 'XAUUSD',
+      tf: 'M15',
+      method: 'SMC',
+      methodLabel: 'SMC Liquidity Sweep + Discount FVG (M15)',
+      direction: 'BUY LIMIT',
+      side: 'BUY',
+      bias: 'Bullish',
+      confidence: 88,
+      entryMin: 2708.00,
+      entryMax: 2709.50,
+      entryPrice: 2708.80,
+      sl: 2705.80,
+      slUnits: 30,
+      tp1: 2713.30,
+      tp1Units: 45,
+      tp2: 2715.30,
+      tp2Units: 65,
+      tp3: 2718.30,
+      tp3Units: 95,
+      unitLabel: 'pips',
+      status: 'TP2 HIT',
+      resultUnits: 65,
+      structure: 'Sweep Asia Low → Displacement Bullish & CHoCH M5 → Retest FVG M15.'
+    },
+    {
+      id: 'hist-seed-2',
+      createdAt: new Date(now - 3600000 * 5).toISOString(),
+      closedAt: new Date(now - 3600000 * 4).toISOString(),
+      pair: 'BTCUSDT',
+      tf: 'M15',
+      method: 'FIBO',
+      methodLabel: 'Fibonacci Golden Pocket 0.618–0.786 (M15)',
+      direction: 'SELL LIMIT',
+      side: 'SELL',
+      bias: 'Bearish',
+      confidence: 85,
+      entryMin: 59820.00,
+      entryMax: 59950.00,
+      entryPrice: 59885.00,
+      sl: 60125.00,
+      slUnits: 240,
+      tp1: 59505.00,
+      tp1Units: 380,
+      tp2: 59345.00,
+      tp2Units: 540,
+      tp3: 59085.00,
+      tp3Units: 800,
+      unitLabel: 'pts',
+      status: 'TP3 HIT',
+      resultUnits: 800,
+      structure: 'Rejection Golden Pocket 0.705 Fibo + Sweep Equal Highs M15.'
+    },
+    {
+      id: 'hist-seed-3',
+      createdAt: new Date(now - 3600000 * 8).toISOString(),
+      closedAt: new Date(now - 3600000 * 7).toISOString(),
+      pair: 'XAUUSD',
+      tf: 'M15',
+      method: 'SMC',
+      methodLabel: 'SMC Liquidity Sweep + Discount FVG (M15)',
+      direction: 'BUY LIMIT',
+      side: 'BUY',
+      bias: 'Bullish',
+      confidence: 82,
+      entryMin: 2714.00,
+      entryMax: 2715.50,
+      entryPrice: 2714.80,
+      sl: 2711.80,
+      slUnits: 30,
+      tp1: 2719.30,
+      tp1Units: 45,
+      tp2: 2721.30,
+      tp2Units: 65,
+      tp3: 2724.30,
+      tp3Units: 95,
+      unitLabel: 'pips',
+      status: 'BREAK EVEN',
+      resultUnits: 0,
+      structure: 'Harga sempat menyentuh TP1 (+45 pips), SL digeser ke BE sebelum pullback.'
+    },
+    {
+      id: 'hist-seed-4',
+      createdAt: new Date(now - 86400000 * 2).toISOString(),
+      closedAt: new Date(now - 86400000 * 2 + 3600000).toISOString(),
+      pair: 'US100',
+      tf: 'M15',
+      method: 'LIQ',
+      methodLabel: 'Equal Highs Liquidity Reversal (M15)',
+      direction: 'SELL LIMIT',
+      side: 'SELL',
+      bias: 'Bearish',
+      confidence: 79,
+      entryMin: 21210.00,
+      entryMax: 21222.00,
+      entryPrice: 21216.00,
+      sl: 21238.00,
+      slUnits: 22,
+      tp1: 21181.00,
+      tp1Units: 35,
+      tp2: 21166.00,
+      tp2Units: 50,
+      tp3: 21141.00,
+      tp3Units: 75,
+      unitLabel: 'pts',
+      status: 'SL HIT',
+      resultUnits: -22,
+      structure: 'Ekspansi volume pembukaan NY menembus batas invalidasi atas.'
+    }
+  ];
+}
+
 const DEFAULT_STATE = {
   theme: 'light',
   activeTab: 'home',
   selectedPair: 'XAUUSD',
   selectedTF: 'M15',
+  selectedMethod: 'AUTO',
   weekendBtcMode: true,
+  autoNotif: true,
+  historyPeriod: 'TODAY', // TODAY | WEEK | MONTH | YEAR | ALL
+  historyFeedMode: 'SYSTEM', // SYSTEM | JOURNAL
   activeAccountId: 'acc-1',
   accounts: DEFAULT_ACCOUNTS,
+  lockedSetups: {}, // Key: `${pair}_${tf}` -> Single locked setup object
+  signalHistory: createInitialHistorySeed(),
+  userJournal: [], // Khusus setup yang diambil user ("Ambil Setup")
   checklist: [
     { id: 'c1', text: 'Asia High & Asia Low (07.00–14.00 WIB) terpetakan', done: true },
     { id: 'c2', text: 'Cek jadwal High Impact News USD (CPI/NFP/FOMC)', done: false },
@@ -71,18 +196,28 @@ const DEFAULT_STATE = {
   tgChatId: ''
 };
 
-// Migrasi otomatis pengaturan lama agar API Key & Token tetap tersimpan
+// Migrasi otomatis pengaturan lama agar API Key, Token & Akun tetap tersimpan
+const prevV23 = JSON.parse(localStorage.getItem('liamvtrade_v23_state') || 'null');
 const prevV22 = JSON.parse(localStorage.getItem('liamvtrade_v22_state') || 'null');
 const prevV21 = JSON.parse(localStorage.getItem('liamvtrade_v21_state') || '{}');
-const savedState = JSON.parse(localStorage.getItem('liamvtrade_v23_state') || 'null');
+const savedState = JSON.parse(localStorage.getItem('liamvtrade_v24_state') || 'null');
 
 let state = {
   ...DEFAULT_STATE,
-  ...(savedState || prevV22 || prevV21)
+  ...(savedState || prevV23 || prevV22 || prevV21)
 };
 
 if (!Array.isArray(state.accounts) || state.accounts.length === 0) {
   state.accounts = [...DEFAULT_ACCOUNTS];
+}
+if (!state.lockedSetups || typeof state.lockedSetups !== 'object') {
+  state.lockedSetups = {};
+}
+if (!Array.isArray(state.signalHistory)) {
+  state.signalHistory = createInitialHistorySeed();
+}
+if (!Array.isArray(state.userJournal)) {
+  state.userJournal = [];
 }
 
 // Otomatis pilih BTCUSDT saat Sabtu/Minggu jika Weekend BTC Mode aktif
@@ -119,9 +254,10 @@ let marketRanges = {
 let activeNewsList = typeof LIAMV_NEWS !== 'undefined' ? [...LIAMV_NEWS] : [];
 let currentNewsFilter = 'ALL';
 let lastTwelveDataSync = 0;
+let expandedHistoryId = null;
 
 function saveState() {
-  localStorage.setItem('liamvtrade_v23_state', JSON.stringify(state));
+  localStorage.setItem('liamvtrade_v24_state', JSON.stringify(state));
 }
 
 function getActiveAccount() {
@@ -163,7 +299,6 @@ function playAlertChime() {
 
 // ==================== 3. LIVE MARKET PRICES (BEBAS BLOKIR DNS 4G INDONESIA) ====================
 async function fetchLiveBtcUnblocked() {
-  // Jalur 1: CryptoCompare Public API (Analytics domain — terbuka penuh di 4G Indonesia + CORS *)
   try {
     const ccRes = await fetch(
       'https://min-api.cryptocompare.com/data/v2/histominute?fsym=BTC&tsym=USD&limit=32&aggregate=15',
@@ -186,7 +321,6 @@ async function fetchLiveBtcUnblocked() {
     }
   } catch (e) {}
 
-  // Jalur 2: CoinGecko Public API (Cadangan — juga terbuka penuh di jaringan 4G Indonesia)
   try {
     const cgRes = await fetch(
       'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=usd&include_24hr_high=true&include_24hr_low=true',
@@ -209,10 +343,8 @@ async function fetchLiveBtcUnblocked() {
 }
 
 async function syncLiveMarketPrices(forceTwelveData = false) {
-  // 1. BTCUSDT Live 24/7 (CryptoCompare / CoinGecko)
   const btcOk = await fetchLiveBtcUnblocked();
 
-  // 2. Twelve Data API (Aman dari rate-limit 8 kredit/menit)
   const now = Date.now();
   if (state.twelveDataKey && (forceTwelveData || now - lastTwelveDataSync >= 55000)) {
     lastTwelveDataSync = now;
@@ -250,6 +382,9 @@ async function syncLiveMarketPrices(forceTwelveData = false) {
       }
     } catch (e) {}
   }
+
+  // Pantau apakah harga live menyentuh TP1/TP2/TP3/BE/SL pada setup yang sedang terkunci
+  evaluateLockedSetupsAgainstLivePrice();
 
   updateHeaderTicker();
   updateRadarMetricsUI();
@@ -374,7 +509,7 @@ function switchTab(tabName) {
   if (tabName === 'signals') renderSignals();
 }
 
-// ==================== 5. REAL-TIME WIB & WEEKEND BTC SESSION ====================
+// ==================== 5. REAL-TIME WIB, TIMER SETUP & WEEKEND BTC ====================
 function toggleWeekendBtcMode() {
   state.weekendBtcMode = !state.weekendBtcMode;
   saveState();
@@ -385,6 +520,16 @@ function toggleWeekendBtcMode() {
   } else {
     showToast('⏸️ Weekend BTC Mode Dinonaktifkan');
   }
+}
+
+function formatElapsedDuration(isoStart) {
+  if (!isoStart) return '0m 00s berjalan';
+  const diffSec = Math.max(0, Math.floor((Date.now() - new Date(isoStart).getTime()) / 1000));
+  const hrs = Math.floor(diffSec / 3600);
+  const mins = Math.floor((diffSec % 3600) / 60);
+  const secs = String(diffSec % 60).padStart(2, '0');
+  if (hrs > 0) return `${hrs}j ${mins}m ${secs}s berjalan`;
+  return `${mins}m ${secs}s berjalan`;
 }
 
 function updateWibSession() {
@@ -401,6 +546,14 @@ function updateWibSession() {
 
   const clockEl = document.getElementById('live-clock-wib');
   if (clockEl) clockEl.textContent = `${days[dayIdx]}, ${hh}:${mm}:${ss} WIB`;
+
+  // Perbarui timer live pada kartu sinyal aktif setiap detik
+  const activeKey = `${state.selectedPair}_${state.selectedTF}`;
+  const activeSetup = state.lockedSetups[activeKey];
+  const timerEl = document.getElementById('live-setup-timer');
+  if (timerEl && activeSetup && activeSetup.status === 'LIVE') {
+    timerEl.textContent = formatElapsedDuration(activeSetup.createdAt);
+  }
 
   const dayNotes = {
     0: 'Minggu — Forex/Gold Tutup • Crypto BTCUSDT Aktif 24/7',
@@ -706,13 +859,217 @@ function toggleChecklist(idx) {
   renderHomeDashboard();
 }
 
-// ==================== 7. MULTI-PAIR & MULTI-METHOD SIGNALS ====================
+// ==================== 7. LOCKED SNIPER ENGINE, AUTO-NOTIF & JOURNAL ====================
 function populateMethodDropdown() {
   const select = document.getElementById('method-select');
   if (!select || typeof LIAMV_METHODS === 'undefined') return;
   select.innerHTML = LIAMV_METHODS.map(
-    (m) => `<option value="${m.id}">${m.name}</option>`
+    (m) => `<option value="${m.id}" ${m.id === state.selectedMethod ? 'selected' : ''}>${m.name}</option>`
   ).join('');
+}
+
+function updateAutoNotifUI() {
+  const btn = document.getElementById('auto-notif-btn');
+  const badge = document.getElementById('auto-notif-badge');
+  if (!btn || !badge) return;
+  if (state.autoNotif) {
+    btn.className = 'px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 text-[11px] font-extrabold flex items-center gap-1.5 transition active:scale-95';
+    badge.textContent = 'AUTO-NOTIF: ON';
+  } else {
+    btn.className = 'px-3 py-1.5 rounded-xl bg-slate-500/15 border border-slate-400/30 opacity-75 text-[11px] font-extrabold flex items-center gap-1.5 transition active:scale-95';
+    badge.textContent = 'AUTO-NOTIF: OFF';
+  }
+}
+
+function toggleAutoNotif() {
+  state.autoNotif = !state.autoNotif;
+  saveState();
+  updateAutoNotifUI();
+  if (state.autoNotif) {
+    if ('Notification' in window && Notification.permission === 'default') {
+      Notification.requestPermission().then(updateNativeNotifStatusUI);
+    }
+    showToast('🔔 Auto-Notif Aktif — Sinyal baru & hasil TP/SL otomatis terkirim!');
+  } else {
+    showToast('🔕 Auto-Notif Dimatikan');
+  }
+}
+
+function getOrLockCurrentSniperSetup(forceRefresh = false) {
+  const pairId = state.selectedPair || 'XAUUSD';
+  const tf = state.selectedTF || 'M15';
+  const methodId = state.selectedMethod || 'AUTO';
+  const key = `${pairId}_${tf}`;
+
+  let existing = state.lockedSetups[key];
+  if (!existing || existing.status !== 'LIVE' || forceRefresh) {
+    const newSetup = buildLockedSniperSetup(
+      pairId,
+      tf,
+      methodId,
+      livePrices[pairId],
+      marketRanges
+    );
+    state.lockedSetups[key] = newSetup;
+    saveState();
+
+    // Otomatis kirim notifikasi saat setup baru terkunci jika Auto-Notif ON
+    if (state.autoNotif) {
+      dispatchAutoSetupNotification(newSetup, 'NEW');
+    }
+    return newSetup;
+  }
+  return existing;
+}
+
+function forceNewSniperSetup() {
+  const setup = getOrLockCurrentSniperSetup(true);
+  renderSignals();
+  showToast(`🎯 Setup baru terkunci: ${setup.pair} ${setup.direction}`);
+}
+
+function evaluateLockedSetupsAgainstLivePrice() {
+  let changed = false;
+
+  Object.keys(state.lockedSetups).forEach((key) => {
+    const sig = state.lockedSetups[key];
+    if (!sig || sig.status !== 'LIVE') return;
+
+    const current = Number(livePrices[sig.pair]);
+    if (!current) return;
+
+    const isBuy = sig.side === 'BUY';
+
+    if (isBuy) {
+      if (current >= sig.tp3) {
+        finalizeSetupOutcome(key, 'TP3 HIT', sig.tp3Units);
+        changed = true;
+      } else if (current >= sig.tp1 && !sig.tp1Reached) {
+        sig.tp1Reached = true;
+        sig.sl = sig.entryPrice; // Geser SL otomatis ke Break Even
+        changed = true;
+        if (state.autoNotif) dispatchAutoSetupNotification(sig, 'TP1_BE');
+      } else if (current <= sig.sl) {
+        if (sig.tp1Reached) {
+          finalizeSetupOutcome(key, 'BREAK EVEN', 0);
+        } else {
+          finalizeSetupOutcome(key, 'SL HIT', -sig.slUnits);
+        }
+        changed = true;
+      }
+    } else {
+      if (current <= sig.tp3) {
+        finalizeSetupOutcome(key, 'TP3 HIT', sig.tp3Units);
+        changed = true;
+      } else if (current <= sig.tp1 && !sig.tp1Reached) {
+        sig.tp1Reached = true;
+        sig.sl = sig.entryPrice;
+        changed = true;
+        if (state.autoNotif) dispatchAutoSetupNotification(sig, 'TP1_BE');
+      } else if (current >= sig.sl) {
+        if (sig.tp1Reached) {
+          finalizeSetupOutcome(key, 'BREAK EVEN', 0);
+        } else {
+          finalizeSetupOutcome(key, 'SL HIT', -sig.slUnits);
+        }
+        changed = true;
+      }
+    }
+  });
+
+  if (changed) saveState();
+}
+
+function finalizeSetupOutcome(setupKey, finalStatus, signedUnits) {
+  const sig = state.lockedSetups[setupKey];
+  if (!sig) return;
+
+  sig.status = finalStatus;
+  sig.resultUnits = signedUnits;
+  sig.closedAt = new Date().toISOString();
+
+  // Masukkan ke riwayat sinyal sistem (paling atas)
+  state.signalHistory.unshift({ ...sig });
+
+  // Jika user sempat menekan "Ambil Setup", perbarui jurnal pribadi & saldo akunnya
+  if (sig.takenByUser) {
+    const pnlUsd = calculateUsdPnl(sig.pair, signedUnits, sig.takenLot || 0.01);
+    const jIdx = state.userJournal.findIndex((j) => j.id === sig.id);
+    const journalEntry = {
+      ...sig,
+      status: finalStatus,
+      resultUnits: signedUnits,
+      pnlUsd: pnlUsd
+    };
+    if (jIdx >= 0) {
+      state.userJournal[jIdx] = journalEntry;
+    } else {
+      state.userJournal.unshift(journalEntry);
+    }
+
+    const acc = state.accounts.find((a) => a.id === sig.takenAccountId);
+    if (acc) {
+      acc.equity = +(acc.equity + pnlUsd).toFixed(2);
+      if (signedUnits > 0) acc.wins += 1;
+      if (signedUnits < 0) {
+        acc.losses += 1;
+        acc.slsToday = Math.min(acc.maxSLs, acc.slsToday + 1);
+      }
+    }
+  }
+
+  saveState();
+  renderHomeDashboard();
+
+  if (state.autoNotif) {
+    dispatchAutoSetupNotification(sig, finalStatus);
+  }
+}
+
+function manualResolveCurrentSetup(outcomeType) {
+  const key = `${state.selectedPair}_${state.selectedTF}`;
+  const sig = state.lockedSetups[key];
+  if (!sig || sig.status !== 'LIVE') return;
+
+  const mapUnits = {
+    'TP1 HIT': sig.tp1Units,
+    'TP2 HIT': sig.tp2Units,
+    'TP3 HIT': sig.tp3Units,
+    'BREAK EVEN': 0,
+    'SL HIT': -sig.slUnits
+  };
+  finalizeSetupOutcome(key, outcomeType, mapUnits[outcomeType] ?? 0);
+  renderSignals();
+  showToast(`📌 Hasil dicatat: ${sig.pair} → ${outcomeType}`);
+}
+
+function takeCurrentSetup() {
+  const key = `${state.selectedPair}_${state.selectedTF}`;
+  const sig = getOrLockCurrentSniperSetup(false);
+  const activeAcc = getActiveAccount();
+
+  if (sig.takenByUser) {
+    showToast(`ℹ️ Setup ini sudah masuk Jurnal (${sig.takenAccountName})`);
+    return;
+  }
+
+  const lotSize = calculateLotForPair(sig.pair, sig.slUnits, activeAcc.balance, activeAcc.riskPct);
+  sig.takenByUser = true;
+  sig.takenAccountId = activeAcc.id;
+  sig.takenAccountName = activeAcc.name;
+  sig.takenLot = lotSize;
+
+  activeAcc.entriesToday = Math.min(activeAcc.maxEntries, activeAcc.entriesToday + 1);
+
+  state.userJournal.unshift({
+    ...sig,
+    pnlUsd: 0
+  });
+
+  saveState();
+  renderHomeDashboard();
+  renderSignals();
+  showToast(`✅ Setup masuk Jurnal Saya (${activeAcc.name} • ${lotSize.toFixed(2)} lot)`);
 }
 
 function setSignalPair(pairId) {
@@ -746,144 +1103,399 @@ function setSignalTF(tf) {
   renderSignals();
 }
 
+function onMethodChange() {
+  const val = document.getElementById('method-select')?.value || 'AUTO';
+  state.selectedMethod = val;
+  saveState();
+  forceNewSniperSetup();
+}
+
+function setHistoryPeriod(period) {
+  state.historyPeriod = period;
+  saveState();
+  ['TODAY', 'WEEK', 'MONTH', 'YEAR', 'ALL'].forEach((p) => {
+    const btn = document.getElementById(`period-btn-${p}`);
+    if (!btn) return;
+    if (p === period) {
+      btn.classList.add('bg-blue-600', 'text-white');
+      btn.classList.remove('glass-card');
+    } else {
+      btn.classList.remove('bg-blue-600', 'text-white');
+      btn.classList.add('glass-card');
+    }
+  });
+  renderHistoryAndStats();
+}
+
+function setHistoryFeedMode(mode) {
+  state.historyFeedMode = mode;
+  saveState();
+  ['SYSTEM', 'JOURNAL'].forEach((m) => {
+    const btn = document.getElementById(`feed-tab-${m}`);
+    if (!btn) return;
+    if (m === mode) {
+      btn.classList.add('bg-blue-600', 'text-white');
+    } else {
+      btn.classList.remove('bg-blue-600', 'text-white');
+    }
+  });
+  renderHistoryAndStats();
+}
+
+function toggleHistoryCardDetail(itemId) {
+  expandedHistoryId = expandedHistoryId === itemId ? null : itemId;
+  renderHistoryAndStats();
+}
+
 function renderSignals() {
-  const container = document.getElementById('signals-container');
+  const liveCardBox = document.getElementById('sniper-live-card');
   const outputBox = document.getElementById('smc-standard-output');
-  if (!container) return;
+  if (!liveCardBox) return;
 
-  if (typeof generateSignalsForPair !== 'function') {
-    container.innerHTML = `
-      <div class="glass-card p-6 text-center">
-        <p class="font-display font-bold text-sm">Memperbarui Engine Sinyal...</p>
-        <p class="text-xs opacity-65 mt-1">Tarik layar ke bawah untuk memuat ulang cache.</p>
-      </div>
-    `;
-    return;
-  }
+  updateAutoNotifUI();
 
-  const pairId = state.selectedPair || 'XAUUSD';
-  const cfg = LIAMV_PAIRS[pairId] || LIAMV_PAIRS.XAUUSD;
+  const sig = getOrLockCurrentSniperSetup(false);
+  const cfg = LIAMV_PAIRS[sig.pair] || LIAMV_PAIRS.XAUUSD;
   const d = cfg.decimals;
   const activeAcc = getActiveAccount();
+  const isBuy = sig.side === 'BUY';
+  const meta = getConfidenceMeta(sig.confidence);
+  const lotSize = calculateLotForPair(sig.pair, sig.slUnits, activeAcc.balance, activeAcc.riskPct);
+  const livePrice = Number(livePrices[sig.pair]) || sig.entryPrice;
+  const isLive = sig.status === 'LIVE';
 
-  const allPairSignals = generateSignalsForPair(pairId, livePrices, marketRanges);
-  const methodFilter = document.getElementById('method-select')?.value || 'ALL';
-  const filtered = allPairSignals.filter((s) => {
-    const tfMatch = s.tf === state.selectedTF;
-    const methodMatch = methodFilter === 'ALL' || s.method === methodFilter;
-    return tfMatch && methodMatch;
+  liveCardBox.innerHTML = `
+    <div class="glass-card p-5 space-y-4 border-2 ${isBuy ? 'border-emerald-500/40' : 'border-rose-500/40'} shadow-lg">
+      <!-- Baris Atas Ala Terminal Pro (Sesuai Referensi Gambar) -->
+      <div class="flex items-center justify-between gap-2 pb-3 border-b border-[var(--border-subtle)]">
+        <div class="flex items-center gap-2.5 min-w-0">
+          <div class="w-1.5 h-10 rounded-full ${isBuy ? 'bg-emerald-500' : 'bg-rose-500'} shrink-0"></div>
+          <span class="px-2.5 py-1 rounded-lg text-[10px] font-extrabold tracking-wider ${isBuy ? 'bg-emerald-500/15 text-emerald-500' : 'bg-rose-500/15 text-rose-500'}">
+            ${sig.side}
+          </span>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1.5">
+              <span class="font-display text-base font-extrabold">${sig.pair}</span>
+              <span class="text-[10px] font-bold opacity-60">(${sig.tf})</span>
+            </div>
+            <div class="flex items-center gap-1.5 text-[10.5px] opacity-75">
+              <span class="w-1.5 h-1.5 rounded-full ${isLive ? 'bg-blue-500 animate-pulse' : 'bg-slate-400'}"></span>
+              <span id="live-setup-timer" class="font-mono-num">${isLive ? formatElapsedDuration(sig.createdAt) : 'Selesai (' + sig.status + ')'}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-right shrink-0">
+          <span class="font-mono-num text-sm font-extrabold block">${livePrice.toFixed(d)}</span>
+          <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold ${
+            isLive ? 'bg-blue-500/15 text-blue-500 border border-blue-500/30' : 'bg-emerald-500/15 text-emerald-500'
+          }">
+            ${isLive ? '• LIVE LOCKED' : sig.status}
+          </span>
+        </div>
+      </div>
+
+      <!-- Metode & Confidence -->
+      <div class="flex items-center justify-between gap-2">
+        <div>
+          <p class="text-xs font-bold">${sig.methodLabel}</p>
+          <span class="inline-block mt-1 px-2 py-0.5 rounded-full text-[9px] font-extrabold ${meta.badgeClass}">
+            ${meta.tier} • ${sig.confidence}% PD
+          </span>
+        </div>
+        <button onclick="forceNewSniperSetup()" class="px-2.5 py-1.5 rounded-xl border border-[var(--border-subtle)] text-[10px] font-bold active:scale-95 whitespace-nowrap">
+          ↻ Scan Baru
+        </button>
+      </div>
+
+      <!-- Grid Harga Terkunci (Tidak Bergeser Sendiri) -->
+      <div class="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-black/[0.03] dark:bg-white/[0.04] border border-[var(--border-subtle)]">
+        <div>
+          <span class="text-[9px] font-bold uppercase opacity-60 block">Zona Entry</span>
+          <span class="font-mono-num text-[10.5px] font-extrabold text-amber-500">${sig.entryMin.toFixed(d)} - ${sig.entryMax.toFixed(d)}</span>
+        </div>
+        <div>
+          <span class="text-[9px] font-bold uppercase opacity-60 block">Stop Loss</span>
+          <span class="font-mono-num text-[10.5px] font-extrabold text-rose-500">${sig.sl.toFixed(d)} (${sig.slUnits}${sig.unitLabel[0]})</span>
+        </div>
+        <div>
+          <span class="text-[9px] font-bold uppercase opacity-60 block">Lot (${activeAcc.name.split(' ')[0]})</span>
+          <span class="font-mono-num text-[10.5px] font-extrabold text-blue-500 whitespace-nowrap">${lotSize.toFixed(2)} lot</span>
+        </div>
+      </div>
+
+      <!-- Target TP1 - TP3 -->
+      <div class="space-y-1.5 text-xs">
+        <div class="flex justify-between items-center px-3 py-1.5 rounded-xl bg-emerald-500/10">
+          <span class="font-bold text-emerald-600 dark:text-emerald-400">TP 1 (1:1.5 • Set BE)</span>
+          <span class="font-mono-num font-bold whitespace-nowrap">${sig.tp1.toFixed(d)} (+${sig.tp1Units} ${sig.unitLabel})</span>
+        </div>
+        <div class="flex justify-between items-center px-3 py-1.5 rounded-xl bg-emerald-500/10">
+          <span class="font-bold text-emerald-600 dark:text-emerald-400">TP 2 (1:2 • Intraday)</span>
+          <span class="font-mono-num font-bold whitespace-nowrap">${sig.tp2.toFixed(d)} (+${sig.tp2Units} ${sig.unitLabel})</span>
+        </div>
+        <div class="flex justify-between items-center px-3 py-1.5 rounded-xl bg-emerald-500/10">
+          <span class="font-bold text-emerald-600 dark:text-emerald-400">TP 3 (1:3 • Extreme)</span>
+          <span class="font-mono-num font-bold whitespace-nowrap">${sig.tp3.toFixed(d)} (+${sig.tp3Units} ${sig.unitLabel})</span>
+        </div>
+      </div>
+
+      <!-- Alasan Struktur -->
+      <p class="text-[11px] opacity-80 leading-relaxed">
+        <strong>Struktur:</strong> ${sig.structure}
+      </p>
+
+      <!-- Tombol Ambil Setup (Masuk Jurnal & Excel) -->
+      <div class="flex gap-2">
+        <button onclick="takeCurrentSetup()" class="flex-1 py-2.5 rounded-xl ${
+          sig.takenByUser
+            ? 'bg-emerald-600 text-white'
+            : 'bg-gradient-to-r from-cyan-500 to-blue-600 text-white'
+        } text-xs font-bold shadow active:scale-95">
+          ${sig.takenByUser ? `✓ Tercatat di Jurnal (${sig.takenAccountName})` : `Ambil Setup (${activeAcc.name})`}
+        </button>
+      </div>
+
+      <!-- Tombol Catat Hasil Akhir Manual (Jika Close Lebih Awal di MT5/cTrader) -->
+      ${
+        isLive
+          ? `<div class="pt-2 border-t border-[var(--border-subtle)]">
+              <span class="text-[9.5px] font-bold uppercase opacity-60 block mb-1.5">Tandai Hasil Setup (Jika Sudah Close):</span>
+              <div class="grid grid-cols-5 gap-1.5 text-[9.5px] font-extrabold">
+                <button onclick="manualResolveCurrentSetup('TP1 HIT')" class="py-1.5 rounded-lg bg-emerald-500/15 text-emerald-500 active:scale-95">TP1</button>
+                <button onclick="manualResolveCurrentSetup('TP2 HIT')" class="py-1.5 rounded-lg bg-emerald-500/20 text-emerald-500 active:scale-95">TP2</button>
+                <button onclick="manualResolveCurrentSetup('TP3 HIT')" class="py-1.5 rounded-lg bg-emerald-500/25 text-emerald-500 active:scale-95">TP3</button>
+                <button onclick="manualResolveCurrentSetup('BREAK EVEN')" class="py-1.5 rounded-lg bg-slate-500/15 opacity-80 active:scale-95">BE</button>
+                <button onclick="manualResolveCurrentSetup('SL HIT')" class="py-1.5 rounded-lg bg-rose-500/15 text-rose-500 active:scale-95">SL</button>
+              </div>
+            </div>`
+          : ''
+      }
+    </div>
+  `;
+
+  if (outputBox) {
+    outputBox.textContent = formatStandardSmcSignal(sig, lotSize, activeAcc.name);
+  }
+
+  renderHistoryAndStats();
+}
+
+function filterItemsByPeriod(items, period) {
+  if (period === 'ALL') return items;
+
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+
+  return items.filter((item) => {
+    const t = new Date(item.closedAt || item.createdAt).getTime();
+    if (period === 'TODAY') return t >= startOfToday;
+    if (period === 'WEEK') return t >= startOfToday - 6 * 86400000;
+    if (period === 'MONTH') return t >= new Date(now.getFullYear(), now.getMonth(), 1).getTime();
+    if (period === 'YEAR') return t >= new Date(now.getFullYear(), 0, 1).getTime();
+    return true;
   });
+}
 
-  const headingEl = document.getElementById('signal-list-heading');
-  const countEl = document.getElementById('signal-active-count');
-  if (headingEl) headingEl.textContent = `${pairId} • ${state.selectedTF} Signals`;
-  if (countEl) countEl.textContent = `${filtered.length} aktif`;
+function renderHistoryAndStats() {
+  const sourceList =
+    state.historyFeedMode === 'JOURNAL' ? state.userJournal : state.signalHistory;
+  const periodItems = filterItemsByPeriod(sourceList, state.historyPeriod);
 
-  if (filtered.length === 0) {
-    container.innerHTML = `
-      <div class="glass-card p-6 text-center">
-        <p class="font-display font-bold text-sm">Tidak ada metode terpilih di ${pairId} (${state.selectedTF})</p>
-        <p class="text-xs opacity-65 mt-1">Ubah filter metode ke "Semua Metode" untuk melihat seluruh setup aktif.</p>
+  const jBadge = document.getElementById('journal-count-badge');
+  if (jBadge) jBadge.textContent = state.userJournal.length;
+
+  // Hitung Statistik Periode Terpilih
+  const tpCount = periodItems.filter((i) => String(i.status).startsWith('TP')).length;
+  const slCount = periodItems.filter((i) => i.status === 'SL HIT').length;
+  const beCount = periodItems.filter((i) => i.status === 'BREAK EVEN').length;
+  const decided = tpCount + slCount;
+  const winrate = decided > 0 ? Math.round((tpCount / decided) * 100) : 0;
+  const netUnits = periodItems.reduce((sum, i) => sum + (Number(i.resultUnits) || 0), 0);
+
+  const elTot = document.getElementById('stat-total-signals');
+  const elTp = document.getElementById('stat-tp-count');
+  const elSl = document.getElementById('stat-sl-count');
+  const elBe = document.getElementById('stat-be-count');
+  const elWr = document.getElementById('stat-winrate');
+  const elPips = document.getElementById('stat-net-pips');
+
+  if (elTot) elTot.textContent = `${periodItems.length} SINYAL`;
+  if (elTp) elTp.textContent = tpCount;
+  if (elSl) elSl.textContent = slCount;
+  if (elBe) elBe.textContent = beCount;
+  if (elWr) elWr.textContent = `${winrate}%`;
+  if (elPips) {
+    elPips.textContent = `${netUnits >= 0 ? '+' : ''}${netUnits}`;
+    elPips.className = `font-mono-num text-xs font-extrabold ${
+      netUnits >= 0 ? 'text-emerald-500' : 'text-rose-500'
+    }`;
+  }
+
+  const feedEl = document.getElementById('history-feed-container');
+  if (!feedEl) return;
+
+  if (periodItems.length === 0) {
+    feedEl.innerHTML = `
+      <div class="glass-card p-5 text-center">
+        <p class="text-xs font-bold opacity-75">Belum ada catatan pada periode ini.</p>
+        <p class="text-[11px] opacity-60 mt-1">${
+          state.historyFeedMode === 'JOURNAL'
+            ? 'Tekan tombol "Ambil Setup" pada kartu sinyal di atas untuk mencatat jurnal pribadimu.'
+            : 'Riwayat otomatis terisi setiap sinyal menyentuh TP, Break Even, atau SL.'
+        }</p>
       </div>
     `;
-    if (outputBox) outputBox.textContent = 'NO SETUP — PILIH "SEMUA METODE" UNTUK MELIHAT SETUP AKTIF';
     return;
   }
 
-  container.innerHTML = filtered
-    .map((sig) => {
-      const isBuy = sig.direction.includes('BUY');
-      const meta = getConfidenceMeta(sig.confidence);
-      const radius = 22;
-      const circumference = 2 * Math.PI * radius;
-      const offset = circumference - (sig.confidence / 100) * circumference;
-      const lotSize = calculateLotForPair(pairId, sig.slUnits, activeAcc.balance, activeAcc.riskPct);
+  feedEl.innerHTML = periodItems
+    .map((item) => {
+      const cfg = LIAMV_PAIRS[item.pair] || LIAMV_PAIRS.XAUUSD;
+      const d = cfg.decimals;
+      const isBuy = item.side === 'BUY';
+      const isTp = String(item.status).startsWith('TP');
+      const isSl = item.status === 'SL HIT';
+      const isExpanded = expandedHistoryId === item.id;
+      const edu = explainSignalEducation(item);
+
+      const badgeStyle = isTp
+        ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30'
+        : isSl
+        ? 'bg-rose-500/15 text-rose-500 border border-rose-500/30'
+        : 'bg-slate-500/15 opacity-80 border border-slate-400/30';
+
+      const wibTime = new Intl.DateTimeFormat('id-ID', {
+        timeZone: 'Asia/Jakarta',
+        day: '2-digit',
+        month: 'short',
+        hour: '2-digit',
+        minute: '2-digit'
+      }).format(new Date(item.closedAt || item.createdAt));
 
       return `
-        <div class="glass-card p-5 space-y-3.5 card-3d">
+        <div onclick="toggleHistoryCardDetail('${item.id}')" class="glass-card p-3.5 cursor-pointer transition active:scale-[0.99]">
           <div class="flex items-center justify-between gap-2">
-            <div>
-              <div class="flex items-center gap-2">
-                <span class="font-display text-lg font-extrabold">${sig.pair}</span>
-                <span class="px-2.5 py-0.5 rounded-lg text-[10px] font-extrabold whitespace-nowrap ${isBuy ? 'bg-blue-600 text-white' : 'bg-rose-600 text-white'}">${sig.direction}</span>
-              </div>
-              <p class="text-[11px] font-semibold opacity-70 mt-0.5">${sig.methodLabel}</p>
-              <span class="inline-block mt-1.5 px-2.5 py-0.5 rounded-full text-[9px] font-extrabold tracking-wider whitespace-nowrap ${meta.badgeClass}">${meta.tier}</span>
-            </div>
-
-            <div class="relative w-14 h-14 flex items-center justify-center shrink-0">
-              <svg class="w-14 h-14 -rotate-90" viewBox="0 0 56 56">
-                <circle cx="28" cy="28" r="${radius}" stroke="currentColor" stroke-opacity="0.12" stroke-width="5" fill="none"/>
-                <circle cx="28" cy="28" r="${radius}" stroke="${meta.strokeColor}" stroke-width="5" stroke-linecap="round" fill="none"
-                  stroke-dasharray="${circumference}" stroke-dashoffset="${offset}"/>
-              </svg>
-              <div class="absolute text-center">
-                <span class="font-mono-num text-xs font-extrabold block leading-none">${sig.confidence}%</span>
-                <span class="text-[8px] font-bold uppercase opacity-60">PD</span>
+            <div class="flex items-center gap-2.5 min-w-0">
+              <div class="w-1 h-8 rounded-full ${isBuy ? 'bg-emerald-500' : 'bg-rose-500'} shrink-0"></div>
+              <span class="px-2 py-0.5 rounded text-[9.5px] font-extrabold ${
+                isBuy ? 'bg-emerald-500/15 text-emerald-500' : 'bg-rose-500/15 text-rose-500'
+              }">${item.side}</span>
+              <div class="min-w-0">
+                <span class="font-display text-xs font-extrabold block truncate">${item.pair} <span class="opacity-55 font-normal">• ${wibTime}</span></span>
+                ${
+                  item.takenAccountName
+                    ? `<span class="text-[9.5px] text-blue-500 font-bold block">${item.takenAccountName} (${item.takenLot} lot)</span>`
+                    : ''
+                }
               </div>
             </div>
-          </div>
 
-          <div class="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-black/[0.03] dark:bg-white/[0.04] border border-[var(--border-subtle)]">
-            <div>
-              <span class="text-[9px] font-bold uppercase opacity-60 block">Zona Entry</span>
-              <span class="font-mono-num text-[10.5px] font-extrabold text-amber-500">${sig.entryMin.toFixed(d)} - ${sig.entryMax.toFixed(d)}</span>
-            </div>
-            <div>
-              <span class="text-[9px] font-bold uppercase opacity-60 block">Stop Loss</span>
-              <span class="font-mono-num text-[10.5px] font-extrabold text-rose-500">${sig.sl.toFixed(d)} (${sig.slUnits}${sig.unitLabel[0]})</span>
-            </div>
-            <div>
-              <span class="text-[9px] font-bold uppercase opacity-60 block">Lot (${activeAcc.name.split(' ')[0]})</span>
-              <span class="font-mono-num text-[10.5px] font-extrabold text-blue-500 whitespace-nowrap">${lotSize.toFixed(2)} lot</span>
+            <div class="text-right shrink-0">
+              <span class="font-mono-num text-xs font-extrabold block">${Number(item.entryPrice).toFixed(d)}</span>
+              <span class="inline-block mt-0.5 px-2 py-0.5 rounded-full text-[8.5px] font-extrabold tracking-wider ${badgeStyle}">
+                ${item.status}
+              </span>
             </div>
           </div>
 
-          <div class="space-y-1.5 text-xs">
-            <div class="flex justify-between items-center px-3 py-1.5 rounded-xl bg-emerald-500/10">
-              <span class="font-bold text-emerald-600 dark:text-emerald-400">TP 1 (1:1.5 • Set BE)</span>
-              <span class="font-mono-num font-bold whitespace-nowrap">${sig.tp1.toFixed(d)} (+${sig.tp1Units} ${sig.unitLabel})</span>
-            </div>
-            <div class="flex justify-between items-center px-3 py-1.5 rounded-xl bg-emerald-500/10">
-              <span class="font-bold text-emerald-600 dark:text-emerald-400">TP 2 (1:2 • Intraday)</span>
-              <span class="font-mono-num font-bold whitespace-nowrap">${sig.tp2.toFixed(d)} (+${sig.tp2Units} ${sig.unitLabel})</span>
-            </div>
-            <div class="flex justify-between items-center px-3 py-1.5 rounded-xl bg-emerald-500/10">
-              <span class="font-bold text-emerald-600 dark:text-emerald-400">TP 3 (1:3 • Extreme)</span>
-              <span class="font-mono-num font-bold whitespace-nowrap">${sig.tp3.toFixed(d)} (+${sig.tp3Units} ${sig.unitLabel})</span>
-            </div>
-          </div>
-
-          <div class="p-3 rounded-2xl bg-blue-500/10 border border-blue-500/20">
-            <div class="flex items-center gap-1.5 text-blue-500 font-bold text-[11px]">
-              <span>⭐ Rekomendasi TP Terbaik:</span>
-              <span>${sig.bestTp}</span>
-            </div>
-            <p class="text-[11px] opacity-80 mt-1 leading-relaxed">${sig.bestTpReason}</p>
-          </div>
-
-          <p class="text-[11px] opacity-75 leading-relaxed">
-            <strong class="opacity-100">Struktur:</strong> ${sig.structure}
-          </p>
-
-          <div class="flex gap-2 pt-1">
-            <button onclick="triggerSignalAlert('${sig.id}')" class="flex-1 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-blue-600 text-white text-xs font-bold shadow active:scale-95">
-              Kirim Notif Sinyal
-            </button>
-            <button onclick="adjustCounter('entries', 1); showToast('✅ Entry dicatat di ${activeAcc.name}');" class="px-3.5 py-2.5 rounded-xl border border-[var(--border-subtle)] text-xs font-bold active:scale-95 whitespace-nowrap">
-              Ambil Setup
-            </button>
-          </div>
+          <!-- Penjelasan Edukasi Pips Saat Kartu Diketuk -->
+          ${
+            isExpanded
+              ? `<div class="mt-3 pt-2.5 border-t border-[var(--border-subtle)] text-[11px] space-y-1.5">
+                  <p class="font-mono-num font-bold text-blue-500">${edu.riskSummary}</p>
+                  <p class="opacity-85 leading-relaxed">${edu.outcomeInsight}</p>
+                  <p class="opacity-70 text-[10.5px]"><strong>Struktur:</strong> ${item.structure}</p>
+                </div>`
+              : `<p class="text-[9.5px] opacity-50 mt-1.5 text-right">Ketuk untuk penjelasan pips & evaluasi ▾</p>`
+          }
         </div>
       `;
     })
     .join('');
+}
 
-  if (outputBox) {
-    const top = filtered[0];
-    const topLot = calculateLotForPair(pairId, top.slUnits, activeAcc.balance, activeAcc.riskPct);
-    outputBox.textContent = formatStandardSmcSignal(top, topLot, activeAcc.name);
+function exportUserJournalCsv() {
+  if (!state.userJournal || state.userJournal.length === 0) {
+    showToast('⚠️ Jurnal Saya masih kosong — klik "Ambil Setup" pada sinyal dulu');
+    return;
   }
+
+  const headers = [
+    'No',
+    'Waktu Entry (WIB)',
+    'Waktu Close (WIB)',
+    'Akun Prop Firm',
+    'Pair',
+    'Timeframe',
+    'Arah',
+    'Metode',
+    'Entry Price',
+    'Stop Loss',
+    'Jarak SL (Pips/Pts)',
+    'Target TP2',
+    'Lot Size',
+    'Status Hasil',
+    'Net Pips/Pts',
+    'Estimasi PnL (USD)'
+  ];
+
+  const rows = state.userJournal.map((item, idx) => {
+    const cfg = LIAMV_PAIRS[item.pair] || LIAMV_PAIRS.XAUUSD;
+    const d = cfg.decimals;
+    const fmtDate = (iso) =>
+      iso
+        ? new Intl.DateTimeFormat('id-ID', {
+            timeZone: 'Asia/Jakarta',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+            .format(new Date(iso))
+            .replace(/,/g, '')
+        : 'Berjalan';
+
+    const pnlUsd =
+      typeof item.pnlUsd === 'number'
+        ? item.pnlUsd
+        : calculateUsdPnl(item.pair, Number(item.resultUnits) || 0, Number(item.takenLot) || 0.01);
+
+    return [
+      idx + 1,
+      `"${fmtDate(item.createdAt)}"`,
+      `"${fmtDate(item.closedAt)}"`,
+      `"${item.takenAccountName || 'Akun Utama'}"`,
+      item.pair,
+      item.tf,
+      item.direction,
+      item.method,
+      Number(item.entryPrice).toFixed(d),
+      Number(item.sl).toFixed(d),
+      item.slUnits,
+      Number(item.tp2).toFixed(d),
+      Number(item.takenLot || 0.01).toFixed(2),
+      item.status,
+      item.resultUnits || 0,
+      pnlUsd.toFixed(2)
+    ].join(',');
+  });
+
+  const csvContent = '\uFEFF' + [headers.join(','), ...rows].join('\n');
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  const todayStr = new Date().toISOString().slice(0, 10);
+
+  link.href = url;
+  link.download = `Liamvtrade_Jurnal_Saya_${todayStr}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+
+  showToast(`📊 Excel CSV berhasil diunduh (${state.userJournal.length} trade)!`);
 }
 
 function copyStandardOutput() {
@@ -1079,7 +1691,7 @@ async function runManualScan() {
   showToast(`📡 Harga & candle diperbarui: ${state.selectedPair} (${livePrices[state.selectedPair]})`);
 }
 
-// ==================== 10. NATIVE HP NOTIFICATION + OPTIONAL TELEGRAM ====================
+// ==================== 10. NATIVE HP NOTIFICATION + AUTO TELEGRAM ====================
 function updateNativeNotifStatusUI() {
   const statusEl = document.getElementById('native-notif-status');
   const btnEl = document.getElementById('btn-enable-notif');
@@ -1091,7 +1703,7 @@ function updateNativeNotifStatusUI() {
   }
 
   if (Notification.permission === 'granted') {
-    statusEl.textContent = '✅ Aktif — Siap kirim banner & getar ke HP';
+    statusEl.textContent = '✅ Aktif — Auto-Notif HP siap jalan otomatis';
     statusEl.className = 'text-xs font-bold text-emerald-500 mt-1';
     btnEl.textContent = 'Tes Bunyi & Notif HP';
     btnEl.onclick = testNativeNotification;
@@ -1144,7 +1756,7 @@ async function sendNativePush(title, body) {
 function testNativeNotification() {
   sendNativePush(
     '🧠 LIAMVTRADE — Xliamvr Terminal',
-    'Notifikasi Native aktif! Sinyal SMC Multi-Pair & alert sesi siap berjalan.'
+    'Notifikasi Native aktif! Sinyal SMC Sniper & update TP/SL otomatis berjalan.'
   );
   showToast('🔔 Notifikasi tes dikirim ke HP!');
 }
@@ -1164,31 +1776,29 @@ async function dispatchTelegramOptional(text) {
   }
 }
 
-async function triggerSignalAlert(sigId) {
-  const pairId = state.selectedPair || 'XAUUSD';
-  const cfg = LIAMV_PAIRS[pairId] || LIAMV_PAIRS.XAUUSD;
+async function dispatchAutoSetupNotification(sig, eventType) {
+  const cfg = LIAMV_PAIRS[sig.pair] || LIAMV_PAIRS.XAUUSD;
   const d = cfg.decimals;
-  const sig = generateSignalsForPair(pairId, livePrices, marketRanges).find((s) => s.id === sigId);
-  if (!sig) return;
-
   const activeAcc = getActiveAccount();
-  const lotSize = calculateLotForPair(pairId, sig.slUnits, activeAcc.balance, activeAcc.riskPct);
-  const title = `${sig.pair} ${sig.direction} (${sig.tf}) • ${sig.confidence}% PD`;
-  const shortBody = `Entry: ${sig.entryMin.toFixed(d)}-${sig.entryMax.toFixed(d)} | SL: ${sig.sl.toFixed(d)} | ${activeAcc.name} (${lotSize.toFixed(2)} lot)`;
+  const lotSize = calculateLotForPair(sig.pair, sig.slUnits, activeAcc.balance, activeAcc.riskPct);
 
-  const sentNative = await sendNativePush(title, shortBody);
-  const fullText = formatStandardSmcSignal(sig, lotSize, activeAcc.name);
-  const sentTg = await dispatchTelegramOptional(fullText);
+  let title = '';
+  let body = '';
 
-  if (sentNative && sentTg) {
-    showToast('🚀 Notif HP & arsip Telegram terkirim!');
-  } else if (sentNative) {
-    showToast('🔔 Notifikasi sinyal muncul di layar HP!');
-  } else if (sentTg) {
-    showToast('🚀 Sinyal terkirim ke Telegram!');
+  if (eventType === 'NEW') {
+    title = `🎯 SNIPER ${sig.pair} ${sig.direction} (${sig.tf})`;
+    body = `Entry: ${sig.entryMin.toFixed(d)}-${sig.entryMax.toFixed(d)} | SL: ${sig.sl.toFixed(d)} | TP2: ${sig.tp2.toFixed(d)} (${lotSize.toFixed(2)} lot)`;
+  } else if (eventType === 'TP1_BE') {
+    title = `🛡️ ${sig.pair} TP1 HIT → SL Digeser ke BE`;
+    body = `Amankan partial profit (+${sig.tp1Units} ${sig.unitLabel}) & geser SL ke ${sig.entryPrice.toFixed(d)}.`;
   } else {
-    showToast('🔔 Aktifkan izin Notifikasi HP di tab Profil!');
+    title = `📌 ${sig.pair} (${sig.tf}) → ${eventType}`;
+    body = `Hasil: ${sig.resultUnits >= 0 ? '+' : ''}${sig.resultUnits} ${sig.unitLabel} | ${sig.methodLabel}`;
   }
+
+  await sendNativePush(title, body);
+  const fullText = formatStandardSmcSignal(sig, lotSize, activeAcc.name);
+  await dispatchTelegramOptional(fullText);
 }
 
 async function testTelegramAlert() {
@@ -1291,6 +1901,8 @@ window.addEventListener('DOMContentLoaded', () => {
   fetchLiveEconomicNews(false);
   setSignalPair(state.selectedPair);
   setSignalTF(state.selectedTF);
+  setHistoryPeriod(state.historyPeriod);
+  setHistoryFeedMode(state.historyFeedMode);
   syncLiveMarketPrices(true);
   setInterval(() => syncLiveMarketPrices(false), 15000);
   switchTab(state.activeTab);
