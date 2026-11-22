@@ -1,23 +1,60 @@
-const CACHE_NAME = 'liamvtrade-v1';
-const ASSETS = ['./', './index.html', './manifest.json'];
+/*!
+ * Liamvtrade — Service Worker & Native Notification Handler (v2.0)
+ * Copyright (c) 2026 Ilham Maulana Nur Al Rasyid (@xliamvr)
+ * Package ID: com.xliamvr.trade — All Rights Reserved.
+ */
 
-self.addEventListener('install', (e) => {
-  e.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS)));
+const CACHE_NAME = 'liamvtrade-v2';
+const ASSETS = [
+  './',
+  './index.html',
+  './style.css',
+  './methods.js',
+  './news.js',
+  './app.js',
+  './manifest.json'
+];
+
+self.addEventListener('install', (event) => {
+  event.waitUntil(
+    caches.open(CACHE_NAME).then((cache) => cache.addAll(ASSETS))
+  );
   self.skipWaiting();
 });
 
-self.addEventListener('activate', (e) => {
-  e.waitUntil(
+self.addEventListener('activate', (event) => {
+  event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
+      Promise.all(
+        keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))
+      )
     )
   );
   self.clients.claim();
 });
 
-self.addEventListener('fetch', (e) => {
-  if (e.request.method !== 'GET') return;
-  e.respondWith(
-    fetch(e.request).catch(() => caches.match(e.request))
+self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+  event.respondWith(
+    fetch(event.request)
+      .then((response) => {
+        const clone = response.clone();
+        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+        return response;
+      })
+      .catch(() => caches.match(event.request))
+  );
+});
+
+// Membuka aplikasi otomatis saat Notifikasi Native di bar atas HP diketuk
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ('focus' in client) return client.focus();
+      }
+      if (clients.openWindow) return clients.openWindow('./index.html');
+    })
   );
 });
