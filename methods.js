@@ -1,10 +1,10 @@
 /*!
- * Liamvtrade — Multi-Pair, Multi-Method & Dynamic Price Engine (v2.1)
+ * Liamvtrade — Multi-Pair, Candle Structure & Dynamic Signal Engine (v2.2)
  * Copyright (c) 2026 Ilham Maulana Nur Al Rasyid (@xliamvr)
  * Package ID: com.xliamvr.trade — All Rights Reserved.
  */
 
-// 1. Konfigurasi Instrumen Aktif (Siap Multi-Pair & Weekend BTC Mode)
+// 1. Konfigurasi Instrumen Aktif (Bebas Blokir DNS 4G Indonesia & Weekend BTC Mode)
 const LIAMV_PAIRS = {
   XAUUSD: {
     id: 'XAUUSD',
@@ -15,7 +15,7 @@ const LIAMV_PAIRS = {
     decimals: 2,
     unitLabel: 'pips',
     pipMultiplier: 10, // $1.00 = 10 pips
-    defaultPrice: 2685.50,
+    defaultPrice: 2712.50,
     weekendActive: false,
     primeSession: 'London (15.30–18.00) & NY (20.30–22.30 WIB)',
     slRange: '20 – 35 pips ($2.0 – $3.5)'
@@ -29,7 +29,7 @@ const LIAMV_PAIRS = {
     decimals: 2,
     unitLabel: 'pts',
     pipMultiplier: 1, // 1.00 index point
-    defaultPrice: 21150.00,
+    defaultPrice: 21180.00,
     weekendActive: false,
     primeSession: 'New York Open (20.30–23.00 WIB)',
     slRange: '15 – 30 points'
@@ -38,13 +38,13 @@ const LIAMV_PAIRS = {
     id: 'BTCUSDT',
     name: 'BTCUSDT (Bitcoin)',
     category: 'Crypto 24/7',
-    tvSymbol: 'BINANCE:BTCUSDT',
+    tvSymbol: 'COINBASE:BTCUSD',
     tdSymbol: 'BTC/USD',
     decimals: 2,
     unitLabel: 'pts',
     pipMultiplier: 1, // $1.00 = 1 point
-    defaultPrice: 96500.00,
-    weekendActive: true, // Tetap aktif saat Sabtu & Minggu
+    defaultPrice: 97450.00,
+    weekendActive: true, // Aktif penuh Sabtu & Minggu (24/7)
     primeSession: '24/7 Active • Peak NY (20.00–00.00 WIB)',
     slRange: '$180 – $350 points'
   },
@@ -64,7 +64,7 @@ const LIAMV_PAIRS = {
   }
 };
 
-// 2. Catatan Roadmap Ekspansi Aset Masa Depan (Tersimpan di Sistem)
+// 2. Catatan Roadmap Ekspansi Aset Masa Depan
 const LIAMV_ASSET_ROADMAP = [
   { id: 'rm-forex', title: 'Forex Pairs Lengkap', items: 'GBPUSD, USDJPY, GBPJPY, XAGUSD', status: 'Fase Berikutnya' },
   { id: 'rm-crypto', title: 'Crypto & Memecoin Radar', items: 'SOL, ETH, PEPE, WIF, DOGE (DEX & CEX)', status: 'Fase Berikutnya' },
@@ -81,7 +81,7 @@ const LIAMV_METHODS = [
   },
   {
     id: 'SMC',
-    name: 'Metode 01: SMC (Asia/Session Sweep + OB/FVG)',
+    name: 'Metode 01: SMC (Session Sweep + OB/FVG)',
     shortName: 'SMC Sweep'
   },
   {
@@ -126,154 +126,142 @@ function calculateLotForPair(pairId, slUnits, accountBalance, riskPct) {
 
   let rawLot = 0.02;
   if (pairId === 'XAUUSD') {
-    // 0.01 lot = $0.10 per pip
     rawLot = riskUsd / (slUnits * 0.1);
   } else if (pairId === 'EURUSD') {
-    // 0.01 lot = $0.10 per pip (1 lot = $10/pip)
     rawLot = riskUsd / (slUnits * 10);
   } else if (pairId === 'US100') {
-    // Standar CFD: 1 lot = $1 per 1.0 point
     rawLot = riskUsd / slUnits;
   } else if (pairId === 'BTCUSDT') {
-    // 1 BTC = $1 per $1 move
     rawLot = riskUsd / slUnits;
   }
 
   return Math.max(0.01, +rawLot.toFixed(2));
 }
 
-// 6. Generator Sinyal Dinamis Mengikuti Harga Live Market Saat Ini
-function generateSignalsForPair(pairId, livePrices) {
+// 6. Generator Sinyal Multi-Timeframe (M5, M15, H1, H4) & Multi-Metode
+function generateSignalsForPair(pairId, livePrices, marketRanges = {}) {
   const cfg = LIAMV_PAIRS[pairId] || LIAMV_PAIRS.XAUUSD;
-  const base = livePrices[pairId] || cfg.defaultPrice;
+  const base = Number(livePrices[pairId]) || cfg.defaultPrice;
   const d = cfg.decimals;
   const mult = cfg.pipMultiplier;
 
-  // Skala jarak per instrumen agar realistis mengikuti harga live
-  const stepMap = {
-    XAUUSD: { zone: 1.5, sl: 3.0, tp1: 4.5, tp2: 6.5, tp3: 9.5, offset: 2.2 },
-    US100: { zone: 12.0, sl: 22.0, tp1: 35.0, tp2: 50.0, tp3: 75.0, offset: 18.0 },
-    BTCUSDT: { zone: 140.0, sl: 260.0, tp1: 400.0, tp2: 580.0, tp3: 850.0, offset: 210.0 },
+  // Skala jarak per instrumen & pengali timeframe
+  const baseStepMap = {
+    XAUUSD: { zone: 1.5, sl: 3.0, tp1: 4.5, tp2: 6.5, tp3: 9.5, offset: 2.0 },
+    US100: { zone: 12.0, sl: 22.0, tp1: 35.0, tp2: 50.0, tp3: 75.0, offset: 16.0 },
+    BTCUSDT: { zone: 130.0, sl: 240.0, tp1: 380.0, tp2: 540.0, tp3: 800.0, offset: 180.0 },
     EURUSD: { zone: 0.0008, sl: 0.0012, tp1: 0.0018, tp2: 0.0026, tp3: 0.0038, offset: 0.0010 }
   };
-  const s = stepMap[pairId] || stepMap.XAUUSD;
 
-  const buyEntryMax = +(base - s.offset).toFixed(d);
-  const buyEntryMin = +(buyEntryMax - s.zone).toFixed(d);
-  const buySl = +(buyEntryMin - (s.sl - s.zone)).toFixed(d);
-  const buySlUnits = Math.round(Math.abs(buyEntryMax - buySl) * mult);
+  const tfScaleMap = {
+    M5: 0.75,
+    M15: 1.0,
+    H1: 1.45,
+    H4: 2.1
+  };
 
-  const sellEntryMin = +(base + s.offset).toFixed(d);
-  const sellEntryMax = +(sellEntryMin + s.zone).toFixed(d);
-  const sellSl = +(sellEntryMax + (s.sl - s.zone)).toFixed(d);
-  const sellSlUnits = Math.round(Math.abs(sellSl - sellEntryMin) * mult);
+  const rangeInfo = marketRanges[pairId] || {};
+  const swingHigh = Number(rangeInfo.high) || +(base + baseStepMap[pairId].offset * 2.5).toFixed(d);
+  const swingLow = Number(rangeInfo.low) || +(base - baseStepMap[pairId].offset * 2.5).toFixed(d);
 
-  return [
-    {
-      id: `${pairId}-m15-smc`,
+  const timeframes = ['M5', 'M15', 'H1', 'H4'];
+  const generated = [];
+
+  timeframes.forEach((tf) => {
+    const scale = tfScaleMap[tf];
+    const b = baseStepMap[pairId];
+    const zone = b.zone * scale;
+    const slDist = b.sl * scale;
+    const tp1Dist = b.tp1 * scale;
+    const tp2Dist = b.tp2 * scale;
+    const tp3Dist = b.tp3 * scale;
+    const offset = b.offset * scale;
+
+    // Setup 1 per TF: SMC Liquidity Sweep + FVG/OB (BUY LIMIT di area Discount)
+    const buyEntryMax = +(base - offset).toFixed(d);
+    const buyEntryMin = +(buyEntryMax - zone).toFixed(d);
+    const buySl = +(buyEntryMin - (slDist - zone)).toFixed(d);
+    const buySlUnits = Math.max(1, Math.round(Math.abs(buyEntryMax - buySl) * mult));
+    const smcConf = tf === 'M15' ? 88 : tf === 'H1' ? 85 : tf === 'M5' ? 78 : 81;
+
+    generated.push({
+      id: `${pairId}-${tf.toLowerCase()}-smc`,
       pair: pairId,
-      tf: 'M15',
+      tf: tf,
       method: 'SMC',
-      methodLabel: 'SMC Liquidity Sweep + Unmitigated FVG',
+      methodLabel: `SMC Liquidity Sweep + Unmitigated FVG (${tf})`,
       direction: 'BUY LIMIT',
       bias: 'Bullish',
-      confidence: 87,
+      confidence: smcConf,
       entryMin: buyEntryMin,
       entryMax: buyEntryMax,
       sl: buySl,
       slUnits: buySlUnits,
       unitLabel: cfg.unitLabel,
-      tp1: +(buyEntryMax + s.tp1).toFixed(d),
-      tp1Units: Math.round(s.tp1 * mult),
-      tp2: +(buyEntryMax + s.tp2).toFixed(d),
-      tp2Units: Math.round(s.tp2 * mult),
-      tp3: +(buyEntryMax + s.tp3).toFixed(d),
-      tp3Units: Math.round(s.tp3 * mult),
-      bestTp: `TP 2 (1:2) — ${(buyEntryMax + s.tp2).toFixed(d)}`,
-      bestTpReason: `Struktur intraday ${pairId} menghormati area Discount FVG M15 setelah sapuan likuiditas bawah.`,
+      tp1: +(buyEntryMax + tp1Dist).toFixed(d),
+      tp1Units: Math.max(1, Math.round(tp1Dist * mult)),
+      tp2: +(buyEntryMax + tp2Dist).toFixed(d),
+      tp2Units: Math.max(1, Math.round(tp2Dist * mult)),
+      tp3: +(buyEntryMax + tp3Dist).toFixed(d),
+      tp3Units: Math.max(1, Math.round(tp3Dist * mult)),
+      bestTp:
+        tf === 'M5'
+          ? `TP 1 (1:1.5) — ${(buyEntryMax + tp1Dist).toFixed(d)}`
+          : `TP 2 (1:2) — ${(buyEntryMax + tp2Dist).toFixed(d)}`,
+      bestTpReason:
+        tf === 'M5'
+          ? `Scalping cepat ${tf} pada ${pairId}; amankan partial profit di TP1 + geser SL ke Break Even.`
+          : `Retest area Discount FVG ${tf} setelah sapuan likuiditas di dekat Session Low (${swingLow.toFixed(d)}).`,
       session: cfg.primeSession,
-      structure: `Sweep Low terdekat di bawah ${buyEntryMin.toFixed(d)} → Displacement Bullish & CHoCH M5 → Retest FVG M15.`,
-      note: `Geser SL ke BE setelah profit mencapai TP1. Ideal SL ${pairId}: ${cfg.slRange}.`
-    },
-    {
-      id: `${pairId}-m5-smc`,
+      structure: `Sweep Low ${swingLow.toFixed(d)} → Displacement Bullish & CHoCH → Retest Extreme FVG/OB ${tf}.`,
+      note: `Wajib geser SL ke BE setelah profit +TP1. Rentang SL ideal ${pairId}: ${cfg.slRange}.`
+    });
+
+    // Setup 2 per TF: Fibonacci / Liquidity Reversal (SELL LIMIT di area Premium)
+    const isFibo = tf === 'H1' || tf === 'M15';
+    const sellEntryMin = +(base + offset).toFixed(d);
+    const sellEntryMax = +(sellEntryMin + zone).toFixed(d);
+    const sellSl = +(sellEntryMax + (slDist - zone)).toFixed(d);
+    const sellSlUnits = Math.max(1, Math.round(Math.abs(sellSl - sellEntryMin) * mult));
+    const secConf = tf === 'H1' ? 82 : tf === 'M15' ? 75 : tf === 'M5' ? 68 : 58;
+
+    generated.push({
+      id: `${pairId}-${tf.toLowerCase()}-${isFibo ? 'fibo' : 'liq'}`,
       pair: pairId,
-      tf: 'M5',
-      method: 'SMC',
-      methodLabel: 'SMC Judas Swing + Extreme OB',
+      tf: tf,
+      method: isFibo ? 'FIBO' : 'LIQ',
+      methodLabel: isFibo
+        ? `Fibonacci Golden Pocket 0.618–0.786 (${tf})`
+        : `Equal Highs Liquidity Sweep (${tf})`,
       direction: 'SELL LIMIT',
       bias: 'Bearish',
-      confidence: 74,
+      confidence: secConf,
       entryMin: sellEntryMin,
       entryMax: sellEntryMax,
       sl: sellSl,
       slUnits: sellSlUnits,
       unitLabel: cfg.unitLabel,
-      tp1: +(sellEntryMin - s.tp1).toFixed(d),
-      tp1Units: Math.round(s.tp1 * mult),
-      tp2: +(sellEntryMin - s.tp2).toFixed(d),
-      tp2Units: Math.round(s.tp2 * mult),
-      tp3: +(sellEntryMin - s.tp3).toFixed(d),
-      tp3Units: Math.round(s.tp3 * mult),
-      bestTp: `TP 1 (1:1.5) — ${(sellEntryMin - s.tp1).toFixed(d)}`,
-      bestTpReason: 'Setup scalping cepat M5; amankan partial profit di TP1 + Set BE lebih awal.',
-      session: cfg.primeSession,
-      structure: `Sweep Resistance atas → Engulfing Bearish M5 + CHoCH M1 kembali ke Extreme OB.`,
-      note: 'Patuhi batas maksimal Entry & SL harian per akun.'
-    },
-    {
-      id: `${pairId}-h1-fibo`,
-      pair: pairId,
-      tf: 'H1',
-      method: 'FIBO',
-      methodLabel: 'Fibonacci Golden Pocket (0.618–0.786)',
-      direction: 'BUY LIMIT',
-      bias: 'Bullish',
-      confidence: 83,
-      entryMin: +(buyEntryMin - s.zone * 0.6).toFixed(d),
-      entryMax: +(buyEntryMax - s.zone * 0.6).toFixed(d),
-      sl: +(buySl - s.zone * 0.6).toFixed(d),
-      slUnits: buySlUnits,
-      unitLabel: cfg.unitLabel,
-      tp1: +(buyEntryMax + s.tp1).toFixed(d),
-      tp1Units: Math.round(s.tp1 * mult),
-      tp2: +(buyEntryMax + s.tp2).toFixed(d),
-      tp2Units: Math.round(s.tp2 * mult),
-      tp3: +(buyEntryMax + s.tp3).toFixed(d),
-      tp3Units: Math.round(s.tp3 * mult),
-      bestTp: `TP 2 (1:2) — ${(buyEntryMax + s.tp2).toFixed(d)}`,
-      bestTpReason: 'Zona Golden Pocket 0.705 Fibo sejajar dengan Extreme Order Block H1.',
-      session: cfg.primeSession,
-      structure: 'BOS Bullish H1 valid → Retracement sehat ke zona OTE 0.618–0.786.',
-      note: 'Tunggu konfirmasi wick rejection di M5 sebelum eksekusi.'
-    },
-    {
-      id: `${pairId}-h4-liq`,
-      pair: pairId,
-      tf: 'H4',
-      method: 'LIQ',
-      methodLabel: 'Major Equal Highs Liquidity Pool',
-      direction: 'SELL LIMIT',
-      bias: 'Bearish',
-      confidence: 57,
-      entryMin: +(sellEntryMin + s.zone * 1.4).toFixed(d),
-      entryMax: +(sellEntryMax + s.zone * 1.4).toFixed(d),
-      sl: +(sellSl + s.zone * 1.4).toFixed(d),
-      slUnits: sellSlUnits,
-      unitLabel: cfg.unitLabel,
-      tp1: +(sellEntryMin - s.tp1).toFixed(d),
-      tp1Units: Math.round(s.tp1 * mult),
-      tp2: +(sellEntryMin - s.tp2).toFixed(d),
-      tp2Units: Math.round(s.tp2 * mult),
-      tp3: +(sellEntryMin - s.tp3).toFixed(d),
-      tp3Units: Math.round(s.tp3 * mult),
-      bestTp: `TP 1 (1:1.5) — ${(sellEntryMin - s.tp1).toFixed(d)}`,
-      bestTpReason: 'Masih berstatus LOW SIGNAL (Early Alert) — belum terjadi sweep H4.',
-      session: 'Menunggu Konfirmasi',
-      structure: 'Harga mendekati Equal Highs H4; pantau reaksi likuiditas.',
-      note: 'LOW SIGNAL — Jadikan watchlist, jangan entry sebelum CHoCH M5.'
-    }
-  ];
+      tp1: +(sellEntryMin - tp1Dist).toFixed(d),
+      tp1Units: Math.max(1, Math.round(tp1Dist * mult)),
+      tp2: +(sellEntryMin - tp2Dist).toFixed(d),
+      tp2Units: Math.max(1, Math.round(tp2Dist * mult)),
+      tp3: +(sellEntryMin - tp3Dist).toFixed(d),
+      tp3Units: Math.max(1, Math.round(tp3Dist * mult)),
+      bestTp: `TP 1 (1:1.5) — ${(sellEntryMin - tp1Dist).toFixed(d)}`,
+      bestTpReason:
+        secConf < 65
+          ? `Status masih LOW SIGNAL (Early Alert) — tunggu sweep di atas ${swingHigh.toFixed(d)} & CHoCH M5.`
+          : `Area Premium ${isFibo ? 'Golden Pocket 0.705 Fibo' : 'Liquidity Pool'} berhimpitan dengan Supply ${tf}.`,
+      session: secConf < 65 ? 'Menunggu Konfirmasi' : cfg.primeSession,
+      structure: `Harga menguji area Premium dekat Session High ${swingHigh.toFixed(d)}; pantau rejection & CHoCH M5.`,
+      note:
+        secConf < 65
+          ? 'LOW SIGNAL — Jadikan watchlist saja, dilarang entry sebelum konfirmasi CHoCH M5.'
+          : 'Patuhi batas maksimal Entry & SL harian pada akun aktif.'
+    });
+  });
+
+  return generated;
 }
 
 // 7. Formatter Output Standar SMC per Pair & Akun
