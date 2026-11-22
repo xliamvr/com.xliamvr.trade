@@ -1,10 +1,10 @@
 /*!
- * Liamvtrade — Service Worker & Cache Controller (v2.4)
+ * Liamvtrade — Service Worker & Offline Cache Controller (v2.5)
  * Copyright (c) 2026 Ilham Maulana Nur Al Rasyid (@xliamvr)
  * Package ID: com.xliamvr.trade — All Rights Reserved.
  */
 
-const CACHE_NAME = 'liamvtrade-v2.4';
+const CACHE_NAME = 'liamvtrade-v2.5';
 const ASSETS = [
   './',
   './index.html',
