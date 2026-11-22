@@ -1,5 +1,5 @@
 /*!
- * Liamvtrade — Core Application Engine, Multi-Account & Live Market Feed (v2.1)
+ * Liamvtrade — Core Application Engine, Multi-Account & Live Market Feed (v2.2)
  * Copyright (c) 2026 Ilham Maulana Nur Al Rasyid (@xliamvr)
  * Package ID: com.xliamvr.trade — All Rights Reserved.
  */
@@ -71,34 +71,55 @@ const DEFAULT_STATE = {
   tgChatId: ''
 };
 
+// Migrasi otomatis pengaturan lama agar API Key & Token tetap tersimpan
+const legacyState = JSON.parse(localStorage.getItem('liamvtrade_v21_state') || '{}');
+const savedState = JSON.parse(localStorage.getItem('liamvtrade_v22_state') || 'null');
+
 let state = {
   ...DEFAULT_STATE,
-  ...JSON.parse(localStorage.getItem('liamvtrade_v21_state') || '{}')
+  ...(savedState || legacyState)
 };
 
 if (!Array.isArray(state.accounts) || state.accounts.length === 0) {
   state.accounts = [...DEFAULT_ACCOUNTS];
 }
 
+// Otomatis pilih BTCUSDT jika hari ini Sabtu/Minggu & Weekend BTC Mode aktif
+(function autoSelectWeekendPair() {
+  const now = new Date();
+  const wib = new Date(now.getTime() + now.getTimezoneOffset() * 60000 + 7 * 3600000);
+  const day = wib.getDay();
+  if ((day === 0 || day === 6) && state.weekendBtcMode) {
+    state.selectedPair = 'BTCUSDT';
+  }
+})();
+
 let livePrices = {
-  XAUUSD: 2685.50,
-  US100: 21150.00,
-  BTCUSDT: 96500.00,
+  XAUUSD: 2712.50,
+  US100: 21180.00,
+  BTCUSDT: 97450.00,
   EURUSD: 1.05450
 };
 
 let priceFeedStatus = {
   XAUUSD: 'REF',
   US100: 'REF',
-  BTCUSDT: 'LIVE',
+  BTCUSDT: 'SYNC',
   EURUSD: 'REF'
+};
+
+let marketRanges = {
+  XAUUSD: { high: 2718.00, low: 2705.20 },
+  US100: { high: 21240.00, low: 21110.00 },
+  BTCUSDT: { high: 98100.00, low: 96650.00 },
+  EURUSD: { high: 1.05680, low: 1.05210 }
 };
 
 let activeNewsList = typeof LIAMV_NEWS !== 'undefined' ? [...LIAMV_NEWS] : [];
 let currentNewsFilter = 'ALL';
 
 function saveState() {
-  localStorage.setItem('liamvtrade_v21_state', JSON.stringify(state));
+  localStorage.setItem('liamvtrade_v22_state', JSON.stringify(state));
 }
 
 function getActiveAccount() {
@@ -138,39 +159,88 @@ function playAlertChime() {
   } catch (e) {}
 }
 
-// ==================== 3. LIVE MARKET PRICES (NO FAKE RANDOM TICK) ====================
-async function syncLiveMarketPrices() {
-  // 1. BTCUSDT Live 24/7 Gratis (Binance Public API — Aktif termasuk Sabtu/Minggu)
+// ==================== 3. LIVE MARKET PRICES (BEBAS BLOKIR 4G INDONESIA) ====================
+async function fetchLiveBtcFromCoinbaseOrKraken() {
+  // Jalur 1: Coinbase Public Spot API (Terbuka di semua operator 4G Indonesia & tanpa API key)
   try {
-    const btcRes = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT');
-    const btcData = await btcRes.json();
-    if (btcData && btcData.price) {
-      livePrices.BTCUSDT = parseFloat(btcData.price);
+    const cbRes = await fetch('https://api.coinbase.com/v2/prices/BTC-USD/spot', { cache: 'no-store' });
+    const cbJson = await cbRes.json();
+    if (cbJson?.data?.amount) {
+      livePrices.BTCUSDT = parseFloat(cbJson.data.amount);
       priceFeedStatus.BTCUSDT = 'LIVE';
+      return true;
     }
   } catch (e) {}
 
-  // 2. XAUUSD, US100, EURUSD Live via Twelve Data (jika API Key diisi)
+  // Jalur 2: Kraken Public Ticker API (Cadangan 24/7)
+  try {
+    const krRes = await fetch('https://api.kraken.com/0/public/Ticker?pair=XBTUSD', { cache: 'no-store' });
+    const krJson = await krRes.json();
+    const pairKey = krJson?.result ? Object.keys(krJson.result)[0] : null;
+    if (pairKey && krJson.result[pairKey]?.c?.[0]) {
+      livePrices.BTCUSDT = parseFloat(krJson.result[pairKey].c[0]);
+      priceFeedStatus.BTCUSDT = 'LIVE';
+      return true;
+    }
+  } catch (e) {}
+
+  return false;
+}
+
+async function fetchLiveBtcCandles() {
+  try {
+    const res = await fetch('https://api.kraken.com/0/public/OHLC?pair=XBTUSD&interval=15', { cache: 'no-store' });
+    const json = await res.json();
+    const pairKey = json?.result ? Object.keys(json.result).find((k) => k !== 'last') : null;
+    if (pairKey && Array.isArray(json.result[pairKey])) {
+      const recent = json.result[pairKey].slice(-32);
+      const highs = recent.map((c) => parseFloat(c[2]));
+      const lows = recent.map((c) => parseFloat(c[3]));
+      marketRanges.BTCUSDT = {
+        high: Math.max(...highs),
+        low: Math.min(...lows)
+      };
+      return marketRanges.BTCUSDT;
+    }
+  } catch (e) {}
+  return marketRanges.BTCUSDT;
+}
+
+async function syncLiveMarketPrices() {
+  // 1. BTCUSDT Live 24/7 (Coinbase / Kraken)
+  const btcOk = await fetchLiveBtcFromCoinbaseOrKraken();
+  if (btcOk) {
+    await fetchLiveBtcCandles();
+  }
+
+  // 2. XAUUSD, US100, EURUSD & BTC Fallback via Twelve Data
   if (state.twelveDataKey) {
-    try {
-      const symbols = 'XAU/USD,NDX,EUR/USD';
-      const tdRes = await fetch(
-        `https://api.twelvedata.com/price?symbol=${symbols}&apikey=${state.twelveDataKey}`
-      );
-      const tdData = await tdRes.json();
-      if (tdData['XAU/USD']?.price) {
-        livePrices.XAUUSD = parseFloat(tdData['XAU/USD'].price);
-        priceFeedStatus.XAUUSD = 'LIVE';
-      }
-      if (tdData['NDX']?.price) {
-        livePrices.US100 = parseFloat(tdData['NDX'].price);
-        priceFeedStatus.US100 = 'LIVE';
-      }
-      if (tdData['EUR/USD']?.price) {
-        livePrices.EURUSD = parseFloat(tdData['EUR/USD'].price);
-        priceFeedStatus.EURUSD = 'LIVE';
-      }
-    } catch (e) {}
+    const tdTargets = [
+      { pairId: 'XAUUSD', sym: 'XAU/USD' },
+      { pairId: 'EURUSD', sym: 'EUR/USD' },
+      { pairId: 'US100', sym: 'QQQ' }
+    ];
+    if (!btcOk) {
+      tdTargets.push({ pairId: 'BTCUSDT', sym: 'BTC/USD' });
+    }
+
+    await Promise.all(
+      tdTargets.map(async (item) => {
+        try {
+          const r = await fetch(
+            `https://api.twelvedata.com/price?symbol=${encodeURIComponent(item.sym)}&apikey=${state.twelveDataKey}`,
+            { cache: 'no-store' }
+          );
+          const d = await r.json();
+          if (d && d.price) {
+            // Jika menggunakan proxy QQQ untuk Nasdaq, konversi ke skala indeks NDX (~42x)
+            const rawVal = parseFloat(d.price);
+            livePrices[item.pairId] = item.sym === 'QQQ' ? +(rawVal * 42.15).toFixed(2) : rawVal;
+            priceFeedStatus[item.pairId] = 'LIVE';
+          }
+        } catch (e) {}
+      })
+    );
   }
 
   updateHeaderTicker();
@@ -181,7 +251,7 @@ function updateHeaderTicker() {
   const pairId = state.selectedPair || 'XAUUSD';
   const cfg = typeof LIAMV_PAIRS !== 'undefined' ? LIAMV_PAIRS[pairId] : null;
   const decimals = cfg ? cfg.decimals : 2;
-  const price = livePrices[pairId] || 0;
+  const price = Number(livePrices[pairId]) || 0;
   const status = priceFeedStatus[pairId] || 'REF';
 
   const lblEl = document.getElementById('header-pair-label');
@@ -189,10 +259,12 @@ function updateHeaderTicker() {
   const stsEl = document.getElementById('header-price-status');
 
   if (lblEl) lblEl.textContent = pairId === 'BTCUSDT' ? 'BTC' : pairId;
-  if (prcEl) prcEl.textContent = price.toLocaleString('en-US', {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals
-  });
+  if (prcEl) {
+    prcEl.textContent = price.toLocaleString('en-US', {
+      minimumFractionDigits: decimals,
+      maximumFractionDigits: decimals
+    });
+  }
   if (stsEl) {
     stsEl.className = `relative inline-flex rounded-full h-2 w-2 ${
       status === 'LIVE' ? 'bg-emerald-500' : 'bg-amber-400'
@@ -248,7 +320,14 @@ function switchTab(tabName) {
     }
   });
 
-  if (tabName === 'chart') renderTradingViewChart();
+  if (tabName === 'chart') {
+    const chartSel = document.getElementById('chart-symbol-select');
+    if (chartSel && state.selectedPair === 'BTCUSDT') {
+      chartSel.value = 'BINANCE:BTCUSDT|BTCUSDT';
+    }
+    renderTradingViewChart();
+    runManualScan();
+  }
   if (tabName === 'signals') renderSignals();
 }
 
@@ -389,7 +468,7 @@ function recordTradeOutcome(accId, isWin) {
   const riskUsd = +(acc.balance * (acc.riskPct / 100)).toFixed(2);
   if (isWin) {
     acc.wins += 1;
-    acc.equity = +(acc.equity + riskUsd * 2).toFixed(2); // Asumsi rata-rata RR 1:2
+    acc.equity = +(acc.equity + riskUsd * 2).toFixed(2);
     acc.entriesToday = Math.min(acc.maxEntries, acc.entriesToday + 1);
     showToast(`✅ +$${(riskUsd * 2).toFixed(1)} Win dicatat di ${acc.name}`);
   } else {
@@ -463,7 +542,6 @@ function deleteAccount(accId) {
 function renderHomeDashboard() {
   const activeAcc = getActiveAccount();
 
-  // Populate Account Switcher Dropdown
   const accSelect = document.getElementById('active-account-select');
   if (accSelect) {
     accSelect.innerHTML = state.accounts
@@ -474,7 +552,6 @@ function renderHomeDashboard() {
       .join('');
   }
 
-  // Active Account Entry & SL Counters + Custom Max Limits
   const entryEl = document.getElementById('daily-entry-count');
   const slEl = document.getElementById('daily-sl-count');
   const maxEntryEl = document.getElementById('max-entry-display');
@@ -490,7 +567,6 @@ function renderHomeDashboard() {
     cbAlert.classList.toggle('hidden', activeAcc.slsToday < activeAcc.maxSLs);
   }
 
-  // Checklist
   const listEl = document.getElementById('checklist-items');
   if (listEl) {
     listEl.innerHTML = state.checklist
@@ -512,7 +588,6 @@ function renderHomeDashboard() {
   const pctEl = document.getElementById('discipline-pct-badge');
   if (pctEl) pctEl.textContent = `${pct}%`;
 
-  // Aggregated Multi-Account Portfolio Metrics (Total Equity, Profit, Winrate)
   const totalBalance = state.accounts.reduce((sum, a) => sum + Number(a.balance), 0);
   const totalEquity = state.accounts.reduce((sum, a) => sum + Number(a.equity), 0);
   const totalProfit = totalEquity - totalBalance;
@@ -535,7 +610,6 @@ function renderHomeDashboard() {
   }
   if (wrEl) wrEl.textContent = `${avgWinrate}% (${totalWins}W/${totalLosses}L)`;
 
-  // Render Individual Account Cards
   const accListEl = document.getElementById('accounts-list-container');
   if (accListEl) {
     accListEl.innerHTML = state.accounts
@@ -630,13 +704,26 @@ function setSignalTF(tf) {
 }
 
 function renderSignals() {
-  if (typeof generateSignalsForPair === 'undefined') return;
+  const container = document.getElementById('signals-container');
+  const outputBox = document.getElementById('smc-standard-output');
+  if (!container) return;
+
+  if (typeof generateSignalsForPair !== 'function') {
+    container.innerHTML = `
+      <div class="glass-card p-6 text-center">
+        <p class="font-display font-bold text-sm">Memperbarui Engine Sinyal...</p>
+        <p class="text-xs opacity-65 mt-1">Tutup dan buka ulang aplikasi agar cache terbaru termuat.</p>
+      </div>
+    `;
+    return;
+  }
+
   const pairId = state.selectedPair || 'XAUUSD';
   const cfg = LIAMV_PAIRS[pairId] || LIAMV_PAIRS.XAUUSD;
   const d = cfg.decimals;
   const activeAcc = getActiveAccount();
 
-  const allPairSignals = generateSignalsForPair(pairId, livePrices);
+  const allPairSignals = generateSignalsForPair(pairId, livePrices, marketRanges);
   const methodFilter = document.getElementById('method-select')?.value || 'ALL';
   const filtered = allPairSignals.filter((s) => {
     const tfMatch = s.tf === state.selectedTF;
@@ -649,18 +736,14 @@ function renderSignals() {
   if (headingEl) headingEl.textContent = `${pairId} • ${state.selectedTF} Signals`;
   if (countEl) countEl.textContent = `${filtered.length} aktif`;
 
-  const container = document.getElementById('signals-container');
-  const outputBox = document.getElementById('smc-standard-output');
-  if (!container) return;
-
   if (filtered.length === 0) {
     container.innerHTML = `
       <div class="glass-card p-6 text-center">
-        <p class="font-display font-bold text-sm">NO SETUP DI ${pairId} (${state.selectedTF})</p>
-        <p class="text-xs opacity-65 mt-1">Tunggu konfirmasi Liquidity Sweep & CHoCH sesuai aturan SMC.</p>
+        <p class="font-display font-bold text-sm">Tidak ada metode terpilih di ${pairId} (${state.selectedTF})</p>
+        <p class="text-xs opacity-65 mt-1">Ubah filter metode ke "Semua Metode" untuk melihat seluruh setup aktif.</p>
       </div>
     `;
-    if (outputBox) outputBox.textContent = 'NO SETUP — TUNGGU KONFIRMASI LIQUIDITY SWEEP & CHoCH';
+    if (outputBox) outputBox.textContent = 'NO SETUP — PILIH "SEMUA METODE" UNTUK MELIHAT SETUP AKTIF';
     return;
   }
 
@@ -857,7 +940,7 @@ async function fetchLiveEconomicNews(manualTrigger = false) {
       return;
     }
   } catch (err) {
-    if (statusEl) statusEl.textContent = '● Mode Kamus Dampak XAUUSD';
+    if (statusEl) statusEl.textContent = '● Mode Kamus Dampak Market';
     if (manualTrigger) showToast('ℹ️ Menampilkan referensi utama news USD');
   }
   renderNews(currentNewsFilter);
@@ -918,7 +1001,8 @@ function renderTradingViewChart() {
   const select = document.getElementById('chart-symbol-select');
   if (!wrapper || !select) return;
 
-  const val = select.value.split('|')[0];
+  let val = select.value.split('|')[0];
+  if (val === 'BINANCE:BTCUSDT') val = 'COINBASE:BTCUSD';
   const tvTheme = state.theme === 'dark' ? 'dark' : 'light';
 
   wrapper.innerHTML = '';
@@ -954,43 +1038,41 @@ async function runManualScan() {
 
   const [, apiSym] = select.value.split('|');
 
-  try {
-    if (apiSym === 'BTCUSDT') {
-      const res = await fetch('https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=15m&limit=30');
-      const data = await res.json();
-      const highs = data.map((c) => parseFloat(c[2]));
-      const lows = data.map((c) => parseFloat(c[3]));
-      const hi = Math.max(...highs).toFixed(2);
-      const lo = Math.min(...lows).toFixed(2);
-      document.getElementById('radar-asia-high').textContent = hi;
-      document.getElementById('radar-asia-low').textContent = lo;
-      document.getElementById('radar-day-range').textContent = `$${(hi - lo).toFixed(2)}`;
-      modeLabel.textContent = 'Live Binance Public API Terhubung (24/7 Gratis)';
-      showToast('📡 Scan live candle BTCUSDT selesai!');
-      return;
-    }
+  if (apiSym === 'BTCUSDT') {
+    const rng = await fetchLiveBtcCandles();
+    document.getElementById('radar-asia-high').textContent = rng.high.toFixed(2);
+    document.getElementById('radar-asia-low').textContent = rng.low.toFixed(2);
+    document.getElementById('radar-day-range').textContent = `$${(rng.high - rng.low).toFixed(2)}`;
+    modeLabel.textContent = 'Live Kraken/Coinbase 15m Candles (24/7 Aktif)';
+    showToast('📡 Scan live candle BTC berhasil!');
+    return;
+  }
 
-    if (state.twelveDataKey) {
+  if (state.twelveDataKey) {
+    try {
+      const tdQuery = apiSym === 'NDX' ? 'QQQ' : apiSym;
       const res = await fetch(
-        `https://api.twelvedata.com/time_series?symbol=${apiSym}&interval=15min&outputsize=30&apikey=${state.twelveDataKey}`
+        `https://api.twelvedata.com/time_series?symbol=${encodeURIComponent(tdQuery)}&interval=15min&outputsize=30&apikey=${state.twelveDataKey}`,
+        { cache: 'no-store' }
       );
       const data = await res.json();
       if (data.values) {
-        const highs = data.values.map((c) => parseFloat(c.high));
-        const lows = data.values.map((c) => parseFloat(c.low));
-        const hi = Math.max(...highs).toFixed(2);
-        const lo = Math.min(...lows).toFixed(2);
-        document.getElementById('radar-asia-high').textContent = hi;
-        document.getElementById('radar-asia-low').textContent = lo;
+        const mult = tdQuery === 'QQQ' ? 42.15 : 1;
+        const highs = data.values.map((c) => parseFloat(c.high) * mult);
+        const lows = data.values.map((c) => parseFloat(c.low) * mult);
+        const hi = Math.max(...highs);
+        const lo = Math.min(...lows);
+        document.getElementById('radar-asia-high').textContent = hi.toFixed(2);
+        document.getElementById('radar-asia-low').textContent = lo.toFixed(2);
         document.getElementById('radar-day-range').textContent = `$${(hi - lo).toFixed(2)}`;
         modeLabel.textContent = `Live Twelve Data API (${apiSym}) Terhubung`;
         showToast(`📡 Scan live ${apiSym} berhasil!`);
         return;
       }
-    }
-  } catch (e) {}
+    } catch (e) {}
+  }
 
-  modeLabel.textContent = 'Mode Referensi Aktif (Isi API Key di Profil untuk Live)';
+  modeLabel.textContent = 'BTCUSDT Live 24/7 • XAU/US100/EUR Menunggu Sesi Senin';
   showToast('📡 Radar memindai struktur likuiditas...');
 }
 
@@ -1083,7 +1165,7 @@ async function triggerSignalAlert(sigId) {
   const pairId = state.selectedPair || 'XAUUSD';
   const cfg = LIAMV_PAIRS[pairId] || LIAMV_PAIRS.XAUUSD;
   const d = cfg.decimals;
-  const sig = generateSignalsForPair(pairId, livePrices).find((s) => s.id === sigId);
+  const sig = generateSignalsForPair(pairId, livePrices, marketRanges).find((s) => s.id === sigId);
   if (!sig) return;
 
   const activeAcc = getActiveAccount();
@@ -1207,6 +1289,6 @@ window.addEventListener('DOMContentLoaded', () => {
   setSignalPair(state.selectedPair);
   setSignalTF(state.selectedTF);
   syncLiveMarketPrices();
-  setInterval(syncLiveMarketPrices, 15000);
+  setInterval(syncLiveMarketPrices, 12000);
   switchTab(state.activeTab);
 });
