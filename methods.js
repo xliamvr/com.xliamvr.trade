@@ -175,6 +175,14 @@
     const direction = pdPercent >= 50 ? 'SELL' : 'BUY';
 
     return {
+            swingHigh,
+      swingHighFmt: shFmt,
+      swingLow,
+      swingLowFmt: slFmt,
+      totalRange,
+      equilibrium,
+      equilibriumFmt: eqFmt,
+
       pair,
       timeframe,
       livePrice,
