@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#070B14" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Liamvtrade Quant Terminal v2.7 — @xliamvr</title>
+  <title>Liamvtrade Quant Terminal v2.8 — @xliamvr</title>
   <link rel="manifest" href="./manifest.json" />
 
   <!-- Institutional Font Pairing: Space Grotesk + Plus Jakarta Sans + JetBrains Mono -->
@@ -124,7 +124,7 @@
         <path stroke-linecap="round" stroke-linejoin="round" d="M3 17l6-6 4 4 8-8M14 7h7v7" />
       </svg>
     </div>
-    <h1 class="font-display text-2xl font-extrabold text-white tracking-tight">Liamvtrade <span class="text-cyan-400">v2.7</span></h1>
+    <h1 class="font-display text-2xl font-extrabold text-white tracking-tight">Liamvtrade <span class="text-cyan-400">v2.8</span></h1>
     <p class="text-xs text-slate-400 mt-1">Institutional ICT / SMC Quant Terminal • @xliamvr</p>
     <div class="w-44 h-1.5 bg-white/10 rounded-full overflow-hidden mt-5">
       <div id="splash-bar" class="h-full w-1/4 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full transition-all duration-700"></div>
@@ -137,7 +137,7 @@
 
   <!-- UPDATE DETECTOR BANNER -->
   <div id="update-banner" class="hidden fixed top-14 left-3 right-3 z-[85] max-w-md mx-auto p-3 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-xs font-extrabold shadow-xl flex items-center justify-between gap-2">
-    <span>⚡ Update v2.7 Baru Tersedia!</span>
+    <span>⚡ Update v2.8 Baru Tersedia!</span>
     <button onclick="window.location.reload()" class="px-3 py-1 rounded-xl bg-white text-slate-900 text-[11px] font-extrabold active:scale-95">
       Muat Ulang
     </button>
@@ -158,7 +158,7 @@
             <span class="font-display text-[13px] font-extrabold tracking-tight">Xliamvr</span>
             <span id="header-user-badge" class="px-1.5 py-0.5 rounded bg-blue-600 text-white text-[8px] font-extrabold">OWNER</span>
           </div>
-          <span id="live-clock-wib" class="font-mono-num text-[9.5px] opacity-80 block whitespace-nowrap">Sen, 07:30:00 WIB</span>
+          <span id="live-clock-wib" class="font-mono-num text-[9.5px] opacity-80 block whitespace-nowrap">Sen, 07:45:00 WIB</span>
         </div>
       </div>
 
@@ -224,7 +224,7 @@
             <h3 class="font-display text-base font-extrabold leading-tight">Kontrol Disiplin Akun</h3>
           </div>
 
-          <!-- Custom Modern Account Drawer Button (Replaces Basic Select) -->
+          <!-- Custom Modern Account Drawer Button -->
           <button onclick="openAccountDrawer()" class="min-w-0 max-w-[175px] px-3 py-2 rounded-2xl bg-blue-600/15 border border-cyan-500/35 text-left flex items-center gap-2 active:scale-95 transition">
             <div class="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0">
               <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
@@ -360,32 +360,45 @@
       <div class="glass-card p-4 space-y-3">
         <div class="flex items-center justify-between gap-2">
           <div>
-            <span class="text-[9.5px] font-extrabold uppercase tracking-wider text-blue-400 block">PRE & POST-NEWS ENGINE</span>
-            <h2 class="font-display text-lg font-extrabold leading-tight">Kalender & Vonis Arah USD</h2>
-            <span id="news-sync-status" class="text-[10.5px] font-semibold text-emerald-400 block mt-0.5">● Kalender Mingguan Bertanggal + Breaking Wire</span>
+            <span class="text-[9.5px] font-extrabold uppercase tracking-wider text-blue-400 block">PRE & POST-NEWS QUANT ENGINE</span>
+            <h2 class="font-display text-lg font-extrabold leading-tight">Kalender & Analisa Buy/Sell</h2>
+            <span id="news-sync-status" class="text-[10.5px] font-semibold text-emerald-400 block mt-0.5">● Menyinkronkan Kalender Live & Analisa POI...</span>
           </div>
           <button onclick="fetchLiveEconomicNews(true)" class="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-extrabold active:scale-95 shrink-0">
             ↻ Sync
           </button>
         </div>
 
+        <!-- Menu Filter Waktu: Hari Ini, Minggu Ini, Bulan Ini, Semua -->
+        <div class="grid grid-cols-4 gap-1.5 text-[10.5px] font-extrabold">
+          <button id="news-period-TODAY" onclick="setNewsPeriod('TODAY')" class="py-2 rounded-xl bg-blue-600 text-white transition">Hari Ini</button>
+          <button id="news-period-WEEK" onclick="setNewsPeriod('WEEK')" class="py-2 rounded-xl glass-card opacity-80 transition">Minggu Ini</button>
+          <button id="news-period-MONTH" onclick="setNewsPeriod('MONTH')" class="py-2 rounded-xl glass-card opacity-80 transition">Bulan Ini</button>
+          <button id="news-period-ALL" onclick="setNewsPeriod('ALL')" class="py-2 rounded-xl glass-card opacity-80 transition">Semua</button>
+        </div>
+
+        <!-- Menu Filter Impact -->
         <div class="grid grid-cols-3 gap-2">
-          <button id="news-filter-ALL" onclick="filterNews('ALL')" class="news-filter-btn py-2 rounded-xl bg-blue-600 text-white text-xs font-extrabold">Semua</button>
+          <button id="news-filter-ALL" onclick="filterNews('ALL')" class="news-filter-btn py-2 rounded-xl bg-blue-600 text-white text-xs font-extrabold">Semua Impact</button>
           <button id="news-filter-HIGH" onclick="filterNews('HIGH')" class="news-filter-btn py-2 rounded-xl glass-card text-xs font-extrabold">🔴 High</button>
           <button id="news-filter-MED" onclick="filterNews('MED')" class="news-filter-btn py-2 rounded-xl glass-card text-xs font-extrabold">🟠 Medium</button>
+        </div>
+
+        <!-- Ringkasan Radar Event Terdekat -->
+        <div id="news-summary-strip" class="p-2.5 rounded-xl bg-cyan-500/10 border border-cyan-500/25 text-[11px] font-semibold leading-relaxed">
         </div>
       </div>
 
       <!-- Breaking Geopolitical & Trump/Fed Wire -->
       <div class="glass-card p-4 space-y-2.5">
         <div class="flex items-center justify-between">
-          <span class="text-[9.5px] font-extrabold uppercase tracking-wider text-cyan-400">⚡ BREAKING WIRE (TRUMP • THE FED • AS–IRAN)</span>
-          <span class="text-[9.5px] opacity-65">Live Radar</span>
+          <span class="text-[9.5px] font-extrabold uppercase tracking-wider text-cyan-400">⚡ BREAKING WIRE (THE FED • TRUMP • GEOPOLITIK)</span>
+          <span class="text-[9.5px] opacity-65">Live Macro</span>
         </div>
         <div id="breaking-wire-container" class="space-y-2"></div>
       </div>
 
-      <!-- Dated Economic Calendar + OB/SnR Confluence -->
+      <!-- Kalender Ekonomi + Analisa Fundamental & Teknikal Buy/Sell -->
       <div id="news-list-container" class="space-y-3"></div>
     </section>
 
@@ -566,7 +579,7 @@
             <h2 class="font-display text-base font-extrabold leading-tight">TradingView Radar</h2>
           </div>
 
-          <!-- Custom Chart Pair Drawer Trigger (Replaces Basic Chrome Select) -->
+          <!-- Custom Chart Pair Drawer Trigger -->
           <button onclick="openChartPairDrawer()" class="min-w-0 max-w-[195px] px-3 py-2 rounded-2xl bg-blue-600/15 border border-cyan-500/35 text-left flex items-center gap-2 active:scale-95 transition">
             <span id="chart-pair-trigger-icon" class="text-base shrink-0">🥇</span>
             <div class="min-w-0 flex-1">
@@ -719,15 +732,15 @@
           </div>
         </details>
 
-        <details class="text-xs">
-          <summary class="font-bold text-blue-400 cursor-pointer select-none py-1">
-            ▸ + Integrasi Arsip Telegram (Opsional)
+        <details class="text-xs" open>
+          <summary class="font-bold text-cyan-400 cursor-pointer select-none py-1">
+            ▸ + Integrasi Bot VIP Telegram (Auto-Sinyal & Laporan TP/SL)
           </summary>
           <div class="mt-2 space-y-2">
-            <input id="cfg-tg-token" type="password" placeholder="Bot Token Telegram" class="w-full px-3 py-2 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] border border-[var(--border-subtle)] text-xs outline-none" />
+            <input id="cfg-tg-token" type="password" placeholder="Bot Token Telegram (dari @BotFather)" class="w-full px-3 py-2 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] border border-[var(--border-subtle)] text-xs outline-none" />
             <div class="flex gap-1.5">
-              <input id="cfg-tg-chatid" type="text" placeholder="Chat ID Telegram" class="flex-1 min-w-0 px-3 py-2 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] border border-[var(--border-subtle)] text-xs outline-none" />
-              <button onclick="testTelegramAlert()" class="px-3 py-2 rounded-xl bg-white/10 text-xs font-bold shrink-0">Tes Bot</button>
+              <input id="cfg-tg-chatid" type="text" placeholder="Chat ID / Channel ID Telegram" class="flex-1 min-w-0 px-3 py-2 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] border border-[var(--border-subtle)] text-xs outline-none" />
+              <button onclick="testTelegramAlert()" class="px-3 py-2 rounded-xl bg-cyan-500 text-slate-950 text-xs font-extrabold shrink-0 active:scale-95">Tes VIP Bot</button>
             </div>
           </div>
         </details>
@@ -753,7 +766,7 @@
       <!-- Copyright & Credits -->
       <div class="glass-card p-4 space-y-2">
         <span class="text-[9.5px] font-extrabold uppercase tracking-wider text-blue-400 block">COPYRIGHT & CREDITS</span>
-        <h3 class="font-display text-base font-extrabold">Liamvtrade Quant Terminal v2.7</h3>
+        <h3 class="font-display text-base font-extrabold">Liamvtrade Quant Terminal v2.8</h3>
         <p class="text-xs opacity-75 leading-relaxed">
           Dirancang dan dikembangkan secara eksklusif oleh <strong>Ilham Maulana Nur Al Rasyid (@xliamvr)</strong> untuk sistem analisis teknikal Inner Circle Trader (ICT), Smart Money Concepts (SMC), Liquidity, dan manajemen risiko Multi-Account Prop Firm.
         </p>
@@ -946,9 +959,9 @@
         <button onclick="closeQuickGuideModal()" class="w-7 h-7 rounded-full bg-white/10 text-xs font-extrabold">✕</button>
       </div>
       <div class="space-y-2 text-xs opacity-90 leading-relaxed">
-        <p><strong>1. Kontrol Filter & Sesi:</strong> Ketuk <strong>🎛️ Filter</strong> di tab Sinyal kapan saja untuk menyalakan atau mematikan <em>Monday Range Filter</em>, <em>Filter Pagi</em>, atau <em>Mesin Sinyal</em> sesuai kondisi market.</p>
+        <p><strong>1. Kontrol Filter & Sesi:</strong> Ketuk <strong>🎛️ Filter</strong> di tab Sinyal kapan saja untuk menyalakan atau mematikan <em>Monday Range Filter</em>, <em>Filter Pagi</em>, atau <em>News Shield</em>.</p>
         <p><strong>2. Kalibrasi & Salin Limit:</strong> Jika harga broker MT5/cTrader selisih tipis dengan spot, samakan di tombol <strong>🧮 Lot</strong>, lalu salin Limit, SL, dan TP1–TP3.</p>
-        <p><strong>3. Catat & Amankan BE:</strong> Ketuk <strong>⚡ Ambil Setup</strong> agar tercatat di <em>Jurnal Saya</em>. Saat TP1 tersentuh, geser SL ke harga masuk (Break Even).</p>
+        <p><strong>3. Auto VIP Telegram & Jurnal:</strong> Ketuk <strong>⚡ Ambil Setup</strong> agar otomatis tercatat di <em>Jurnal Saya</em> dan terkirim rapi ke Bot Telegram kamu.</p>
       </div>
     </div>
   </div>
