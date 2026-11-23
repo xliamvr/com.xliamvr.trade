@@ -162,8 +162,6 @@
 
     const unitAtr = spec.baseAtrM15 * tfCfg.atrMult;
 
-    // Faktor posisi harga dalam Dealing Range (0.18 sampai 0.82)
-    // Disesuaikan secara deterministik namun responsif saat rescan atau harga berubah
     const priceWave = Math.sin(livePrice / (unitAtr * 1.35) + seed * 1.15);
     const sessionShift = (wibCtx.hour % 4) * 0.03;
     const pdRatio = Math.min(0.84, Math.max(0.16, 0.5 + priceWave * 0.27 + sessionShift - 0.04));
@@ -174,8 +172,6 @@
     const equilibrium = swingLow + totalRange * 0.5;
     const pdPercent = Math.round(pdRatio * 100);
 
-    // Bias: jika harga di Premium (>52%) cari struktur SELL; jika di Discount (<48%) cari struktur BUY
-    // Kecuali ada override bias atau kondisi ekstrem
     const direction = pdPercent >= 50 ? 'SELL' : 'BUY';
 
     return {
@@ -196,13 +192,12 @@
 
   /**
    * Menghitung sinyal lengkap berdasarkan metode yang dipilih user.
-   * Setiap metode menggunakan rumus penempatan Entry, Zona Range, SL, TP1-3, dan Edukasi yang berbeda.
    */
   function buildSignalSetup(options) {
     const pair = options.pair || 'XAUUSD';
     const timeframe = options.timeframe || 'M15';
     const methodKey = METHOD_CATALOG[options.method] ? options.method : 'auto';
-    const livePrice = Number(options.livePrice) || 3576.20;
+    const livePrice = Number(options.livePrice) || 2645.50;
     const scanSeed = Number(options.scanSeed) || 0;
     const sopScoreBonus = Number(options.sopScoreBonus) || 0;
 
@@ -235,12 +230,9 @@
     const slFmt = formatPrice(pair, dr.swingLow);
     const eqFmt = formatPrice(pair, dr.equilibrium);
 
-    // =========================================================================
     // 1. AUTO SNIPER (MULTI-CONFLUENCE ICT/SMC)
-    // =========================================================================
     if (methodKey === 'auto') {
       if (direction === 'BUY') {
-        // Entry di Discount 72% range (retracement ke Bullish FVG + OB)
         entry = dr.swingHigh - dr.totalRange * 0.72;
         if (entry >= livePrice) entry = livePrice - dr.unitAtr * 0.22;
         zoneLow = entry - dr.unitAtr * 0.16;
@@ -258,7 +250,6 @@
         tp3Reason = `1:3.2+ HTF Pool (${shFmt})`;
         poiSummary = `Discount Zone (${dr.pdPercent}% PD): Sapuan likuiditas bawah ${slFmt} → MSS Bullish ${timeframe} → Limit di Bullish OB/FVG.`;
       } else {
-        // Entry di Premium 72% dari bawah (28% dari Swing High)
         entry = dr.swingLow + dr.totalRange * 0.72;
         if (entry <= livePrice) entry = livePrice + dr.unitAtr * 0.22;
         zoneLow = entry - dr.unitAtr * 0.16;
@@ -291,12 +282,9 @@
       });
     }
 
-    // =========================================================================
     // 2. ICT JUDAS SWING (SESSION MANIPULATION REVERSAL)
-    // =========================================================================
     else if (methodKey === 'judas') {
       if (direction === 'BUY') {
-        // Judas Swing menyapu Asia Low lalu langsung berbalik naik cepat
         const fakeoutLow = dr.swingLow - dr.unitAtr * 0.25;
         entry = livePrice - dr.unitAtr * 0.14;
         zoneLow = entry - dr.unitAtr * 0.12;
@@ -314,7 +302,6 @@
         tp3Reason = `Sapuan Asia/Session High (${shFmt})`;
         poiSummary = `Judas Swing (${dr.sessionName}): Manipulasi turun menembus ${slFmt} untuk menjebak seller → Reclaim struktur → Target berbalik ke ${shFmt}.`;
       } else {
-        // Judas Swing menyapu Asia High lalu langsung berbalik turun cepat
         const fakeoutHigh = dr.swingHigh + dr.unitAtr * 0.25;
         entry = livePrice + dr.unitAtr * 0.14;
         zoneLow = entry - dr.unitAtr * 0.10;
@@ -346,12 +333,9 @@
       });
     }
 
-    // =========================================================================
     // 3. SMC ORDER BLOCK + FVG CONFLUENCE
-    // =========================================================================
     else if (methodKey === 'smc_ob') {
       if (direction === 'BUY') {
-        // Order Block institutional berada di 18% terbawah range
         const obTop = dr.swingLow + dr.totalRange * 0.24;
         const obBottom = dr.swingLow + dr.totalRange * 0.08;
         entry = (obTop + obBottom) / 2;
@@ -403,12 +387,9 @@
       });
     }
 
-    // =========================================================================
     // 4. LIQUIDITY SWEEP / TURTLE SOUP
-    // =========================================================================
     else if (methodKey === 'sweep') {
       if (direction === 'BUY') {
-        // Entry tepat di ambang Equal Lows / Swing Low sweep
         entry = dr.swingLow + dr.unitAtr * 0.08;
         if (entry >= livePrice) entry = livePrice - dr.unitAtr * 0.28;
         zoneLow = dr.swingLow - dr.unitAtr * 0.12;
@@ -456,11 +437,8 @@
       });
     }
 
-    // =========================================================================
     // 5. ICT SILVER BULLET (TIME-WINDOW FVG)
-    // =========================================================================
     else if (methodKey === 'silver_bullet') {
-      // Silver Bullet menggunakan FVG terdekat dengan SL & TP terukur berbasis waktu Killzone
       const sbWindowNote = dr.isSilverBulletWindow
         ? 'JAM SILVER BULLET AKTIF!'
         : 'Simulasi Zona FVG Silver Bullet (Jam Optimal: 14:00, 21:00, 01:00 WIB)';
@@ -514,9 +492,7 @@
       });
     }
 
-    // =========================================================================
     // 6. FIB OTE (OPTIMAL TRADE ENTRY 0.618 - 0.705 - 0.786)
-    // =========================================================================
     else if (methodKey === 'ote') {
       if (direction === 'BUY') {
         const fib618 = dr.swingHigh - dr.totalRange * 0.618;
@@ -529,8 +505,8 @@
         zoneHigh = Math.max(fib618, entry + dr.unitAtr * 0.12);
         sl = dr.swingLow - dr.unitAtr * 0.15;
         const riskDist = Math.abs(entry - sl);
-        tp1 = dr.swingHigh; // 0.0 Fib
-        tp2 = dr.swingHigh + dr.totalRange * 0.272; // -0.272 Fib Ext
+        tp1 = dr.swingHigh;
+        tp2 = dr.swingHigh + dr.totalRange * 0.272;
         tp3 = Math.max(dr.swingHigh + dr.totalRange * 0.618, entry + riskDist * 3.0);
 
         entryNote = 'Golden Level 0.705 OTE Fibo';
@@ -550,8 +526,8 @@
         zoneHigh = Math.max(fib786, entry + dr.unitAtr * 0.12);
         sl = dr.swingHigh + dr.unitAtr * 0.15;
         const riskDist = Math.abs(sl - entry);
-        tp1 = dr.swingLow; // 0.0 Fib
-        tp2 = dr.swingLow - dr.totalRange * 0.272; // -0.272 Fib Ext
+        tp1 = dr.swingLow;
+        tp2 = dr.swingLow - dr.totalRange * 0.272;
         tp3 = Math.min(dr.swingLow - dr.totalRange * 0.618, entry - riskDist * 3.0);
 
         entryNote = 'Golden Level 0.705 OTE Fibo';
@@ -574,7 +550,6 @@
       });
     }
 
-    // Normalisasi & hitung pips untuk semua level
     const slPips = toPips(pair, entry - sl);
     const tp1Pips = toPips(pair, tp1 - entry);
     const tp2Pips = toPips(pair, tp2 - entry);
@@ -654,10 +629,6 @@
     `;
   }
 
-  /**
-   * Menghitung ukuran lot prop firm yang presisi berdasarkan Ekuitas, Risk %, Jarak SL (pips),
-   * dan Hard Lot Max akun, sekaligus mengembalikan estimasi risiko ($) & potensi profit TP2 ($).
-   */
   function calculatePositionSize(account, signal) {
     const spec = getPairSpec(signal.pair);
     const equity = Number(account.equity) || Number(account.balance) || 1000;
