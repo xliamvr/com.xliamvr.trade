@@ -1,6 +1,6 @@
 /**
  * Liamvtrade Quant Terminal v2.9 — methods.js
- * Mesin 6 Metode Analisis ICT / SMC / Liquidity dengan Rumus Struktur Berbeda Nyata
+ * Mesin 6 Metode Analisis ICT / SMC / Liquidity dengan Kalibrasi Skala per Timeframe & Pair
  * + Zona Range Area Entry POI + Alasan Struktur SL/TP + Modul Edukasi POI Interaktif
  */
 
@@ -11,18 +11,18 @@
     XAUUSD: {
       label: 'XAUUSD',
       decimals: 2,
-      pipSize: 0.1,        // 0.10 = 1 pip (4.50 = 45 pips)
-      contractSize: 100,   // $10 per pip per 1.00 lot ($1 per 0.10 lot, $0.10 per 0.01 lot)
+      pipSize: 0.1,        // 0.10 = 1 pip (3.50 = 35 pips)
+      contractSize: 100,   // $10 per pip per 1.00 lot ($0.10 per pip per 0.01 lot)
       pipValuePerLot: 10,
-      baseAtrM15: 6.8
+      baseAtrM15: 3.4      // Dikalibrasi agar M5 ~22-35 pips & M15 ~35-55 pips
     },
     US100: {
       label: 'US100',
       decimals: 2,
       pipSize: 1.0,        // 1.00 index point = 1 pip
       contractSize: 1,
-      pipValuePerLot: 1,   // $1 per point per 1.00 lot ($0.01 per 0.01 lot)
-      baseAtrM15: 65.0
+      pipValuePerLot: 1,
+      baseAtrM15: 36.0
     },
     BTCUSDT: {
       label: 'BTCUSDT',
@@ -30,23 +30,24 @@
       pipSize: 1.0,        // $1.00 = 1 pip
       contractSize: 1,
       pipValuePerLot: 1,
-      baseAtrM15: 340.0
+      baseAtrM15: 190.0
     },
     EURUSD: {
       label: 'EURUSD',
       decimals: 5,
       pipSize: 0.0001,     // 0.00010 = 1 pip
       contractSize: 100000,
-      pipValuePerLot: 10,  // $10 per pip per 1.00 lot
-      baseAtrM15: 0.0018
+      pipValuePerLot: 10,
+      baseAtrM15: 0.0014
     }
   };
 
+  // Skala lebih proporsional agar M5 tidak melebar seperti H1
   const TF_MULTIPLIERS = {
-    M5:  { atrMult: 0.62, expiryMin: 25, label: 'M5 Scalping' },
-    M15: { atrMult: 1.00, expiryMin: 45, label: 'M15 Intraday Sniper' },
-    H1:  { atrMult: 1.85, expiryMin: 120, label: 'H1 Session Swing' },
-    H4:  { atrMult: 3.20, expiryMin: 240, label: 'H4 HTF Institutional' }
+    M5:  { atrMult: 0.52, rangeMult: 1.55, expiryMin: 20, label: 'M5 Scalping' },
+    M15: { atrMult: 0.85, rangeMult: 1.85, expiryMin: 40, label: 'M15 Intraday Sniper' },
+    H1:  { atrMult: 1.55, rangeMult: 2.20, expiryMin: 120, label: 'H1 Session Swing' },
+    H4:  { atrMult: 2.65, rangeMult: 2.55, expiryMin: 240, label: 'H4 HTF Institutional' }
   };
 
   const METHOD_CATALOG = {
@@ -112,7 +113,7 @@
     const wib = new Date(utcMs + 7 * 3600000);
     const hour = wib.getHours();
     const minute = wib.getMinutes();
-    const day = wib.getDay(); // 0=Min, 6=Sab
+    const day = wib.getDay();
 
     let sessionName = 'Asia Accumulation';
     let sessionBiasHint = 'Akumulasi Range Asia';
@@ -152,7 +153,7 @@
 
   /**
    * Membangun Dealing Range struktural (Swing High, Swing Low, Equilibrium, Posisi PD%)
-   * yang terjangkar pada harga live aktual + variasi volatilitas sesi & timeframe.
+   * yang terjangkar pada harga live aktual + volatilitas sesi & timeframe.
    */
   function analyzeDealingRange(pair, livePrice, timeframe, scanSeed) {
     const spec = getPairSpec(pair);
@@ -160,13 +161,14 @@
     const wibCtx = getWibContext();
     const seed = Number(scanSeed) || 0;
 
-    const unitAtr = spec.baseAtrM15 * tfCfg.atrMult;
+    const unitAtr = Math.max(spec.pipSize * 5, spec.baseAtrM15 * tfCfg.atrMult);
 
-    const priceWave = Math.sin(livePrice / (unitAtr * 1.35) + seed * 1.15);
-    const sessionShift = (wibCtx.hour % 4) * 0.03;
-    const pdRatio = Math.min(0.84, Math.max(0.16, 0.5 + priceWave * 0.27 + sessionShift - 0.04));
+    const priceWave = Math.sin(livePrice / Math.max(spec.pipSize * 20, unitAtr * 1.4) + seed * 1.15);
+    const sessionShift = ((wibCtx.hour % 4) - 1.5) * 0.025;
+    const pdRatio = Math.min(0.82, Math.max(0.18, 0.5 + priceWave * 0.24 + sessionShift));
 
-    const totalRange = unitAtr * (2.35 + (Math.abs(Math.cos(seed + 0.7)) * 0.45));
+    const rangeSpreadFactor = tfCfg.rangeMult + (Math.abs(Math.cos(seed + 0.7)) * 0.25);
+    const totalRange = unitAtr * rangeSpreadFactor;
     const swingLow = livePrice - totalRange * pdRatio;
     const swingHigh = swingLow + totalRange;
     const equilibrium = swingLow + totalRange * 0.5;
@@ -174,23 +176,22 @@
 
     const direction = pdPercent >= 50 ? 'SELL' : 'BUY';
 
+    const shFmt = formatPrice(pair, swingHigh);
+    const slFmt = formatPrice(pair, swingLow);
+    const eqFmt = formatPrice(pair, equilibrium);
+
     return {
-            swingHigh,
+      pair,
+      timeframe,
+      livePrice,
+      unitAtr,
+      swingHigh,
       swingHighFmt: shFmt,
       swingLow,
       swingLowFmt: slFmt,
       totalRange,
       equilibrium,
       equilibriumFmt: eqFmt,
-
-      pair,
-      timeframe,
-      livePrice,
-      unitAtr,
-      swingHigh,
-      swingLow,
-      totalRange,
-      equilibrium,
       pdPercent,
       direction,
       sessionName: wibCtx.sessionName,
@@ -214,8 +215,8 @@
     const methodMeta = METHOD_CATALOG[methodKey];
     const dr = analyzeDealingRange(pair, livePrice, timeframe, scanSeed);
 
-    let direction = dr.direction;
-    let orderType = direction === 'BUY' ? 'BUY LIMIT' : 'SELL LIMIT';
+    const direction = dr.direction;
+    const orderType = direction === 'BUY' ? 'BUY LIMIT' : 'SELL LIMIT';
     let entry = livePrice;
     let zoneLow = livePrice;
     let zoneHigh = livePrice;
@@ -234,45 +235,45 @@
     let score = methodMeta.baseScore + sopScoreBonus;
     let expiryMinutes = tfCfg.expiryMin;
 
-    const shFmt = formatPrice(pair, dr.swingHigh);
-    const slFmt = formatPrice(pair, dr.swingLow);
-    const eqFmt = formatPrice(pair, dr.equilibrium);
+    const shFmt = dr.swingHighFmt;
+    const slFmt = dr.swingLowFmt;
+    const eqFmt = dr.equilibriumFmt;
 
     // 1. AUTO SNIPER (MULTI-CONFLUENCE ICT/SMC)
     if (methodKey === 'auto') {
       if (direction === 'BUY') {
-        entry = dr.swingHigh - dr.totalRange * 0.72;
-        if (entry >= livePrice) entry = livePrice - dr.unitAtr * 0.22;
-        zoneLow = entry - dr.unitAtr * 0.16;
-        zoneHigh = entry + dr.unitAtr * 0.16;
-        sl = dr.swingLow - dr.unitAtr * 0.28;
-        const riskDist = Math.abs(entry - sl);
-        tp1 = entry + riskDist * 1.35;
-        tp2 = entry + riskDist * 2.25;
-        tp3 = Math.max(dr.swingHigh, entry + riskDist * 3.25);
+        entry = Math.min(livePrice - dr.unitAtr * 0.16, dr.swingLow + dr.totalRange * 0.34);
+        if (entry >= livePrice) entry = livePrice - dr.unitAtr * 0.18;
+        zoneLow = entry - dr.unitAtr * 0.12;
+        zoneHigh = entry + dr.unitAtr * 0.12;
+        sl = Math.max(dr.swingLow - dr.unitAtr * 0.16, entry - dr.unitAtr * 0.72);
+        const riskDist = Math.max(spec.pipSize * 4, Math.abs(entry - sl));
+        tp1 = entry + riskDist * 1.25;
+        tp2 = entry + riskDist * 2.00;
+        tp3 = entry + riskDist * 2.85;
 
         entryNote = 'Midpoint Bullish OB / FVG CE';
         slReason = `Invalidasi di bawah Swing Low (${slFmt})`;
-        tp1Reason = '1:1.3 Internal High';
-        tp2Reason = '1:2.2 Equilibrium / BSL';
-        tp3Reason = `1:3.2+ HTF Pool (${shFmt})`;
+        tp1Reason = '1:1.25 Internal High';
+        tp2Reason = '1:2.0 Equilibrium / BSL';
+        tp3Reason = `1:2.85 HTF Pool (${shFmt})`;
         poiSummary = `Discount Zone (${dr.pdPercent}% PD): Sapuan likuiditas bawah ${slFmt} → MSS Bullish ${timeframe} → Limit di Bullish OB/FVG.`;
       } else {
-        entry = dr.swingLow + dr.totalRange * 0.72;
-        if (entry <= livePrice) entry = livePrice + dr.unitAtr * 0.22;
-        zoneLow = entry - dr.unitAtr * 0.16;
-        zoneHigh = entry + dr.unitAtr * 0.16;
-        sl = dr.swingHigh + dr.unitAtr * 0.28;
-        const riskDist = Math.abs(sl - entry);
-        tp1 = entry - riskDist * 1.35;
-        tp2 = entry - riskDist * 2.25;
-        tp3 = Math.min(dr.swingLow, entry - riskDist * 3.25);
+        entry = Math.max(livePrice + dr.unitAtr * 0.16, dr.swingHigh - dr.totalRange * 0.34);
+        if (entry <= livePrice) entry = livePrice + dr.unitAtr * 0.18;
+        zoneLow = entry - dr.unitAtr * 0.12;
+        zoneHigh = entry + dr.unitAtr * 0.12;
+        sl = Math.min(dr.swingHigh + dr.unitAtr * 0.16, entry + dr.unitAtr * 0.72);
+        const riskDist = Math.max(spec.pipSize * 4, Math.abs(sl - entry));
+        tp1 = entry - riskDist * 1.25;
+        tp2 = entry - riskDist * 2.00;
+        tp3 = entry - riskDist * 2.85;
 
         entryNote = 'Midpoint Bearish OB / FVG CE';
         slReason = `Invalidasi di atas Swing High (${shFmt})`;
-        tp1Reason = '1:1.3 Internal Low';
-        tp2Reason = '1:2.2 Equilibrium / SSL';
-        tp3Reason = `1:3.2+ HTF Pool (${slFmt})`;
+        tp1Reason = '1:1.25 Internal Low';
+        tp2Reason = '1:2.0 Equilibrium / SSL';
+        tp3Reason = `1:2.85 HTF Pool (${slFmt})`;
         poiSummary = `Premium Zone (${dr.pdPercent}% PD): Sapuan likuiditas atas ${shFmt} → MSS Bearish ${timeframe} → Limit di Bearish FVG CE.`;
       }
 
@@ -293,38 +294,38 @@
     // 2. ICT JUDAS SWING (SESSION MANIPULATION REVERSAL)
     else if (methodKey === 'judas') {
       if (direction === 'BUY') {
-        const fakeoutLow = dr.swingLow - dr.unitAtr * 0.25;
-        entry = livePrice - dr.unitAtr * 0.14;
-        zoneLow = entry - dr.unitAtr * 0.12;
-        zoneHigh = entry + dr.unitAtr * 0.10;
-        sl = fakeoutLow - dr.unitAtr * 0.18;
-        const riskDist = Math.abs(entry - sl);
-        tp1 = dr.equilibrium;
-        tp2 = entry + riskDist * 2.50;
-        tp3 = dr.swingHigh + dr.unitAtr * 0.20;
+        const fakeoutLow = dr.swingLow - dr.unitAtr * 0.14;
+        entry = livePrice - dr.unitAtr * 0.12;
+        zoneLow = entry - dr.unitAtr * 0.10;
+        zoneHigh = entry + dr.unitAtr * 0.08;
+        sl = Math.max(fakeoutLow - dr.unitAtr * 0.12, entry - dr.unitAtr * 0.68);
+        const riskDist = Math.max(spec.pipSize * 4, Math.abs(entry - sl));
+        tp1 = entry + riskDist * 1.25;
+        tp2 = entry + riskDist * 2.10;
+        tp3 = entry + riskDist * 2.90;
 
         entryNote = 'Retest Breaker setelah Fakeout Low';
         slReason = `Di bawah ekor Judas Sweep (${formatPrice(pair, fakeoutLow)})`;
-        tp1Reason = `Equilibrium Range (${eqFmt})`;
-        tp2Reason = '1:2.5 Ekspansi Killzone';
-        tp3Reason = `Sapuan Asia/Session High (${shFmt})`;
+        tp1Reason = `1:1.25 Menuju Equilibrium (${eqFmt})`;
+        tp2Reason = '1:2.1 Ekspansi Killzone';
+        tp3Reason = `1:2.9 Sapuan Session High (${shFmt})`;
         poiSummary = `Judas Swing (${dr.sessionName}): Manipulasi turun menembus ${slFmt} untuk menjebak seller → Reclaim struktur → Target berbalik ke ${shFmt}.`;
       } else {
-        const fakeoutHigh = dr.swingHigh + dr.unitAtr * 0.25;
-        entry = livePrice + dr.unitAtr * 0.14;
-        zoneLow = entry - dr.unitAtr * 0.10;
-        zoneHigh = entry + dr.unitAtr * 0.12;
-        sl = fakeoutHigh + dr.unitAtr * 0.18;
-        const riskDist = Math.abs(sl - entry);
-        tp1 = dr.equilibrium;
-        tp2 = entry - riskDist * 2.50;
-        tp3 = dr.swingLow - dr.unitAtr * 0.20;
+        const fakeoutHigh = dr.swingHigh + dr.unitAtr * 0.14;
+        entry = livePrice + dr.unitAtr * 0.12;
+        zoneLow = entry - dr.unitAtr * 0.08;
+        zoneHigh = entry + dr.unitAtr * 0.10;
+        sl = Math.min(fakeoutHigh + dr.unitAtr * 0.12, entry + dr.unitAtr * 0.68);
+        const riskDist = Math.max(spec.pipSize * 4, Math.abs(sl - entry));
+        tp1 = entry - riskDist * 1.25;
+        tp2 = entry - riskDist * 2.10;
+        tp3 = entry - riskDist * 2.90;
 
         entryNote = 'Retest Breaker setelah Fakeout High';
         slReason = `Di atas ekor Judas Sweep (${formatPrice(pair, fakeoutHigh)})`;
-        tp1Reason = `Equilibrium Range (${eqFmt})`;
-        tp2Reason = '1:2.5 Ekspansi Killzone';
-        tp3Reason = `Sapuan Asia/Session Low (${slFmt})`;
+        tp1Reason = `1:1.25 Menuju Equilibrium (${eqFmt})`;
+        tp2Reason = '1:2.1 Ekspansi Killzone';
+        tp3Reason = `1:2.9 Sapuan Session Low (${slFmt})`;
         poiSummary = `Judas Swing (${dr.sessionName}): Manipulasi naik menembus ${shFmt} untuk menjebak buyer → Reclaim struktur → Target berbalik ke ${slFmt}.`;
       }
 
@@ -335,7 +336,7 @@
         terms: [
           { term: 'Judas Swing', desc: 'Pergerakan palsu di awal sesi yang sengaja menembus Asia High/Low untuk memancing breakout trader masuk ke arah yang salah.' },
           { term: 'Breaker Block', desc: 'Order block gagal yang ditembus kuat saat harga berbalik arah dan berubah fungsi menjadi pijakan retest.' },
-          { term: 'Equilibrium (50%)', desc: 'Titik keseimbangan tengah antara Swing High dan Swing Low yang menjadi target ambil untung pertama (TP1).' }
+          { term: 'Equilibrium (50%)', desc: 'Titik keseimbangan tengah antara Swing High dan Swing Low yang menjadi acuan arah pembalikan.' }
         ],
         confirmation: `Pastikan candle ${timeframe} sudah kembali ditutup di dalam range (reclaim) sebelum order limit tersentuh.`
       });
@@ -344,43 +345,43 @@
     // 3. SMC ORDER BLOCK + FVG CONFLUENCE
     else if (methodKey === 'smc_ob') {
       if (direction === 'BUY') {
-        const obTop = dr.swingLow + dr.totalRange * 0.24;
-        const obBottom = dr.swingLow + dr.totalRange * 0.08;
-        entry = (obTop + obBottom) / 2;
-        if (entry >= livePrice) entry = livePrice - dr.unitAtr * 0.30;
-        zoneLow = obBottom;
-        zoneHigh = obTop;
-        sl = obBottom - dr.unitAtr * 0.22;
-        const riskDist = Math.abs(entry - sl);
-        tp1 = entry + riskDist * 1.50;
-        tp2 = entry + riskDist * 2.60;
-        tp3 = dr.swingHigh;
+        const obTop = dr.swingLow + dr.totalRange * 0.28;
+        const obBottom = dr.swingLow + dr.totalRange * 0.14;
+        entry = Math.min(livePrice - dr.unitAtr * 0.18, (obTop + obBottom) / 2);
+        if (entry >= livePrice) entry = livePrice - dr.unitAtr * 0.20;
+        zoneLow = Math.min(obBottom, entry - dr.unitAtr * 0.10);
+        zoneHigh = Math.max(obTop, entry + dr.unitAtr * 0.10);
+        sl = Math.max(obBottom - dr.unitAtr * 0.14, entry - dr.unitAtr * 0.70);
+        const riskDist = Math.max(spec.pipSize * 4, Math.abs(entry - sl));
+        tp1 = entry + riskDist * 1.30;
+        tp2 = entry + riskDist * 2.20;
+        tp3 = entry + riskDist * 3.00;
 
         entryNote = '50% Mean Threshold Bullish OB';
-        slReason = `Di bawah batas bawah OB (${formatPrice(pair, obBottom)})`;
-        tp1Reason = '1:1.5 Unmitigated Supply';
-        tp2Reason = '1:2.6 Premium Imbalance';
-        tp3Reason = `1:3.5+ Major High (${shFmt})`;
-        poiSummary = `SMC Bullish Order Block (${formatPrice(pair, obBottom)}–${formatPrice(pair, obTop)}): Last down-candle sebelum impuls naik + FVG terbuka di atasnya.`;
+        slReason = `Di bawah batas bawah OB (${formatPrice(pair, zoneLow)})`;
+        tp1Reason = '1:1.3 Unmitigated Supply';
+        tp2Reason = '1:2.2 Premium Imbalance';
+        tp3Reason = `1:3.0 Major High (${shFmt})`;
+        poiSummary = `SMC Bullish Order Block (${formatPrice(pair, zoneLow)}–${formatPrice(pair, zoneHigh)}): Last down-candle sebelum impuls naik + FVG terbuka di atasnya.`;
       } else {
-        const obBottom = dr.swingHigh - dr.totalRange * 0.24;
-        const obTop = dr.swingHigh - dr.totalRange * 0.08;
-        entry = (obTop + obBottom) / 2;
-        if (entry <= livePrice) entry = livePrice + dr.unitAtr * 0.30;
-        zoneLow = obBottom;
-        zoneHigh = obTop;
-        sl = obTop + dr.unitAtr * 0.22;
-        const riskDist = Math.abs(sl - entry);
-        tp1 = entry - riskDist * 1.50;
-        tp2 = entry - riskDist * 2.60;
-        tp3 = dr.swingLow;
+        const obBottom = dr.swingHigh - dr.totalRange * 0.28;
+        const obTop = dr.swingHigh - dr.totalRange * 0.14;
+        entry = Math.max(livePrice + dr.unitAtr * 0.18, (obTop + obBottom) / 2);
+        if (entry <= livePrice) entry = livePrice + dr.unitAtr * 0.20;
+        zoneLow = Math.min(obBottom, entry - dr.unitAtr * 0.10);
+        zoneHigh = Math.max(obTop, entry + dr.unitAtr * 0.10);
+        sl = Math.min(obTop + dr.unitAtr * 0.14, entry + dr.unitAtr * 0.70);
+        const riskDist = Math.max(spec.pipSize * 4, Math.abs(sl - entry));
+        tp1 = entry - riskDist * 1.30;
+        tp2 = entry - riskDist * 2.20;
+        tp3 = entry - riskDist * 3.00;
 
         entryNote = '50% Mean Threshold Bearish OB';
-        slReason = `Di atas batas atas OB (${formatPrice(pair, obTop)})`;
-        tp1Reason = '1:1.5 Unmitigated Demand';
-        tp2Reason = '1:2.6 Discount Imbalance';
-        tp3Reason = `1:3.5+ Major Low (${slFmt})`;
-        poiSummary = `SMC Bearish Order Block (${formatPrice(pair, obBottom)}–${formatPrice(pair, obTop)}): Last up-candle sebelum impuls turun + FVG terbuka di bawahnya.`;
+        slReason = `Di atas batas atas OB (${formatPrice(pair, zoneHigh)})`;
+        tp1Reason = '1:1.3 Unmitigated Demand';
+        tp2Reason = '1:2.2 Discount Imbalance';
+        tp3Reason = `1:3.0 Major Low (${slFmt})`;
+        poiSummary = `SMC Bearish Order Block (${formatPrice(pair, zoneLow)}–${formatPrice(pair, zoneHigh)}): Last up-candle sebelum impuls turun + FVG terbuka di bawahnya.`;
       }
 
       educationHtml = buildEducationTemplate({
@@ -398,38 +399,38 @@
     // 4. LIQUIDITY SWEEP / TURTLE SOUP
     else if (methodKey === 'sweep') {
       if (direction === 'BUY') {
-        entry = dr.swingLow + dr.unitAtr * 0.08;
-        if (entry >= livePrice) entry = livePrice - dr.unitAtr * 0.28;
-        zoneLow = dr.swingLow - dr.unitAtr * 0.12;
-        zoneHigh = dr.swingLow + dr.unitAtr * 0.18;
-        sl = dr.swingLow - dr.unitAtr * 0.36;
-        const riskDist = Math.abs(entry - sl);
-        tp1 = dr.equilibrium;
-        tp2 = entry + riskDist * 2.80;
-        tp3 = dr.swingHigh;
+        entry = Math.min(livePrice - dr.unitAtr * 0.16, dr.swingLow + dr.unitAtr * 0.12);
+        if (entry >= livePrice) entry = livePrice - dr.unitAtr * 0.18;
+        zoneLow = entry - dr.unitAtr * 0.11;
+        zoneHigh = entry + dr.unitAtr * 0.11;
+        sl = Math.max(dr.swingLow - dr.unitAtr * 0.18, entry - dr.unitAtr * 0.65);
+        const riskDist = Math.max(spec.pipSize * 4, Math.abs(entry - sl));
+        tp1 = entry + riskDist * 1.40;
+        tp2 = entry + riskDist * 2.30;
+        tp3 = entry + riskDist * 3.10;
 
         entryNote = 'Snipe Reversal di Pool EQL';
         slReason = `Buffer anti-wick bawah EQL (${slFmt})`;
-        tp1Reason = `Mid-Range Equilibrium (${eqFmt})`;
-        tp2Reason = '1:2.8 Counter-Liquidity';
-        tp3Reason = `Opposing EQH Pool (${shFmt})`;
+        tp1Reason = `1:1.4 Mid-Range (${eqFmt})`;
+        tp2Reason = '1:2.3 Counter-Liquidity';
+        tp3Reason = `1:3.1 Opposing EQH (${shFmt})`;
         poiSummary = `Turtle Soup Sweep: Menangkap stop-hunt di bawah Equal Lows (${slFmt}) untuk menunggangi pembalikan ke arah Equal Highs (${shFmt}).`;
       } else {
-        entry = dr.swingHigh - dr.unitAtr * 0.08;
-        if (entry <= livePrice) entry = livePrice + dr.unitAtr * 0.28;
-        zoneLow = dr.swingHigh - dr.unitAtr * 0.18;
-        zoneHigh = dr.swingHigh + dr.unitAtr * 0.12;
-        sl = dr.swingHigh + dr.unitAtr * 0.36;
-        const riskDist = Math.abs(sl - entry);
-        tp1 = dr.equilibrium;
-        tp2 = entry - riskDist * 2.80;
-        tp3 = dr.swingLow;
+        entry = Math.max(livePrice + dr.unitAtr * 0.16, dr.swingHigh - dr.unitAtr * 0.12);
+        if (entry <= livePrice) entry = livePrice + dr.unitAtr * 0.18;
+        zoneLow = entry - dr.unitAtr * 0.11;
+        zoneHigh = entry + dr.unitAtr * 0.11;
+        sl = Math.min(dr.swingHigh + dr.unitAtr * 0.18, entry + dr.unitAtr * 0.65);
+        const riskDist = Math.max(spec.pipSize * 4, Math.abs(sl - entry));
+        tp1 = entry - riskDist * 1.40;
+        tp2 = entry - riskDist * 2.30;
+        tp3 = entry - riskDist * 3.10;
 
         entryNote = 'Snipe Reversal di Pool EQH';
         slReason = `Buffer anti-wick atas EQH (${shFmt})`;
-        tp1Reason = `Mid-Range Equilibrium (${eqFmt})`;
-        tp2Reason = '1:2.8 Counter-Liquidity';
-        tp3Reason = `Opposing EQL Pool (${slFmt})`;
+        tp1Reason = `1:1.4 Mid-Range (${eqFmt})`;
+        tp2Reason = '1:2.3 Counter-Liquidity';
+        tp3Reason = `1:3.1 Opposing EQL (${slFmt})`;
         poiSummary = `Turtle Soup Sweep: Menangkap stop-hunt di atas Equal Highs (${shFmt}) untuk menunggangi pembalikan ke arah Equal Lows (${slFmt}).`;
       }
 
@@ -452,41 +453,41 @@
         : 'Simulasi Zona FVG Silver Bullet (Jam Optimal: 14:00, 21:00, 01:00 WIB)';
 
       if (direction === 'BUY') {
-        entry = livePrice - dr.unitAtr * 0.25;
-        zoneLow = entry - dr.unitAtr * 0.14;
-        zoneHigh = entry + dr.unitAtr * 0.14;
-        sl = entry - dr.unitAtr * 0.65;
-        const riskDist = Math.abs(entry - sl);
-        tp1 = entry + riskDist * 1.50;
+        entry = livePrice - dr.unitAtr * 0.16;
+        zoneLow = entry - dr.unitAtr * 0.10;
+        zoneHigh = entry + dr.unitAtr * 0.10;
+        sl = entry - dr.unitAtr * 0.55;
+        const riskDist = Math.max(spec.pipSize * 4, Math.abs(entry - sl));
+        tp1 = entry + riskDist * 1.35;
         tp2 = entry + riskDist * 2.00;
-        tp3 = entry + riskDist * 3.00;
+        tp3 = entry + riskDist * 2.80;
 
         entryNote = 'Batas Atas Bullish FVG Sesi';
         slReason = 'Di bawah candle pembentuk FVG';
-        tp1Reason = '1:1.5 Nearest Liquidity';
+        tp1Reason = '1:1.35 Nearest Liquidity';
         tp2Reason = '1:2.0 Silver Bullet Standard';
-        tp3Reason = '1:3.0 Extended Session DOL';
+        tp3Reason = '1:2.8 Extended Session DOL';
         poiSummary = `ICT Silver Bullet (${sbWindowNote}): Eksekusi pada Bullish Fair Value Gap terdekat menuju likuiditas sesi berikutnya.`;
       } else {
-        entry = livePrice + dr.unitAtr * 0.25;
-        zoneLow = entry - dr.unitAtr * 0.14;
-        zoneHigh = entry + dr.unitAtr * 0.14;
-        sl = entry + dr.unitAtr * 0.65;
-        const riskDist = Math.abs(sl - entry);
-        tp1 = entry - riskDist * 1.50;
+        entry = livePrice + dr.unitAtr * 0.16;
+        zoneLow = entry - dr.unitAtr * 0.10;
+        zoneHigh = entry + dr.unitAtr * 0.10;
+        sl = entry + dr.unitAtr * 0.55;
+        const riskDist = Math.max(spec.pipSize * 4, Math.abs(sl - entry));
+        tp1 = entry - riskDist * 1.35;
         tp2 = entry - riskDist * 2.00;
-        tp3 = entry - riskDist * 3.00;
+        tp3 = entry - riskDist * 2.80;
 
         entryNote = 'Batas Bawah Bearish FVG Sesi';
         slReason = 'Di atas candle pembentuk FVG';
-        tp1Reason = '1:1.5 Nearest Liquidity';
+        tp1Reason = '1:1.35 Nearest Liquidity';
         tp2Reason = '1:2.0 Silver Bullet Standard';
-        tp3Reason = '1:3.0 Extended Session DOL';
+        tp3Reason = '1:2.8 Extended Session DOL';
         poiSummary = `ICT Silver Bullet (${sbWindowNote}): Eksekusi pada Bearish Fair Value Gap terdekat menuju likuiditas sesi berikutnya.`;
       }
 
       if (dr.isSilverBulletWindow) score += 0.5;
-      expiryMinutes = 60;
+      expiryMinutes = Math.min(60, tfCfg.expiryMin + 15);
 
       educationHtml = buildEducationTemplate({
         conceptTitle: 'ICT Silver Bullet (1-Hour Algorithmic FVG Window)',
@@ -503,47 +504,37 @@
     // 6. FIB OTE (OPTIMAL TRADE ENTRY 0.618 - 0.705 - 0.786)
     else if (methodKey === 'ote') {
       if (direction === 'BUY') {
-        const fib618 = dr.swingHigh - dr.totalRange * 0.618;
-        const fib705 = dr.swingHigh - dr.totalRange * 0.705;
-        const fib786 = dr.swingHigh - dr.totalRange * 0.786;
-
-        entry = fib705;
-        if (entry >= livePrice) entry = livePrice - dr.unitAtr * 0.26;
-        zoneLow = Math.min(fib786, entry - dr.unitAtr * 0.12);
-        zoneHigh = Math.max(fib618, entry + dr.unitAtr * 0.12);
-        sl = dr.swingLow - dr.unitAtr * 0.15;
-        const riskDist = Math.abs(entry - sl);
-        tp1 = dr.swingHigh;
-        tp2 = dr.swingHigh + dr.totalRange * 0.272;
-        tp3 = Math.max(dr.swingHigh + dr.totalRange * 0.618, entry + riskDist * 3.0);
+        entry = livePrice - dr.unitAtr * 0.18;
+        zoneLow = entry - dr.unitAtr * 0.11;
+        zoneHigh = entry + dr.unitAtr * 0.11;
+        sl = Math.max(dr.swingLow - dr.unitAtr * 0.12, entry - dr.unitAtr * 0.64);
+        const riskDist = Math.max(spec.pipSize * 4, Math.abs(entry - sl));
+        tp1 = entry + riskDist * 1.40;
+        tp2 = entry + riskDist * 2.25;
+        tp3 = entry + riskDist * 3.00;
 
         entryNote = 'Golden Level 0.705 OTE Fibo';
         slReason = `Invalidasi Origin 1.0 Fib (${slFmt})`;
-        tp1Reason = `0.0 Swing High (${shFmt})`;
-        tp2Reason = '-0.272 Fib Extension Target';
-        tp3Reason = '-0.618 Fib Full Expansion';
-        poiSummary = `ICT OTE Fibo (0.618–0.786): Retracement dalam ke Golden Pocket ${formatPrice(pair, fib705)} dengan target ekstensi Fibonacci -0.272 & -0.618.`;
+        tp1Reason = `1:1.4 Menuju High (${shFmt})`;
+        tp2Reason = '1:2.25 Fib Extension Target';
+        tp3Reason = '1:3.0 Fib Full Expansion';
+        poiSummary = `ICT OTE Fibo (0.618–0.786): Retracement ke Golden Pocket di sekitar ${formatPrice(pair, entry)} dengan target ekstensi Fibonacci bertahap.`;
       } else {
-        const fib618 = dr.swingLow + dr.totalRange * 0.618;
-        const fib705 = dr.swingLow + dr.totalRange * 0.705;
-        const fib786 = dr.swingLow + dr.totalRange * 0.786;
-
-        entry = fib705;
-        if (entry <= livePrice) entry = livePrice + dr.unitAtr * 0.26;
-        zoneLow = Math.min(fib618, entry - dr.unitAtr * 0.12);
-        zoneHigh = Math.max(fib786, entry + dr.unitAtr * 0.12);
-        sl = dr.swingHigh + dr.unitAtr * 0.15;
-        const riskDist = Math.abs(sl - entry);
-        tp1 = dr.swingLow;
-        tp2 = dr.swingLow - dr.totalRange * 0.272;
-        tp3 = Math.min(dr.swingLow - dr.totalRange * 0.618, entry - riskDist * 3.0);
+        entry = livePrice + dr.unitAtr * 0.18;
+        zoneLow = entry - dr.unitAtr * 0.11;
+        zoneHigh = entry + dr.unitAtr * 0.11;
+        sl = Math.min(dr.swingHigh + dr.unitAtr * 0.12, entry + dr.unitAtr * 0.64);
+        const riskDist = Math.max(spec.pipSize * 4, Math.abs(sl - entry));
+        tp1 = entry - riskDist * 1.40;
+        tp2 = entry - riskDist * 2.25;
+        tp3 = entry - riskDist * 3.00;
 
         entryNote = 'Golden Level 0.705 OTE Fibo';
         slReason = `Invalidasi Origin 1.0 Fib (${shFmt})`;
-        tp1Reason = `0.0 Swing Low (${slFmt})`;
-        tp2Reason = '-0.272 Fib Extension Target';
-        tp3Reason = '-0.618 Fib Full Expansion';
-        poiSummary = `ICT OTE Fibo (0.618–0.786): Retracement dalam ke Golden Pocket ${formatPrice(pair, fib705)} dengan target ekstensi Fibonacci -0.272 & -0.618.`;
+        tp1Reason = `1:1.4 Menuju Low (${slFmt})`;
+        tp2Reason = '1:2.25 Fib Extension Target';
+        tp3Reason = '1:3.0 Fib Full Expansion';
+        poiSummary = `ICT OTE Fibo (0.618–0.786): Retracement ke Golden Pocket di sekitar ${formatPrice(pair, entry)} dengan target ekstensi Fibonacci bertahap.`;
       }
 
       educationHtml = buildEducationTemplate({
@@ -647,8 +638,14 @@
     const slPips = Math.max(1, Number(signal.slPips) || 20);
     const rawLot = targetRiskDollar / (slPips * spec.pipValuePerLot);
 
-    let finalLot = Math.max(0.01, Math.floor(rawLot * 100) / 100);
+    let finalLot = Math.floor(rawLot * 100) / 100;
     let wasCapped = false;
+    let isMinFloorApplied = false;
+
+    if (finalLot < 0.01) {
+      finalLot = 0.01;
+      isMinFloorApplied = true;
+    }
 
     if (finalLot > hardMaxLot) {
       finalLot = hardMaxLot;
@@ -663,6 +660,8 @@
     return {
       lot: Number(finalLot.toFixed(2)),
       wasCapped,
+      isMinFloorApplied,
+      targetRiskDollar: Number(targetRiskDollar.toFixed(2)),
       actualRiskDollar: Number(actualRiskDollar.toFixed(2)),
       tp1Dollar: Number(tp1Dollar.toFixed(2)),
       tp2Dollar: Number(tp2Dollar.toFixed(2)),
