@@ -183,7 +183,9 @@
   let state = loadState();
   let currentSignalObj = null;
   let lastAutoSentSignalKey = '';
+  let lastAutoSentSignalTimeMs = 0;
   let lastAutoSentNewsKey = '';
+  const AUTO_TELEGRAM_COOLDOWN_MS = 10 * 60000; // Anti-spam minimal 10 menit per setup identik
 
   function getWibDateKey() {
     const now = new Date();
@@ -203,20 +205,19 @@
       const base = createInitialState();
       return {
         ...base,
-        ...parsed, 
-      weekendBtcMode: false,
-      flags: { ...base.flags, ...(parsed.flags || {}) },
-      config: { ...base.config, ...(parsed.config || {}) },
-      prices: { ...base.prices, ...(parsed.prices || {}) },
-      priceOffsets: { ...base.priceOffsets, ...(parsed.priceOffsets || {}) },
-      signal: { ...base.signal, ...(parsed.signal || {}) },
-      chart: { ...base.chart, ...(parsed.chart || {}) },
-      news: { ...base.news, ...(parsed.news || {}) },
-      sopItems: Array.isArray(parsed.sopItems) && parsed.sopItems.length > 0 ? parsed.sopItems : base.sopItems,
-      accounts: Array.isArray(parsed.accounts) && parsed.accounts.length > 0 ? parsed.accounts : base.accounts,
-      tradeLogs: Array.isArray(parsed.tradeLogs) ? parsed.tradeLogs : []
-    };
-
+        ...parsed,
+        weekendBtcMode: false,
+        flags: { ...base.flags, ...(parsed.flags || {}) },
+        config: { ...base.config, ...(parsed.config || {}) },
+        prices: { ...base.prices, ...(parsed.prices || {}) },
+        priceOffsets: { ...base.priceOffsets, ...(parsed.priceOffsets || {}) },
+        signal: { ...base.signal, ...(parsed.signal || {}) },
+        chart: { ...base.chart, ...(parsed.chart || {}) },
+        news: { ...base.news, ...(parsed.news || {}) },
+        sopItems: Array.isArray(parsed.sopItems) && parsed.sopItems.length > 0 ? parsed.sopItems : base.sopItems,
+        accounts: Array.isArray(parsed.accounts) && parsed.accounts.length > 0 ? parsed.accounts : base.accounts,
+        tradeLogs: Array.isArray(parsed.tradeLogs) ? parsed.tradeLogs : []
+      };
     } catch (_) {
       return createInitialState();
     }
@@ -266,13 +267,37 @@
     if (m) m.classList.add('hidden');
   }
 
-    function copyTextValue(text, label = 'Nilai') {
+  function fallbackCopy(text, label) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = String(text);
+      ta.setAttribute('readonly', '');
+      ta.style.position = 'fixed';
+      ta.style.top = '0';
+      ta.style.left = '0';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      if (ok) {
+        showToast(`${label} disalin: ${text}`, 'success');
+      } else {
+        showToast('Gagal menyalin otomatis', 'error');
+      }
+    } catch (_) {
+      showToast('Gagal menyalin otomatis', 'error');
+    }
+  }
+
+  function copyTextValue(text, label = 'Nilai') {
     const safeText = text === undefined || text === null ? '' : String(text).trim();
     if (!safeText || safeText === '--') {
       showToast(`${label} belum tersedia untuk disalin`, 'warn');
       return;
     }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
+    if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
       navigator.clipboard.writeText(safeText).then(
         () => showToast(`${label} disalin: ${safeText}`, 'success'),
         () => fallbackCopy(safeText, label)
@@ -280,39 +305,6 @@
     } else {
       fallbackCopy(safeText, label);
     }
-  }
-
-  function copySignalField(field) {
-    if (!currentSignalObj) {
-      showToast('Data sinyal belum siap', 'warn');
-      return;
-    }
-    const map = {
-      entry: { val: currentSignalObj.entryFmt, label: 'Entry' },
-      sl: { val: currentSignalObj.slFmt, label: 'Stop Loss' },
-      tp1: { val: currentSignalObj.tp1Fmt, label: 'TP 1' },
-      tp2: { val: currentSignalObj.tp2Fmt, label: 'TP 2' },
-      tp3: { val: currentSignalObj.tp3Fmt, label: 'TP 3' }
-    };
-    const item = map[field];
-    if (item) copyTextValue(item.val, item.label);
-  }
-
-
-  function fallbackCopy(text, label) {
-    const ta = document.createElement('textarea');
-    ta.value = text;
-    ta.style.position = 'fixed';
-    ta.style.opacity = '0';
-    document.body.appendChild(ta);
-    ta.select();
-    try {
-      document.execCommand('copy');
-      showToast(`${label} disalin: ${text}`, 'success');
-    } catch (_) {
-      showToast('Gagal menyalin otomatis', 'error');
-    }
-    ta.remove();
   }
 
   // =========================================================================
@@ -336,6 +328,7 @@
     saveState();
     if (state.activeTab === 'chart') {
       renderTradingViewChart(state.chart.pair);
+      scanChartStructure(false);
     }
     showToast(`Mode tampilan diubah ke ${state.theme === 'dark' ? 'Dark Mode' : 'Light Mode'}`, 'info');
   }
@@ -560,33 +553,38 @@
     if (quotaEl) quotaEl.textContent = `Kuota TD: ${state.tdQuotaUsed} / 800`;
   }
 
-  
-async function syncLiveMarketPrices(forceShowToast = false) {
-  let updatedAny = false;
-  let sourceTag = 'Live Feed';
+  async function syncLiveMarketPrices(forceShowToast = false) {
+    let updatedAny = false;
+    let sourceTag = 'Live Feed';
 
-  if (global.LiamPriceFeed) {
-    const live = await global.LiamPriceFeed.fetchAccuratePrices(state.config.tdApiKey);
-    if (live.XAUUSD) { state.prices.XAUUSD = live.XAUUSD; updatedAny = true; }
-    if (live.US100)  { state.prices.US100 = live.US100;   updatedAny = true; }
-    if (live.BTCUSDT){ state.prices.BTCUSDT = live.BTCUSDT; updatedAny = true; }
-    if (live.EURUSD) { state.prices.EURUSD = live.EURUSD; updatedAny = true; }
-    if (live.source) sourceTag = live.source;
+    if (global.LiamPriceFeed) {
+      const live = await global.LiamPriceFeed.fetchAccuratePrices(state.config.tdApiKey);
+      if (live.XAUUSD) { state.prices.XAUUSD = live.XAUUSD; updatedAny = true; }
+      if (live.US100)  { state.prices.US100 = live.US100;   updatedAny = true; }
+      if (live.BTCUSDT){ state.prices.BTCUSDT = live.BTCUSDT; updatedAny = true; }
+      if (live.EURUSD) { state.prices.EURUSD = live.EURUSD; updatedAny = true; }
+      if (live.source) sourceTag = live.source;
+    }
+
+    state.priceSourceLabel = sourceTag;
+    state.lastPriceSyncMs = Date.now();
+    saveState();
+    renderPriceDisplays();
+
+    if (state.activeTab === 'news') {
+      renderNewsSection();
+    } else if (state.activeTab === 'chart') {
+      scanChartStructure(false);
+    }
+
+    if (updatedAny && state.config.engineMasterActive && state.config.tgAutoSignal) {
+      recalculateAndRenderSignal(true);
+    }
+
+    if (forceShowToast) {
+      showToast(updatedAny ? `Harga live diperbarui (${sourceTag})` : 'Menggunakan harga kalibrasi aktif', updatedAny ? 'success' : 'info');
+    }
   }
-
-  state.priceSourceLabel = sourceTag;
-  state.lastPriceSyncMs = Date.now();
-  saveState();
-  renderPriceDisplays();
-
-      if (state.activeTab === 'news') renderNewsSection();
-
-
-  if (forceShowToast) {
-    showToast(updatedAny ? `Harga live diperbarui (${sourceTag})` : 'Menggunakan harga kalibrasi aktif', updatedAny ? 'success' : 'info');
-  }
-}
-
 
   // =========================================================================
   // KALIBRASI HARGA BROKER & KALKULATOR LOT
@@ -1389,10 +1387,10 @@ async function syncLiveMarketPrices(forceShowToast = false) {
     const msg = [
       `🚨 <b>XLIAMVR NEWS QUANT ALERT</b>`,
       `📌 Event: <b>${escapeHtml(evt.title)}</b>`,
-      `🕒 Jadwal: <code>${evt.dateStr} ${evt.timeWib}</code> (${evt.currency})`,
-      `📊 Forecast: <code>${evt.forecast}</code> | Prev: <code>${evt.previous}</code>`,
-      `🎯 Bias: <b>${evt.verdictPair} — ${evt.verdictDirection}</b> (${evt.verdictConfidence})`,
-      tp.entry ? `📍 Entry: <code>${tp.entry}</code> | SL: <code>${tp.sl}</code> | TP1: <code>${tp.tp1}</code> | TP2: <code>${tp.tp2}</code>` : '',
+      `🕒 Jadwal: <code>${escapeHtml(evt.dateStr)} ${escapeHtml(evt.timeWib)}</code> (${escapeHtml(evt.currency)})`,
+      `📊 Forecast: <code>${escapeHtml(evt.forecast)}</code> | Prev: <code>${escapeHtml(evt.previous)}</code>`,
+      `🎯 Bias: <b>${escapeHtml(evt.verdictPair)} — ${escapeHtml(evt.verdictDirection)}</b> (${escapeHtml(evt.verdictConfidence)})`,
+      tp.entry ? `📍 Entry: <code>${escapeHtml(tp.entry)}</code> | SL: <code>${escapeHtml(tp.sl)}</code> | TP1: <code>${escapeHtml(tp.tp1)}</code> | TP2: <code>${escapeHtml(tp.tp2)}</code>` : '',
       `💡 <i>${escapeHtml(evt.verdictSummary)}</i>`
     ]
       .filter(Boolean)
@@ -1434,7 +1432,7 @@ async function syncLiveMarketPrices(forceShowToast = false) {
     state.signal.expiryEndMs = Date.now() + (global.LiamMethods.TF_MULTIPLIERS[state.signal.timeframe]?.expiryMin || 45) * 60000;
     saveState();
     renderPriceDisplays();
-    recalculateAndRenderSignal(true);
+    recalculateAndRenderSignal(false);
   }
 
   function selectSignalTimeframe(tf) {
@@ -1442,14 +1440,14 @@ async function syncLiveMarketPrices(forceShowToast = false) {
     state.signal.timeframe = tf;
     state.signal.expiryEndMs = Date.now() + global.LiamMethods.TF_MULTIPLIERS[tf].expiryMin * 60000;
     saveState();
-    recalculateAndRenderSignal(true);
+    recalculateAndRenderSignal(false);
   }
 
   function selectSignalMethod(methodKey) {
     if (!global.LiamMethods.METHOD_CATALOG[methodKey]) return;
     state.signal.method = methodKey;
     saveState();
-    recalculateAndRenderSignal(true);
+    recalculateAndRenderSignal(false);
     showToast(`Metode: ${global.LiamMethods.METHOD_CATALOG[methodKey].name}`, 'info');
   }
 
@@ -1497,7 +1495,11 @@ async function syncLiveMarketPrices(forceShowToast = false) {
     renderNewsSniperPanel();
     showToast(`News Sniper Mode: ${state.flags.newsSniper ? 'AKTIF' : 'OFF'}`, state.flags.newsSniper ? 'success' : 'info');
     if (state.flags.newsSniper && state.config.tgAutoNews) {
-      dispatchNewsSniperTelegram(false);
+      const newsKey = `sniper|${getWibDateKey()}`;
+      if (newsKey !== lastAutoSentNewsKey) {
+        lastAutoSentNewsKey = newsKey;
+        dispatchNewsSniperTelegram(false);
+      }
     }
   }
 
@@ -1612,11 +1614,11 @@ async function syncLiveMarketPrices(forceShowToast = false) {
     const ns = buildNewsSniperSetup();
     const msg = [
       `⚡ <b>NEWS SNIPER AUTO-SIGNAL</b>`,
-      `📰 Event: <b>${escapeHtml(ns.event.title)}</b> (${ns.event.timeWib})`,
-      `🎯 Eksekusi: <b>${ns.direction} ${ns.pair}</b>`,
-      `📍 Entry: <code>${ns.entryFmt}</code>`,
-      `🛑 SL: <code>${ns.slFmt}</code>`,
-      `🎯 TP: <code>${ns.tpFmt}</code>`,
+      `📰 Event: <b>${escapeHtml(ns.event.title)}</b> (${escapeHtml(ns.event.timeWib)})`,
+      `🎯 Eksekusi: <b>${escapeHtml(ns.direction)} ${escapeHtml(ns.pair)}</b>`,
+      `📍 Entry: <code>${escapeHtml(ns.entryFmt)}</code>`,
+      `🛑 SL: <code>${escapeHtml(ns.slFmt)}</code>`,
+      `🎯 TP: <code>${escapeHtml(ns.tpFmt)}</code>`,
       `📌 <i>${escapeHtml(ns.rationale)}</i>`
     ].join('\n');
 
@@ -1707,13 +1709,15 @@ async function syncLiveMarketPrices(forceShowToast = false) {
       };
     }
 
-        let pos = { lot: 0.02, actualRiskDollar: 4.0, tp2Dollar: 8.8, wasCapped: false };
+    let pos = { lot: 0.02, actualRiskDollar: 4.0, tp2Dollar: 8.8, wasCapped: false };
     try {
       if (global.LiamMethods && typeof global.LiamMethods.calculatePositionSize === 'function') {
         pos = global.LiamMethods.calculatePositionSize(acc || { equity: 1000, balance: 1000, riskPct: 0.4, maxLot: 0.15 }, sig);
       }
     } catch (_) {}
 
+    sig.pos = pos;
+    currentSignalObj = sig;
 
     const isBuy = sig.direction === 'BUY';
     const mainCard = document.getElementById('main-sniper-card');
@@ -1791,10 +1795,13 @@ async function syncLiveMarketPrices(forceShowToast = false) {
     renderNewsSniperPanel();
     updateSignalExpiryTicker();
 
-    if (allowAutoTelegram && state.config.tgAutoSignal) {
-      const sigKey = `${sig.pair}|${sig.timeframe}|${sig.methodKey}|${sig.direction}|${sig.entryFmt}|${state.signal.scanSeed}`;
-      if (sigKey !== lastAutoSentSignalKey) {
+    if (allowAutoTelegram && state.config.engineMasterActive && state.config.tgAutoSignal) {
+      const sigKey = `${sig.pair}|${sig.timeframe}|${sig.methodKey}|${sig.direction}|${sig.entryFmt}|${sig.slFmt}|${sig.tp2Fmt}`;
+      const nowMs = Date.now();
+      const cooldownPassed = nowMs - lastAutoSentSignalTimeMs >= AUTO_TELEGRAM_COOLDOWN_MS;
+      if (sigKey !== lastAutoSentSignalKey || cooldownPassed) {
         lastAutoSentSignalKey = sigKey;
+        lastAutoSentSignalTimeMs = nowMs;
         sendCurrentSignalToTelegramOnly(false);
       }
     }
@@ -1803,16 +1810,20 @@ async function syncLiveMarketPrices(forceShowToast = false) {
   function updateSignalExpiryTicker() {
     const el = document.getElementById('sig-expiry-timer');
     if (!el) return;
-    let remSec = Math.floor((Number(state.signal.expiryEndMs || 0) - Date.now()) / 1000);
-    if (remSec <= 0) {
-      const tfMin = global.LiamMethods.TF_MULTIPLIERS[state.signal.timeframe]?.expiryMin || 45;
-      state.signal.expiryEndMs = Date.now() + tfMin * 60000;
-      remSec = tfMin * 60;
+    const tfMin = global.LiamMethods?.TF_MULTIPLIERS?.[state.signal?.timeframe]?.expiryMin || 45;
+    const maxWindowMs = tfMin * 60000;
+    const now = Date.now();
+    let endMs = Number(state.signal?.expiryEndMs) || 0;
+    if (!Number.isFinite(endMs) || endMs <= now || endMs - now > maxWindowMs) {
+      endMs = now + maxWindowMs;
+      state.signal.expiryEndMs = endMs;
       saveState();
     }
+    const remSec = Math.max(0, Math.floor((endMs - now) / 1000));
     const mm = String(Math.floor(remSec / 60)).padStart(2, '0');
     const ss = String(remSec % 60).padStart(2, '0');
-    el.textContent = `⏳ ${mm}:${ss}`;
+    const pulseGlyph = remSec % 2 === 0 ? '⏳' : '🕒';
+    el.innerHTML = `<span class="inline-block animate-pulse">${pulseGlyph}</span> <span>${mm}:${ss}</span>`;
   }
 
   function togglePoiEducationDrawer() {
@@ -1825,7 +1836,13 @@ async function syncLiveMarketPrices(forceShowToast = false) {
   }
 
   function copySignalField(field) {
-    if (!currentSignalObj) return;
+    if (!currentSignalObj) {
+      recalculateAndRenderSignal(false);
+    }
+    if (!currentSignalObj) {
+      showToast('Data sinyal belum siap', 'warn');
+      return;
+    }
     const map = {
       entry: { val: currentSignalObj.entryFmt, label: 'Entry' },
       sl: { val: currentSignalObj.slFmt, label: 'Stop Loss' },
@@ -1853,11 +1870,17 @@ async function syncLiveMarketPrices(forceShowToast = false) {
   }
 
   function copyFullSignalSetup() {
+    if (!currentSignalObj) {
+      recalculateAndRenderSignal(false);
+    }
     if (!currentSignalObj) return;
     copyTextValue(formatSignalPlainText(currentSignalObj), 'Setup Lengkap');
   }
 
   function toggleStandardFormatBox() {
+    if (!currentSignalObj) {
+      recalculateAndRenderSignal(false);
+    }
     state.signal.showStandardFormat = !state.signal.showStandardFormat;
     saveState();
     const box = document.getElementById('standard-format-preview');
@@ -1869,6 +1892,9 @@ async function syncLiveMarketPrices(forceShowToast = false) {
   }
 
   async function takeSetupAndSendTelegram() {
+    if (!currentSignalObj) {
+      recalculateAndRenderSignal(false);
+    }
     if (!currentSignalObj) return;
     if (!canExecuteNewTrade()) return;
 
@@ -1914,19 +1940,22 @@ async function syncLiveMarketPrices(forceShowToast = false) {
   }
 
   async function sendCurrentSignalToTelegramOnly(showFeedback = true) {
+    if (!currentSignalObj) {
+      recalculateAndRenderSignal(false);
+    }
     if (!currentSignalObj) return;
     const s = currentSignalObj;
     const msg = [
       `🎯 <b>XLIAMVR SNIPER SIGNAL</b>`,
-      `📈 Pair: <b>${s.pair}</b> • Timeframe: <b>${s.timeframe}</b>`,
-      `🧭 Arah: <b>${s.orderType}</b> (${s.methodShortTag}) • Score: <code>${s.score.toFixed(1)}/10</code>`,
-      `📐 Zona POI: <code>${s.zoneRangeFormatted}</code>`,
-      `📍 Entry: <code>${s.entryFmt}</code>`,
-      `🛑 SL: <code>${s.slFmt}</code> (-${s.slPips} pips)`,
-      `✅ TP1: <code>${s.tp1Fmt}</code> (+${s.tp1Pips})`,
-      `✅ TP2: <code>${s.tp2Fmt}</code> (+${s.tp2Pips})`,
-      `✅ TP3: <code>${s.tp3Fmt}</code> (+${s.tp3Pips})`,
-      `⚖️ Rekomendasi Lot: <code>${s.pos ? s.pos.lot.toFixed(2) : '0.02'}</code>`
+      `📈 Pair: <b>${escapeHtml(s.pair)}</b> • Timeframe: <b>${escapeHtml(s.timeframe)}</b>`,
+      `🧭 Arah: <b>${escapeHtml(s.orderType)}</b> (${escapeHtml(s.methodShortTag)}) • Score: <code>${escapeHtml(s.score.toFixed(1))}/10</code>`,
+      `📐 Zona POI: <code>${escapeHtml(s.zoneRangeFormatted)}</code>`,
+      `📍 Entry: <code>${escapeHtml(s.entryFmt)}</code>`,
+      `🛑 SL: <code>${escapeHtml(s.slFmt)}</code> (-${escapeHtml(s.slPips)} pips)`,
+      `✅ TP1: <code>${escapeHtml(s.tp1Fmt)}</code> (+${escapeHtml(s.tp1Pips)})`,
+      `✅ TP2: <code>${escapeHtml(s.tp2Fmt)}</code> (+${escapeHtml(s.tp2Pips)})`,
+      `✅ TP3: <code>${escapeHtml(s.tp3Fmt)}</code> (+${escapeHtml(s.tp3Pips)})`,
+      `⚖️ Rekomendasi Lot: <code>${escapeHtml(s.pos ? s.pos.lot.toFixed(2) : '0.02')}</code>`
     ].join('\n');
 
     await dispatchTelegramMessage(msg, showFeedback);
@@ -2016,10 +2045,10 @@ async function syncLiveMarketPrices(forceShowToast = false) {
     if (state.config.tgAutoResult && outcome !== 'CANCEL') {
       const pipSign = item.pipsResult > 0 ? `+${item.pipsResult}` : `${item.pipsResult}`;
       const msg = [
-        `📣 <b>UPDATE HASIL TRADE — ${item.pair}</b>`,
-        `Hasil: <b>${outcome}</b> (${pipSign} pips)`,
-        `Arah: ${item.orderType} • Entry: <code>${item.entry}</code>`,
-        `Akun: ${item.accountName}`
+        `📣 <b>UPDATE HASIL TRADE — ${escapeHtml(item.pair)}</b>`,
+        `Hasil: <b>${escapeHtml(outcome)}</b> (${escapeHtml(pipSign)} pips)`,
+        `Arah: ${escapeHtml(item.orderType)} • Entry: <code>${escapeHtml(item.entry)}</code>`,
+        `Akun: ${escapeHtml(item.accountName)}`
       ].join('\n');
       await dispatchTelegramMessage(msg, false);
     }
@@ -2258,15 +2287,54 @@ async function syncLiveMarketPrices(forceShowToast = false) {
   function scanChartStructure(showFeedback = true) {
     const pair = state.chart.pair || 'XAUUSD';
     const price = getCalibratedPrice(pair);
-    const dr = global.LiamMethods.analyzeDealingRange(pair, price, state.signal.timeframe || 'M15', state.signal.scanSeed);
+    const tf = state.signal.timeframe || 'M15';
+    const seed = Number(state.signal.scanSeed) || 1;
+    const spec = global.LiamMethods?.getPairSpec ? global.LiamMethods.getPairSpec(pair) : { decimals: pair === 'EURUSD' ? 5 : 2 };
+    const dec = spec.decimals;
 
-    setText('chart-swing-high', dr.swingHighFmt);
-    setText('chart-swing-low', dr.swingLowFmt);
-    setText('chart-active-range', global.LiamMethods.formatPrice(pair, dr.totalRange));
+    let dr = null;
+    try {
+      dr = global.LiamMethods?.analyzeDealingRange
+        ? global.LiamMethods.analyzeDealingRange(pair, price, tf, seed)
+        : null;
+    } catch (_) {
+      dr = null;
+    }
+
+    const baseSpan = pair === 'EURUSD' ? 0.0042 : pair === 'XAUUSD' ? 16.5 : pair === 'BTCUSDT' ? 1350 : 160;
+    const swingHighNum = Number.isFinite(Number(dr?.swingHigh)) ? Number(dr.swingHigh) : price + baseSpan * 0.55;
+    const swingLowNum = Number.isFinite(Number(dr?.swingLow)) ? Number(dr.swingLow) : price - baseSpan * 0.45;
+    const totalRangeNum = Math.max(0.00001, Math.abs(swingHighNum - swingLowNum));
+    const eqNum = Number.isFinite(Number(dr?.equilibrium)) ? Number(dr.equilibrium) : (swingHighNum + swingLowNum) / 2;
+    const pdPct = Number.isFinite(Number(dr?.pdPercent))
+      ? Number(dr.pdPercent)
+      : Math.max(0, Math.min(100, Math.round(((price - swingLowNum) / totalRangeNum) * 100)));
+
+    const highFmt = dr?.swingHighFmt || swingHighNum.toFixed(dec);
+    const lowFmt = dr?.swingLowFmt || swingLowNum.toFixed(dec);
+    const rangeFmt = dr?.totalRange ? global.LiamMethods.formatPrice(pair, dr.totalRange) : totalRangeNum.toFixed(dec);
+    const eqFmt = dr?.equilibriumFmt || eqNum.toFixed(dec);
+
+    const shEl = document.getElementById('chart-swing-high');
+    const slEl = document.getElementById('chart-swing-low');
+    const arEl = document.getElementById('chart-active-range');
+
+    if (shEl) {
+      shEl.textContent = highFmt;
+      shEl.className = 'text-sm sm:text-base font-mono font-extrabold text-emerald-400';
+    }
+    if (slEl) {
+      slEl.textContent = lowFmt;
+      slEl.className = 'text-sm sm:text-base font-mono font-extrabold text-rose-400';
+    }
+    if (arEl) {
+      arEl.textContent = rangeFmt;
+      arEl.className = 'text-sm sm:text-base font-mono font-extrabold text-sky-400';
+    }
 
     const verdictBox = document.getElementById('chart-scan-verdict-box');
-    const zoneLabel = dr.pdPercent >= 50 ? 'PREMIUM (Area Jual / Distribusi)' : 'DISCOUNT (Area Beli / Akumulasi)';
-    const text = `<strong>${pair} (${TV_SYMBOL_MAP[pair]})</strong> berada pada posisi <strong>${dr.pdPercent}% Dealing Range</strong> → Zona <strong>${zoneLabel}</strong>. Equilibrium di <code>${dr.equilibriumFmt}</code>.`;
+    const zoneLabel = pdPct >= 50 ? 'PREMIUM (Area Jual / Distribusi)' : 'DISCOUNT (Area Beli / Akumulasi)';
+    const text = `<strong>${pair} (${TV_SYMBOL_MAP[pair]})</strong> berada pada posisi <strong>${pdPct}% Dealing Range</strong> → Zona <strong>${zoneLabel}</strong>. Equilibrium di <code>${eqFmt}</code>.`;
 
     if (verdictBox) verdictBox.innerHTML = text;
     if (showFeedback) showToast(`Struktur ${pair} dipindai!`, 'success');
@@ -2556,8 +2624,8 @@ async function syncLiveMarketPrices(forceShowToast = false) {
     const msg = [
       `🤖 <b>LIAMVTRADE QUANT BOT TEST</b>`,
       `Status: <b>ONLINE &amp; TERHUBUNG</b>`,
-      `Waktu: <code>${formatWibShortTime()}</code>`,
-      `Akun Aktif: <b>${getActiveAccount()?.name || '-'}</b>`
+      `Waktu: <code>${escapeHtml(formatWibShortTime())}</code>`,
+      `Akun Aktif: <b>${escapeHtml(getActiveAccount()?.name || '-')}</b>`
     ].join('\n');
     await dispatchTelegramMessage(msg, true);
   }
@@ -2592,175 +2660,6 @@ async function syncLiveMarketPrices(forceShowToast = false) {
     const wib = new Date(utcMs + 7 * 3600000);
     return `${String(wib.getHours()).padStart(2, '0')}:${String(wib.getMinutes()).padStart(2, '0')} WIB`;
   }
-    function fallbackCopy(text, label) {
-    try {
-      const ta = document.createElement('textarea');
-      ta.value = String(text);
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.focus();
-      ta.select();
-      const ok = document.execCommand('copy');
-      ta.remove();
-      if (typeof showToast === 'function') {
-        showToast(ok ? `${label} disalin: ${text}` : 'Gagal menyalin otomatis', ok ? 'success' : 'error');
-      }
-    } catch (_) {
-      if (typeof showToast === 'function') showToast('Gagal menyalin otomatis', 'error');
-    }
-  }
-
-  function copyTextValue(text, label = 'Nilai') {
-    const safe = text === undefined || text === null ? '' : String(text).trim();
-    if (!safe || safe === '--') {
-      if (typeof showToast === 'function') showToast(`${label} belum tersedia`, 'warn');
-      return;
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(safe).then(
-        () => { if (typeof showToast === 'function') showToast(`${label} disalin: ${safe}`, 'success'); },
-        () => fallbackCopy(safe, label)
-      );
-    } else {
-      fallbackCopy(safe, label);
-    }
-  }
-
-  function copySignalField(field) {
-    if (!currentSignalObj) return;
-    const map = {
-      entry: [currentSignalObj.entryFmt, 'Entry'],
-      sl: [currentSignalObj.slFmt, 'Stop Loss'],
-      tp1: [currentSignalObj.tp1Fmt, 'TP 1'],
-      tp2: [currentSignalObj.tp2Fmt, 'TP 2'],
-      tp3: [currentSignalObj.tp3Fmt, 'TP 3']
-    };
-    if (map[field]) copyTextValue(map[field][0], map[field][1]);
-  }
-
-  function buildSignalSummaryText(sig) {
-    if (!sig) return '';
-    return [
-      `${sig.pair} (${sig.timeframe}) - ${sig.orderType || sig.direction}`,
-      `Entry: ${sig.entryFmt} | SL: ${sig.slFmt}`,
-      `TP1: ${sig.tp1Fmt} | TP2: ${sig.tp2Fmt} | TP3: ${sig.tp3Fmt}`
-    ].join('\n');
-  }
-
-  function copyFullSignalSetup() {
-    if (!currentSignalObj) return;
-    copyTextValue(buildSignalSummaryText(currentSignalObj), 'Full Setup');
-  }
-
-  async function dispatchTelegramMessage(text) {
-    const token = (state.config?.tgToken || '').trim();
-    const chatId = (state.config?.tgChatId || '').trim();
-    if (!token || !chatId) {
-      if (typeof showToast === 'function') showToast('Isi Bot Token & Chat ID Telegram di tab Profil dulu', 'warn');
-      return false;
-    }
-    try {
-      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ chat_id: chatId, text })
-      });
-      if (res.ok) {
-        if (typeof showToast === 'function') showToast('Setup terkirim ke Telegram', 'success');
-        return true;
-      }
-      if (typeof showToast === 'function') showToast('Gagal kirim ke Telegram (cek Token/Chat ID)', 'error');
-      return false;
-    } catch (_) {
-      if (typeof showToast === 'function') showToast('Koneksi gagal saat kirim ke Telegram', 'error');
-      return false;
-    }
-  }
-
-  function takeSignalSetupOnly() {
-    if (!currentSignalObj) return;
-    if (typeof showToast === 'function') {
-      showToast(`Setup ${currentSignalObj.pair} ${currentSignalObj.orderType || currentSignalObj.direction} diambil`, 'success');
-    }
-  }
-
-  async function sendSignalToTelegramOnly() {
-    if (!currentSignalObj) return;
-    await dispatchTelegramMessage(buildSignalSummaryText(currentSignalObj));
-  }
-
-  async function takeAndSendSignalToTelegram() {
-    if (!currentSignalObj) return;
-    takeSignalSetupOnly();
-    await dispatchTelegramMessage(buildSignalSummaryText(currentSignalObj));
-  }
-
-  function updateChartSwingMetrics() {
-    const pair = state.chart?.pair || state.signal?.pair || 'US100';
-    const price = Number(state.prices?.[pair]) || 0;
-    if (!price) return;
-    const dec = pair === 'EURUSD' ? 5 : 2;
-    const span = pair === 'EURUSD' ? 0.0045 : pair === 'XAUUSD' ? 18 : pair === 'BTCUSDT' ? 1400 : 180;
-    const sh = document.getElementById('chart-swing-high') || document.querySelector('[data-metric="swing-high"]');
-    const sl = document.getElementById('chart-swing-low') || document.querySelector('[data-metric="swing-low"]');
-    const ar = document.getElementById('chart-active-range') || document.querySelector('[data-metric="active-range"]');
-    const highVal = price + span * 0.55;
-    const lowVal = price - span * 0.45;
-    if (sh) sh.textContent = highVal.toFixed(dec);
-    if (sl) sl.textContent = lowVal.toFixed(dec);
-    if (ar) ar.textContent = `${lowVal.toFixed(dec)} - ${highVal.toFixed(dec)}`;
-  }
-
-  function updateSignalExpiryTicker() {
-    const el = document.getElementById('sig-expiry-timer');
-    if (!el) return;
-    const tfMin = global.LiamMethods?.TF_MULTIPLIERS?.[state.signal?.timeframe]?.expiryMin || 30;
-    const windowMs = tfMin * 60000;
-    const now = Date.now();
-    let endMs = Number(state.signal?.expiryEndMs) || 0;
-    if (!Number.isFinite(endMs) || endMs <= now || endMs - now > windowMs) {
-      endMs = now + windowMs;
-      state.signal.expiryEndMs = endMs;
-    }
-    const rem = Math.max(0, Math.floor((endMs - now) / 1000));
-    const mm = String(Math.floor(rem / 60)).padStart(2, '0');
-    const ss = String(rem % 60).padStart(2, '0');
-    el.textContent = `${mm}:${ss}`;
-  }
-
-  document.addEventListener('click', (e) => {
-    const btn = e.target.closest('button');
-    if (!btn) return;
-    const txt = (btn.textContent || '').trim().toLowerCase();
-    const id = btn.id || '';
-
-    if (id.includes('take-send') || txt.includes('ambil setup & kirim tele')) {
-      e.preventDefault();
-      takeAndSendSignalToTelegram();
-    } else if (id.includes('send-only') || txt === 'kirim saja') {
-      e.preventDefault();
-      sendSignalToTelegramOnly();
-    } else if (id.includes('copy-setup') || txt.includes('copy setup')) {
-      e.preventDefault();
-      copyFullSignalSetup();
-    } else if (txt === 'copy' || id.startsWith('btn-copy-')) {
-      const card = btn.closest('[data-copy-field]') || btn.parentElement;
-      const field = card?.dataset?.copyField ||
-        (txt.includes('copy') && card?.textContent?.toLowerCase().includes('stop loss') ? 'sl' :
-         card?.textContent?.toLowerCase().includes('tp 1') ? 'tp1' :
-         card?.textContent?.toLowerCase().includes('tp 2') ? 'tp2' :
-         card?.textContent?.toLowerCase().includes('tp 3') ? 'tp3' : 'entry');
-      e.preventDefault();
-      copySignalField(field);
-    }
-  });
-
-  setInterval(() => {
-    updateSignalExpiryTicker();
-    updateChartSwingMetrics();
-  }, 1000);
-
 
   // =========================================================================
   // EXPOSE GLOBAL HANDLERS & BOOTSTRAP
@@ -2777,6 +2676,9 @@ async function syncLiveMarketPrices(forceShowToast = false) {
     copySignalField,
     copyTextValue,
     copyFullSignalSetup,
+    toggleStandardFormatBox,
+    takeSetupAndSendTelegram,
+    sendCurrentSignalToTelegramOnly,
     switchActiveAccount,
     adjustAccountLimit,
     adjustAccountCounter,
@@ -2810,12 +2712,6 @@ async function syncLiveMarketPrices(forceShowToast = false) {
     toggleNewsSniperMode,
     dispatchNewsSniperTelegram,
     togglePoiEducationDrawer,
-    copySignalField,
-    copyTextValue,
-    copyFullSignalSetup,
-    toggleStandardFormatBox,
-    takeSetupAndSendTelegram,
-    sendCurrentSignalToTelegramOnly,
     setRecapPeriod,
     switchLogSubTab,
     setLogStatusFilter,
@@ -2847,7 +2743,7 @@ async function syncLiveMarketPrices(forceShowToast = false) {
     syncFilterButtonsUI();
     renderPriceDisplays();
     renderHomeSection();
-    recalculateAndRenderSignal(false);
+    recalculateAndRenderSignal(true);
     renderPerformanceAndLogs();
     renderNewsSection();
     populateProfileInputs();
@@ -2860,7 +2756,7 @@ async function syncLiveMarketPrices(forceShowToast = false) {
     // Tick setiap 1 detik untuk jam WIB, cooldown & timer expiry sinyal
     setInterval(updateClockAndSessions, 1000);
 
-    // Auto-refresh harga live setiap 25 detik
+    // Auto-refresh harga live & sinyal otomatis (anti-spam) setiap 25 detik
     setInterval(() => syncLiveMarketPrices(false), 25000);
   });
 })(window);
