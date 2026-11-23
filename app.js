@@ -95,9 +95,11 @@
   }
 
   function getPairSpecSafe(pair) {
+    const sym = String(pair || 'XAUUSD').toUpperCase();
     const methods = global.LiamMethods || {};
     if (typeof methods.getPairSpec === 'function') {
-      return methods.getPairSpec(pair);
+      const spec = methods.getPairSpec(sym);
+      if (spec) return spec;
     }
     const fallback = {
       XAUUSD: { decimals: 2, pipSize: 0.1, pipValuePerLot: 10 },
@@ -105,15 +107,17 @@
       BTCUSDT: { decimals: 2, pipSize: 1.0, pipValuePerLot: 1 },
       EURUSD: { decimals: 5, pipSize: 0.0001, pipValuePerLot: 10 }
     };
-    return fallback[pair] || fallback.XAUUSD;
+    return fallback[sym] || fallback.XAUUSD;
   }
 
   function formatPriceSafe(pair, val) {
+    const sym = String(pair || 'XAUUSD').toUpperCase();
     const methods = global.LiamMethods || {};
     if (typeof methods.formatPrice === 'function') {
-      return methods.formatPrice(pair, val);
+      const out = methods.formatPrice(sym, val);
+      if (out && out !== '--') return out;
     }
-    const spec = getPairSpecSafe(pair);
+    const spec = getPairSpecSafe(sym);
     if (!Number.isFinite(Number(val))) return '--';
     return Number(val).toFixed(spec.decimals);
   }
@@ -683,16 +687,60 @@
   }
 
   // =========================================================================
-  // LIVE MARKET PRICE FEED (AKURAT SESUAI TRADINGVIEW / SPOT GLOBAL)
+  // LIVE MARKET PRICE FEED + KALIBRASI BROKER
   // =========================================================================
   function getCalibratedPrice(pair) {
+    const sym = String(pair || 'XAUUSD').toUpperCase();
     const basePrices = { XAUUSD: 2650.00, US100: 20850.00, BTCUSDT: 92000.00, EURUSD: 1.08500 };
-    const rawNum = Number(state.prices[pair]);
-    const raw = Number.isFinite(rawNum) && rawNum > 0 ? rawNum : (basePrices[pair] || 2650.00);
-    const offset = Number(state.priceOffsets[pair]) || 0;
-    const spec = getPairSpecSafe(pair);
+    const rawNum = Number(state.prices[sym]);
+    const raw = Number.isFinite(rawNum) && rawNum > 0 ? rawNum : (basePrices[sym] || 2650.00);
+    const offset = Number(state.priceOffsets[sym]) || 0;
+    const spec = getPairSpecSafe(sym);
     const val = raw + offset;
     return Number(val.toFixed(spec.decimals));
+  }
+
+  function openCalibrationModal(pairOverride = null) {
+    const pair = String(pairOverride || state.signal?.pair || 'XAUUSD').toUpperCase();
+    const spec = getPairSpecSafe(pair);
+    const raw = Number(state.prices[pair]) || 0;
+    const offset = Number(state.priceOffsets[pair]) || 0;
+    const calibrated = getCalibratedPrice(pair);
+
+    setVal('cal-pair-select', pair);
+    setText('cal-raw-price', formatPriceSafe(pair, raw));
+    setText('cal-calibrated-price', formatPriceSafe(pair, calibrated));
+    setVal('cal-offset-input', offset);
+    const noteEl = document.getElementById('cal-pair-note');
+    if (noteEl) {
+      noteEl.textContent = `Kalibrasi ${pair} (${spec.decimals} desimal) menambahkan offset ke harga feed mentah agar selaras dengan broker / TradingView kamu.`;
+    }
+    openModal('modal-calibration');
+  }
+
+  function applyBrokerPriceCalibration() {
+    const pair = String(document.getElementById('cal-pair-select')?.value || state.signal?.pair || 'XAUUSD').toUpperCase();
+    const rawOffset = Number(String(document.getElementById('cal-offset-input')?.value ?? '0').replace(',', '.'));
+    const offset = Number.isFinite(rawOffset) ? rawOffset : 0;
+
+    state.priceOffsets[pair] = offset;
+    saveState();
+    closeModal('modal-calibration');
+    renderPriceDisplays();
+    recalculateAndRenderSignal(false);
+    evaluateActiveTradesAgainstLivePrices();
+    showToast(`Kalibrasi ${pair} disimpan (Offset: ${offset >= 0 ? '+' : ''}${offset})`, 'success');
+  }
+
+  function resetBrokerPriceCalibration(pairOverride = null) {
+    const pair = String(pairOverride || document.getElementById('cal-pair-select')?.value || state.signal?.pair || 'XAUUSD').toUpperCase();
+    state.priceOffsets[pair] = 0;
+    setVal('cal-offset-input', 0);
+    saveState();
+    renderPriceDisplays();
+    recalculateAndRenderSignal(false);
+    evaluateActiveTradesAgainstLivePrices();
+    showToast(`Offset kalibrasi ${pair} direset ke 0.00`, 'info');
   }
 
   function renderPriceDisplays() {
@@ -773,7 +821,7 @@
   // LIVE RUNNING TRACKER + MANUAL TP INPUT/HIT + SL->BE + CUT NOW
   // =========================================================================
   function evaluateTradeLiveMetrics(item) {
-    const pair = item.pair || 'XAUUSD';
+    const pair = String(item.pair || 'XAUUSD').toUpperCase();
     const spec = getPairSpecSafe(pair);
     const livePx = getCalibratedPrice(pair);
     const entryPx = Number(item.entry);
@@ -781,32 +829,32 @@
     const tp1Px = Number(item.tp1);
     const tp2Px = Number(item.tp2);
     const tp3Px = Number(item.tp3);
-    const isBuy = item.direction === 'BUY';
+    const isBuy = String(item.direction || '').toUpperCase() === 'BUY' || String(item.orderType || '').toUpperCase().includes('BUY');
     const isLimit = String(item.orderType || '').toUpperCase().includes('LIMIT');
-    const lot = Number(item.lot) || 0.02;
+    const lot = Math.max(0.01, Number(item.lot) || 0.02);
+    const pipSize = Number(spec.pipSize) || (pair === 'EURUSD' ? 0.0001 : pair === 'US100' || pair === 'BTCUSDT' ? 1.0 : 0.1);
+    const pipValuePerLot = Number(spec.pipValuePerLot) || (pair === 'US100' || pair === 'BTCUSDT' ? 1 : 10);
 
-    let liveStatus = 'PENDING LIMIT';
+    let liveStatus = isLimit ? 'MENUNGGU LIMIT' : 'RUNNING';
     let autoOutcome = null;
 
     if (item.status === 'done' && item.outcome) {
       liveStatus = `${item.outcome} HIT`;
     } else if (item.status === 'cancel') {
       liveStatus = 'DIBATALKAN';
-    } else if (Number.isFinite(entryPx) && Number.isFinite(livePx)) {
+    } else if (Number.isFinite(entryPx) && entryPx > 0 && Number.isFinite(livePx) && livePx > 0) {
       const limitTriggered = isLimit
         ? isBuy
-          ? livePx <= entryPx * 1.0002
-          : livePx >= entryPx * 0.9998
-        : isBuy
-        ? livePx >= entryPx * 0.9998
-        : livePx <= entryPx * 1.0002;
+          ? livePx <= entryPx
+          : livePx >= entryPx
+        : true;
 
       if (!item.triggeredAt && limitTriggered) {
         item.triggeredAt = Date.now();
         liveStatus = 'RUNNING';
       } else if (item.triggeredAt || !isLimit) {
         liveStatus = 'RUNNING';
-        if (Number.isFinite(slPx) && ((isBuy && livePx <= slPx) || (!isBuy && livePx >= slPx))) {
+        if (Number.isFinite(slPx) && slPx > 0 && ((isBuy && livePx <= slPx) || (!isBuy && livePx >= slPx))) {
           autoOutcome = 'SL';
           liveStatus = 'SL HIT';
         } else if (Number.isFinite(tp3Px) && tp3Px > 0 && ((isBuy && livePx >= tp3Px) || (!isBuy && livePx <= tp3Px))) {
@@ -824,16 +872,16 @@
       }
     }
 
-    const refPrice = liveStatus === 'MENUNGGU LIMIT' || liveStatus === 'PENDING LIMIT' ? livePx : entryPx;
-    const diffFromEntryPrice = Number.isFinite(livePx) && Number.isFinite(entryPx)
+    const isPendingLimit = liveStatus === 'MENUNGGU LIMIT' || liveStatus === 'PENDING LIMIT';
+    const diffFromEntryPrice = !isPendingLimit && Number.isFinite(livePx) && Number.isFinite(entryPx)
       ? isBuy
         ? livePx - entryPx
         : entryPx - livePx
       : 0;
-    const floatingPips = Number((diffFromEntryPrice / (spec.pipSize || 0.1)).toFixed(1));
-    const floatingDollar = Number((floatingPips * (spec.pipValuePerLot || 10) * lot).toFixed(2));
+    const floatingPips = Number((diffFromEntryPrice / pipSize).toFixed(1));
+    const floatingDollar = Number((floatingPips * pipValuePerLot * lot).toFixed(2));
     const distToEntryPips = Number.isFinite(livePx) && Number.isFinite(entryPx)
-      ? Number((Math.abs(livePx - entryPx) / (spec.pipSize || 0.1)).toFixed(1))
+      ? Number((Math.abs(livePx - entryPx) / pipSize).toFixed(1))
       : 0;
 
     return {
@@ -901,7 +949,6 @@
     const spec = getPairSpecSafe(s.pair);
     const livePx = getCalibratedPrice(s.pair);
     const entryNum = Number(s.entryFmt);
-    const slNum = Number(s.slFmt);
     const tp1Num = Number(s.tp1Fmt);
     const isBuy = s.direction === 'BUY';
 
@@ -989,6 +1036,7 @@
     item.exitPrice = formatPriceSafe(item.pair, exitPrice);
     item.pipsResult = calcPips;
     item.closedAt = Date.now();
+    state.signal.manualRunningTpInput = '';
 
     const inpEl = document.getElementById('sig-manual-tp-input');
     if (inpEl) inpEl.value = '';
@@ -1055,6 +1103,7 @@
     item.exitPrice = formatPriceSafe(item.pair, livePx);
     item.pipsResult = diffPips;
     item.closedAt = Date.now();
+    state.signal.manualRunningTpInput = '';
 
     if (!isProfit) {
       const acc = state.accounts.find((a) => a.id === item.accountId) || getActiveAccount();
@@ -2810,11 +2859,11 @@
                   ✅ Hit TP
                 </button>
                 <button type="button" onclick="moveActiveTradeToBreakeven('${item.id}')"
-                  class="px-2 py-1.5 rounded-lg bg-slate-800 border border-amber-500/40 text-amber-300 text-[10px] font-extrabold active:scale-95 shrink-0">
+                  class="px-2.5 py-1.5 rounded-lg bg-slate-800 border border-amber-500/40 text-amber-300 text-[10px] font-extrabold active:scale-95 shrink-0">
                   SL→BE
                 </button>
                 <button type="button" onclick="cutActiveTradeNow('${item.id}')"
-                  class="px-2 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-sky-300 text-[10px] font-extrabold active:scale-95 shrink-0">
+                  class="px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-sky-300 text-[10px] font-extrabold active:scale-95 shrink-0">
                   Cut
                 </button>
               </div>
