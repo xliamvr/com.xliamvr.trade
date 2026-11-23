@@ -1,13 +1,14 @@
 /**
- * Liamvtrade Quant Terminal — methods_2.js (v2.9.2-p1p2)
- * Mesin Analisis ICT / SMC / Liquidity Tunggal + Gate P1/P2 + Validasi Struktur & ATR
+ * Liamvtrade Quant Terminal — methods_2.js
+ * Mesin 6 Metode Analisis ICT / SMC / Liquidity dengan Skala SL per Timeframe,
+ * NY Session (DST-aware) + Weekend Block, Lock per Candle/SignalId, & Gate Data/News
  */
 
 (function (global) {
   'use strict';
 
-  const ENGINE_VERSION = 'v2.9.2-p1p2';
-  const DEFAULT_MAX_DATA_AGE_MS = 120000; // 2 menit maksimal usia data harga live
+  const ENGINE_VERSION = 'v2.9.3-tuned';
+  const DEFAULT_MAX_DATA_AGE_MS = 120000; // 2 menit batas maksimal kesegaran data live
 
   const PAIR_SPECS = {
     XAUUSD: {
@@ -16,9 +17,11 @@
       pipSize: 0.1,        // 0.10 = 1 pip
       contractSize: 100,
       pipValuePerLot: 10,  // $10 per pip per 1.00 lot ($0.10 per 0.01 lot)
-      baseAtrM15: 3.4,
-      minSlPips: 12,
-      maxSlPips: { M5: 45, M15: 65, H1: 110, H4: 180 }
+      baseAtrM15: 3.2,
+      minSlPips: 10,
+      // Batas keras SL per timeframe agar M5 tidak pernah melebar ekstrem (maks ~45-50 pip di M5)
+      maxSlPips: { M5: 48, M15: 72, H1: 115, H4: 185 },
+      defaultSpreadPips: 2.5
     },
     US100: {
       label: 'US100',
@@ -26,9 +29,10 @@
       pipSize: 1.0,
       contractSize: 1,
       pipValuePerLot: 1,
-      baseAtrM15: 36.0,
+      baseAtrM15: 34.0,
       minSlPips: 12,
-      maxSlPips: { M5: 55, M15: 85, H1: 140, H4: 220 }
+      maxSlPips: { M5: 55, M15: 85, H1: 140, H4: 220 },
+      defaultSpreadPips: 2.0
     },
     BTCUSDT: {
       label: 'BTCUSDT',
@@ -36,9 +40,10 @@
       pipSize: 1.0,
       contractSize: 1,
       pipValuePerLot: 1,
-      baseAtrM15: 190.0,
+      baseAtrM15: 180.0,
       minSlPips: 25,
-      maxSlPips: { M5: 140, M15: 220, H1: 380, H4: 650 }
+      maxSlPips: { M5: 130, M15: 210, H1: 360, H4: 600 },
+      defaultSpreadPips: 15.0
     },
     EURUSD: {
       label: 'EURUSD',
@@ -48,15 +53,17 @@
       pipValuePerLot: 10,
       baseAtrM15: 0.0014,
       minSlPips: 6,
-      maxSlPips: { M5: 22, M15: 35, H1: 60, H4: 95 }
+      maxSlPips: { M5: 20, M15: 35, H1: 60, H4: 95 },
+      defaultSpreadPips: 1.0
     }
   };
 
+  // Tiap timeframe punya skala SL/TP yang berbeda jelas
   const TF_CONFIG = {
-    M5:  { atrMult: 0.52, rangeMult: 1.55, expiryMin: 20, candleMs: 5 * 60 * 1000,  label: 'M5 Scalping' },
-    M15: { atrMult: 0.85, rangeMult: 1.85, expiryMin: 40, candleMs: 15 * 60 * 1000, label: 'M15 Intraday Sniper' },
-    H1:  { atrMult: 1.55, rangeMult: 2.20, expiryMin: 120, candleMs: 60 * 60 * 1000, label: 'H1 Session Swing' },
-    H4:  { atrMult: 2.65, rangeMult: 2.55, expiryMin: 240, candleMs: 240 * 60 * 1000, label: 'H4 HTF Institutional' }
+    M5:  { atrMult: 0.45, slAtrFactor: 0.85, tpMults: [1.2, 1.9, 2.7], expiryMin: 20, candleMs: 5 * 60 * 1000,  label: 'M5 Scalping' },
+    M15: { atrMult: 0.80, slAtrFactor: 1.05, tpMults: [1.3, 2.1, 3.0], expiryMin: 45, candleMs: 15 * 60 * 1000, label: 'M15 Intraday' },
+    H1:  { atrMult: 1.55, slAtrFactor: 1.25, tpMults: [1.4, 2.4, 3.5], expiryMin: 120, candleMs: 60 * 60 * 1000, label: 'H1 Session Swing' },
+    H4:  { atrMult: 2.75, slAtrFactor: 1.45, tpMults: [1.5, 2.6, 4.0], expiryMin: 240, candleMs: 240 * 60 * 1000, label: 'H4 HTF Swing' }
   };
 
   const METHOD_CATALOG = {
@@ -64,47 +71,42 @@
       key: 'auto',
       name: 'Auto Sniper (Multi-Confluence)',
       shortTag: 'AUTO',
-      baseScore: 8.5,
-      requiresKillzone: false
+      baseScore: 8.2
     },
     judas: {
       key: 'judas',
       name: 'ICT Judas Swing (Session Manipulation)',
       shortTag: 'JUDAS',
-      baseScore: 8.7,
-      requiresKillzone: true,
-      allowedSessions: ['London Killzone', 'New York AM Killzone']
+      baseScore: 8.4
     },
     smc_ob: {
       key: 'smc_ob',
       name: 'SMC Order Block + FVG Confluence',
       shortTag: 'SMC OB',
-      baseScore: 8.4,
-      requiresKillzone: false
+      baseScore: 8.3
     },
     sweep: {
       key: 'sweep',
       name: 'Liquidity Sweep (Turtle Soup Stop-Hunt)',
       shortTag: 'SWEEP',
-      baseScore: 8.6,
-      requiresKillzone: false
+      baseScore: 8.4
     },
     silver_bullet: {
       key: 'silver_bullet',
       name: 'ICT Silver Bullet (Time-Window FVG)',
       shortTag: 'SILVER BULLET',
-      baseScore: 8.3,
-      requiresKillzone: true,
-      silverBulletOnly: true
+      baseScore: 8.2
     },
     ote: {
       key: 'ote',
       name: 'FIB OTE (Optimal Trade Entry 0.62–0.79)',
       shortTag: 'FIB OTE',
-      baseScore: 8.2,
-      requiresKillzone: false
+      baseScore: 8.1
     }
   };
+
+  // Cache hasil sinyal pertama per signalId (kecuali dipaksa analisis ulang)
+  const lockedSignalCache = new Map();
 
   function getPairSpec(pair) {
     return PAIR_SPECS[pair] || PAIR_SPECS.XAUUSD;
@@ -124,81 +126,149 @@
       : Math.round(raw);
   }
 
-  function getWibContext(refTimeMs) {
-    const now = new Date(Number.isFinite(refTimeMs) ? refTimeMs : Date.now());
-    const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
-    const wib = new Date(utcMs + 7 * 3600000);
-    const hour = wib.getHours();
-    const minute = wib.getMinutes();
-    const day = wib.getDay();
+  /**
+   * Menghitung konteks waktu New York (otomatis mengikuti DST / musim panas & dingin)
+   * serta mendeteksi status akhir pekan berdasarkan waktu NY.
+   */
+  function getNySessionContext(refTimeMs) {
+    const ms = Number.isFinite(refTimeMs) ? refTimeMs : Date.now();
+    const dateObj = new Date(ms);
 
-    let sessionName = 'Pre-Session / Transition';
-    let sessionBiasHint = 'Konsolidasi Menjelang Killzone';
-    let isKillzone = false;
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      weekday: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false
+    }).formatToParts(dateObj);
+
+    const map = {};
+    for (const p of parts) {
+      if (p.type !== 'literal') map[p.type] = p.value;
+    }
+
+    const nyHour = Number(map.hour) || 0;
+    const nyMinute = Number(map.minute) || 0;
+    const nyWeekday = map.weekday || 'Mon';
+
+    // Pasar forex/komoditas utama libur Sabtu-Minggu (dengan buffer Jumat malam NY & Minggu sore NY)
+    const isWeekend =
+      nyWeekday === 'Sat' ||
+      nyWeekday === 'Sun' ||
+      (nyWeekday === 'Fri' && nyHour >= 17);
+
+    let sessionName = 'Off-Session / NY Close';
+    let sessionBiasHint = 'Konsolidasi / Transisi Sesi';
     let isSilverBulletWindow = false;
+    let isJudasWindow = false;
 
-    if (hour >= 13 && hour < 17) {
+    // Waktu NY (DST-aware):
+    // London open ~03:00 NY, NY AM open ~08:00-11:00 NY, NY PM ~13:00-15:00 NY
+    // ICT Silver Bullet windows (NY time): 03:00-04:00, 10:00-11:00, 14:00-15:00
+    if (nyHour >= 2 && nyHour < 5) {
       sessionName = 'London Killzone';
-      sessionBiasHint = 'Manipulasi Judas Swing London';
-      isKillzone = true;
-      if (hour === 14) isSilverBulletWindow = true;
-    } else if (hour >= 19 && hour < 23) {
+      sessionBiasHint = 'Pembukaan London & Potensi Judas Swing';
+      isJudasWindow = true;
+      if (nyHour === 3) isSilverBulletWindow = true;
+    } else if (nyHour >= 7 && nyHour < 11) {
       sessionName = 'New York AM Killzone';
-      sessionBiasHint = 'Ekspansi Likuiditas & Overlap NY';
-      isKillzone = true;
-      if (hour === 21) isSilverBulletWindow = true;
-    } else if (hour >= 0 && hour < 3) {
+      sessionBiasHint = 'Ekspansi Likuiditas & Sesi NY Utama';
+      isJudasWindow = nyHour === 7 || nyHour === 8;
+      if (nyHour === 10) isSilverBulletWindow = true;
+    } else if (nyHour >= 13 && nyHour < 16) {
       sessionName = 'New York PM Session';
-      sessionBiasHint = 'Re-distribusi & Penutupan Sesi US';
-      isKillzone = true;
-      if (hour === 1) isSilverBulletWindow = true;
-    } else if (hour >= 5 && hour < 13) {
+      sessionBiasHint = 'Re-distribusi & Kelanjutan Sesi US';
+      if (nyHour === 14) isSilverBulletWindow = true;
+    } else if (nyHour >= 19 || nyHour < 2) {
       sessionName = 'Asia Range';
-      sessionBiasHint = 'Pembentukan Asia High & Low';
+      sessionBiasHint = 'Pembentukan Range Asia';
     }
 
     return {
-      wib,
-      hour,
-      minute,
-      day,
-      isWeekend: day === 0 || day === 6,
+      nyHour,
+      nyMinute,
+      nyWeekday,
+      isWeekend,
       sessionName,
       sessionBiasHint,
-      isKillzone,
+      isJudasWindow,
       isSilverBulletWindow
     };
   }
 
   /**
-   * Menghitung timestamp penutupan candle terakhir untuk timeframe tertentu.
-   * Dipakai sebagai kunci deterministik agar scan ulang di candle yang sama tidak mengubah hasil.
+   * Menghitung waktu penutupan candle berjalan/terakhir secara akurat.
+   * Jika broker mengirimkan candleOpenTs atau candleCloseTs eksplisit, pakai itu.
    */
-  function getCandleCloseTimestamp(timeframe, refTimeMs) {
+  function getCandleCloseTimestamp(timeframe, refTimeMs, explicitCloseTs) {
+    if (Number.isFinite(Number(explicitCloseTs)) && Number(explicitCloseTs) > 0) {
+      return Number(explicitCloseTs);
+    }
     const tfCfg = TF_CONFIG[timeframe] || TF_CONFIG.M15;
     const baseMs = Number.isFinite(refTimeMs) ? refTimeMs : Date.now();
-    return Math.floor(baseMs / tfCfg.candleMs) * tfCfg.candleMs;
+    const candleOpenTs = Math.floor(baseMs / tfCfg.candleMs) * tfCfg.candleMs;
+    return candleOpenTs + tfCfg.candleMs;
   }
 
   function buildDeterministicSignalId(pair, timeframe, methodKey, candleCloseTs) {
     return `${pair}_${timeframe}_${methodKey.toUpperCase()}_${candleCloseTs}`;
   }
 
+  function clearLockedSignal(signalId) {
+    if (signalId) {
+      lockedSignalCache.delete(signalId);
+    } else {
+      lockedSignalCache.clear();
+    }
+  }
+
   /**
-   * Membangun Dealing Range struktural berbasis ATR nyata per timeframe & harga aktual.
-   * Jika data candle/ATR nyata disediakan dari broker, memakai ATR & high/low aktual.
+   * Menentukan arah dengan mempertimbangkan struktur/tren/sweep, bukan sekadar posisi di range.
    */
+  function resolveStructureDirection(opts, livePrice, swingHigh, swingLow, equilibrium) {
+    const explicitBias = (opts.htfBias || opts.trendBias || opts.structureBias || '').toUpperCase();
+    if (explicitBias === 'BUY' || explicitBias === 'BULLISH') {
+      return { direction: 'BUY', source: 'bias struktur/tren BULLISH' };
+    }
+    if (explicitBias === 'SELL' || explicitBias === 'BEARISH') {
+      return { direction: 'SELL', source: 'bias struktur/tren BEARISH' };
+    }
+
+    // Jika ada data sweep likuiditas eksplisit
+    if (opts.sweptSide === 'LOW' || opts.sweepType === 'SELL_SIDE_SWEEP') {
+      return { direction: 'BUY', source: 'sweep likuiditas bawah (SSL)' };
+    }
+    if (opts.sweptSide === 'HIGH' || opts.sweepType === 'BUY_SIDE_SWEEP') {
+      return { direction: 'SELL', source: 'sweep likuiditas atas (BSL)' };
+    }
+
+    // Jika ada harga open/prevClose dari candle/sesi, baca momentum/arah aktual
+    const prevClose = Number(opts.prevClose);
+    const candleOpen = Number(opts.candleOpen);
+    if (Number.isFinite(prevClose) && Number.isFinite(candleOpen) && prevClose !== candleOpen) {
+      const dir = prevClose > candleOpen ? 'BUY' : 'SELL';
+      return { direction: dir, source: `arah candle sebelumnya (${dir})` };
+    }
+
+    // Fallback posisi relatif terhadap equilibrium jika tidak ada bias/candle eksternal
+    const dir = livePrice <= equilibrium ? 'BUY' : 'SELL';
+    return {
+      direction: dir,
+      source: livePrice <= equilibrium ? 'area bawah equilibrium (50%)' : 'area atas equilibrium (50%)'
+    };
+  }
+
   function analyzeDealingRange(pair, livePrice, timeframe, scanSeed, marketContext) {
     const spec = getPairSpec(pair);
     const tfCfg = TF_CONFIG[timeframe] || TF_CONFIG.M15;
     const ctx = marketContext || {};
-    const wibCtx = getWibContext(ctx.nowMs);
+    const nyCtx = getNySessionContext(ctx.nowMs);
     const seed = Number.isFinite(Number(scanSeed)) ? Number(scanSeed) : 0;
 
     const hasRealAtr = Number.isFinite(Number(ctx.realAtr)) && Number(ctx.realAtr) > 0;
     const unitAtr = hasRealAtr
       ? Number(ctx.realAtr)
-      : Math.max(spec.pipSize * 5, spec.baseAtrM15 * tfCfg.atrMult);
+      : Math.max(spec.pipSize * 4, spec.baseAtrM15 * tfCfg.atrMult);
 
     const hasRealSwing =
       Number.isFinite(Number(ctx.recentHigh)) &&
@@ -215,19 +285,19 @@
       totalRange = Math.max(unitAtr * 1.1, swingHigh - swingLow);
     } else {
       const priceWave = Math.sin(livePrice / Math.max(spec.pipSize * 20, unitAtr * 1.4) + seed * 1.15);
-      const sessionShift = ((wibCtx.hour % 4) - 1.5) * 0.025;
-      const pdSeedRatio = Math.min(0.82, Math.max(0.18, 0.5 + priceWave * 0.24 + sessionShift));
-      const rangeSpreadFactor = tfCfg.rangeMult + (Math.abs(Math.cos(seed + 0.7)) * 0.25);
+      const pdSeedRatio = Math.min(0.82, Math.max(0.18, 0.5 + priceWave * 0.22));
+      const rangeSpreadFactor = 1.6 + (Math.abs(Math.cos(seed + 0.7)) * 0.35);
       totalRange = unitAtr * rangeSpreadFactor;
       swingLow = livePrice - totalRange * pdSeedRatio;
       swingHigh = swingLow + totalRange;
     }
 
-    const rawPdRatio = (livePrice - swingLow) / Math.max(spec.pipSize, totalRange);
-    const pdRatio = Math.min(0.95, Math.max(0.05, rawPdRatio));
-    const pdPercent = Math.round(pdRatio * 100);
     const equilibrium = swingLow + totalRange * 0.5;
-    const direction = pdPercent >= 50 ? 'SELL' : 'BUY';
+    const pdPercent = Math.round(
+      Math.min(95, Math.max(5, ((livePrice - swingLow) / Math.max(spec.pipSize, totalRange)) * 100))
+    );
+
+    const dirInfo = resolveStructureDirection(ctx, livePrice, swingHigh, swingLow, equilibrium);
 
     return {
       pair,
@@ -244,261 +314,370 @@
       equilibrium,
       equilibriumFmt: formatPrice(pair, equilibrium),
       pdPercent,
-      direction,
-      sessionName: wibCtx.sessionName,
-      isKillzone: wibCtx.isKillzone,
-      isSilverBulletWindow: wibCtx.isSilverBulletWindow
+      direction: dirInfo.direction,
+      directionSource: dirInfo.source,
+      nyCtx
     };
   }
 
-  function createDecisionState(baseMeta, status, reasonCode, detectedFacts, extra) {
+  function createDecision(baseMeta, status, reasonCode, detectedFacts, extra) {
     return Object.assign({}, baseMeta, {
       status, // 'SIGNAL' | 'WAIT' | 'NO_TRADE'
       isExecutable: status === 'SIGNAL',
       reasonCode,
-      detectedFacts: Array.isArray(detectedFacts) ? detectedFacts : [],
-      validationBadge: 'Belum tervalidasi',
-      sampleCount: Number(baseMeta.sampleCount) || 0,
-      minSamplesRequired: 150
+      detectedFacts: Array.isArray(detectedFacts) ? detectedFacts : []
     }, extra || {});
   }
 
   /**
-   * Menghasilkan keputusan sinyal yang terkunci per candle close dan mematuhi gate P1 & P2.
+   * Menghitung setup sinyal per metode dengan logika terpisah, SL berbasis ATR & batas pip per TF
+   * (termasuk spread), gate data basi & weekend, news lock ±30 menit, serta lock per candle/signalId.
    */
   function buildSignalSetup(options) {
     const opts = options || {};
     const pair = opts.pair || 'XAUUSD';
     const timeframe = opts.timeframe || 'M15';
     const methodKey = METHOD_CATALOG[opts.method] ? opts.method : 'auto';
-    const livePrice = Number(opts.livePrice);
-    const nowMs = Number.isFinite(Number(opts.nowMs)) ? Number(opts.nowMs) : Date.now();
-    const lastUpdateTs = Number.isFinite(Number(opts.lastUpdateTs)) ? Number(opts.lastUpdateTs) : nowMs;
-    const maxDataAgeMs = Number.isFinite(Number(opts.maxDataAgeMs)) ? Number(opts.maxDataAgeMs) : DEFAULT_MAX_DATA_AGE_MS;
-    const candleCloseTs = Number.isFinite(Number(opts.candleCloseTs))
-      ? Number(opts.candleCloseTs)
-      : getCandleCloseTimestamp(timeframe, nowMs);
+    const forceReanalyze = Boolean(opts.forceReanalyze);
 
-    // Seed deterministik terkunci per candle close (tidak berubah saat scan ulang di candle yang sama)
-    const deterministicSeed = (candleCloseTs % 1000000) / 10000;
-    const sopScoreBonus = Number(opts.sopScoreBonus) || 0;
+    const nowMs = Number.isFinite(Number(opts.nowMs)) ? Number(opts.nowMs) : Date.now();
+    const candleCloseTs = getCandleCloseTimestamp(timeframe, nowMs, opts.candleCloseTs);
+    const signalId = buildDeterministicSignalId(pair, timeframe, methodKey, candleCloseTs);
+
+    // Kunci hasil sinyal pertama per signalId di candle yang sama (kecuali diminta analisis ulang)
+    if (!forceReanalyze && lockedSignalCache.has(signalId)) {
+      return Object.assign({}, lockedSignalCache.get(signalId), {
+        lockedFromCache: true
+      });
+    }
+
+    const livePrice = Number(opts.livePrice);
+    const maxDataAgeMs = Number.isFinite(Number(opts.maxDataAgeMs))
+      ? Number(opts.maxDataAgeMs)
+      : DEFAULT_MAX_DATA_AGE_MS;
 
     const spec = getPairSpec(pair);
     const tfCfg = TF_CONFIG[timeframe] || TF_CONFIG.M15;
     const methodMeta = METHOD_CATALOG[methodKey];
-    const signalId = buildDeterministicSignalId(pair, timeframe, methodKey, candleCloseTs);
+    const nyCtx = getNySessionContext(nowMs);
 
     const baseMeta = {
       engineVersion: ENGINE_VERSION,
       signalId,
       candleCloseTs,
       candleCloseIso: new Date(candleCloseTs).toISOString(),
-      lastUpdateTs,
       pair,
       timeframe,
       methodKey,
       methodLabel: methodMeta.name,
       methodShortTag: methodMeta.shortTag,
-      livePrice: Number.isFinite(livePrice) ? livePrice : null,
-      sampleCount: Number(opts.sampleCount) || 0
+      sessionName: nyCtx.sessionName,
+      nyTimeLabel: `${String(nyCtx.nyHour).padStart(2, '0')}:${String(nyCtx.nyMinute).padStart(2, '0')} NY (${nyCtx.nyWeekday})`,
+      livePrice: Number.isFinite(livePrice) ? livePrice : null
     };
 
-    // P1: Blokir sinyal jika harga tidak valid atau data basi
-    if (!Number.isFinite(livePrice) || livePrice <= 0) {
-      return createDecisionState(baseMeta, 'NO_TRADE', 'INVALID_PRICE', [
-        'Harga broker tidak tersedia atau tidak valid.'
+    // Blokir akhir pekan (fail-closed saat pasar tutup)
+    if (nyCtx.isWeekend) {
+      const res = createDecision(baseMeta, 'NO_TRADE', 'WEEKEND_MARKET_CLOSED', [
+        `Pasar sedang libur akhir pekan (${nyCtx.nyWeekday}, ${String(nyCtx.nyHour).padStart(2, '0')}:${String(nyCtx.nyMinute).padStart(2, '0')} NY).`
       ], {
-        poiSummary: 'NO TRADE: Harga live broker belum valid.',
-        educationHtml: ''
+        direction: null,
+        orderType: 'NO TRADE',
+        poiSummary: 'NO TRADE: Akhir pekan / pasar tutup.'
       });
+      lockedSignalCache.set(signalId, res);
+      return res;
     }
 
-    const dataAgeMs = Math.max(0, nowMs - lastUpdateTs);
-    if (dataAgeMs > maxDataAgeMs) {
-      return createDecisionState(baseMeta, 'NO_TRADE', 'STALE_PRICE_FEED', [
-        `Data harga terakhir diperbarui ${Math.round(dataAgeMs / 1000)} detik lalu (batas ${Math.round(maxDataAgeMs / 1000)} detik).`
+    // Fail-closed untuk data basi: lastUpdateTs wajib valid dan tidak melewati batas usia data
+    const lastUpdateRaw = opts.lastUpdateTs;
+    const lastUpdateNum = Number(lastUpdateRaw);
+    if (!Number.isFinite(livePrice) || livePrice <= 0) {
+      const res = createDecision(baseMeta, 'NO_TRADE', 'INVALID_LIVE_PRICE', [
+        'Harga live tidak tersedia atau tidak valid.'
+      ], {
+        direction: null,
+        orderType: 'NO TRADE',
+        poiSummary: 'NO TRADE: Harga live tidak valid.'
+      });
+      lockedSignalCache.set(signalId, res);
+      return res;
+    }
+
+    if (lastUpdateRaw === undefined || lastUpdateRaw === null || !Number.isFinite(lastUpdateNum) || lastUpdateNum <= 0) {
+      const res = createDecision(baseMeta, 'NO_TRADE', 'MISSING_LAST_UPDATE_TS', [
+        'Timestamp pembaruan data (lastUpdateTs) tidak tersedia; sinyal diblokir agar tidak memakai data tanpa waktu valid.'
+      ], {
+        direction: null,
+        orderType: 'NO TRADE',
+        poiSummary: 'NO TRADE: Waktu update data tidak valid.'
+      });
+      lockedSignalCache.set(signalId, res);
+      return res;
+    }
+
+    const dataAgeMs = nowMs - lastUpdateNum;
+    if (dataAgeMs < 0 || dataAgeMs > maxDataAgeMs) {
+      const ageSec = Math.max(0, Math.round(dataAgeMs / 1000));
+      const res = createDecision(baseMeta, 'NO_TRADE', 'STALE_PRICE_DATA', [
+        `Data harga berusia ${ageSec} detik (melewati batas kesegaran ${Math.round(maxDataAgeMs / 1000)} detik).`
       ], {
         dataAgeMs,
-        poiSummary: 'NO TRADE: Feed harga basi/terputus, sinyal diblokir otomatis.',
-        educationHtml: ''
+        direction: null,
+        orderType: 'NO TRADE',
+        poiSummary: 'NO TRADE: Data harga basi, sinyal ditahan.'
       });
+      lockedSignalCache.set(signalId, res);
+      return res;
     }
 
+    const deterministicSeed = (candleCloseTs % 1000000) / 10000;
     const dr = analyzeDealingRange(pair, livePrice, timeframe, deterministicSeed, {
       nowMs,
       realAtr: opts.realAtr,
       recentHigh: opts.recentHigh,
-      recentLow: opts.recentLow
+      recentLow: opts.recentLow,
+      htfBias: opts.htfBias,
+      trendBias: opts.trendBias,
+      structureBias: opts.structureBias,
+      sweptSide: opts.sweptSide,
+      sweepType: opts.sweepType,
+      prevClose: opts.prevClose,
+      candleOpen: opts.candleOpen
     });
 
     const detectedFacts = [
-      `Sesi aktif terdeteksi: ${dr.sessionName}.`,
-      dr.hasRealAtr
-        ? `ATR aktual ${timeframe} terdeteksi: ${formatPrice(pair, dr.unitAtr)}.`
-        : `Estimasi ATR ${timeframe} terkalibrasi: ${formatPrice(pair, dr.unitAtr)}.`,
-      `Posisi harga di ${dr.pdPercent}% range (${dr.swingLowFmt} – ${dr.swingHighFmt}).`
+      `Sesi NY aktif: ${nyCtx.sessionName} (${baseMeta.nyTimeLabel}).`,
+      `Arah ${dr.direction} merujuk pada ${dr.directionSource}.`,
+      `ATR ${timeframe} acuan: ${formatPrice(pair, dr.unitAtr)}.`
     ];
 
-    // P2: News Lock ±30 menit di sekitar High Impact
-    const newsLockActive = Boolean(opts.newsLockActive);
-    const newsBias = (opts.newsBias || '').toUpperCase(); // 'BUY' | 'SELL' | ''
-    if (newsLockActive) {
-      return createDecisionState(baseMeta, 'WAIT', 'NEWS_LOCK_WINDOW', detectedFacts.concat([
-        'News Lock aktif dalam jendela ±30 menit rilis High Impact.'
+    // Gate Killzone per metode khusus
+    if (methodKey === 'silver_bullet' && !nyCtx.isSilverBulletWindow) {
+      const res = createDecision(baseMeta, 'NO_TRADE', 'SILVER_BULLET_WINDOW_INACTIVE', detectedFacts.concat([
+        'Di luar jendela jam Silver Bullet NY (03:00, 10:00, atau 14:00 waktu New York).'
       ]), {
-        direction: null,
-        orderType: 'WAIT',
-        poiSummary: 'WAIT: News Lock ±30 menit aktif di sekitar rilis berita High Impact.',
-        educationHtml: ''
-      });
-    }
-
-    // P2: Killzone gate per metode
-    if (methodMeta.silverBulletOnly && !dr.isSilverBulletWindow) {
-      return createDecisionState(baseMeta, 'NO_TRADE', 'OUTSIDE_SILVER_BULLET_WINDOW', detectedFacts.concat([
-        `Waktu saat ini bukan jendela Silver Bullet aktif (${dr.sessionName}).`
-      ]), {
-        direction: null,
+        direction: dr.direction,
         orderType: 'NO TRADE',
-        poiSummary: 'NO TRADE: Di luar jam jendela Silver Bullet aktif.',
-        educationHtml: ''
+        poiSummary: 'NO TRADE: Di luar jendela waktu Silver Bullet.'
       });
+      lockedSignalCache.set(signalId, res);
+      return res;
     }
 
-    if (methodMeta.requiresKillzone && Array.isArray(methodMeta.allowedSessions)) {
-      if (!methodMeta.allowedSessions.includes(dr.sessionName)) {
-        return createDecisionState(baseMeta, 'NO_TRADE', 'OUTSIDE_METHOD_KILLZONE', detectedFacts.concat([
-          `Metode ${methodMeta.shortTag} dibatasi pada sesi ${methodMeta.allowedSessions.join(' / ')}, sedangkan sesi saat ini ${dr.sessionName}.`
-        ]), {
-          direction: null,
-          orderType: 'NO TRADE',
-          poiSummary: `NO TRADE: Metode ${methodMeta.shortTag} tidak aktif di sesi ${dr.sessionName}.`,
-          educationHtml: ''
-        });
-      }
+    if (methodKey === 'judas' && !nyCtx.isJudasWindow && nyCtx.sessionName !== 'London Killzone' && nyCtx.sessionName !== 'New York AM Killzone') {
+      const res = createDecision(baseMeta, 'NO_TRADE', 'JUDAS_SESSION_INACTIVE', detectedFacts.concat([
+        `Sesi ${nyCtx.sessionName} bukan jendela manipulasi Judas Swing utama.`
+      ]), {
+        direction: dr.direction,
+        orderType: 'NO TRADE',
+        poiSummary: `NO TRADE: Judas Swing tidak aktif pada ${nyCtx.sessionName}.`
+      });
+      lockedSignalCache.set(signalId, res);
+      return res;
     }
+
+    // News Lock ±30 menit & konflik bias dari data kalender nyata (tanpa teks bias buatan AI)
+    const highImpactEvents = Array.isArray(opts.highImpactEvents) ? opts.highImpactEvents : [];
+    const lockWindowMs = 30 * 60 * 1000;
+    const activeLockEvent = highImpactEvents.find((ev) => {
+      const evTs = Number(ev && (ev.timestampMs || ev.timeMs || ev.ts));
+      return Number.isFinite(evTs) && Math.abs(nowMs - evTs) <= lockWindowMs;
+    });
+
+    if (Boolean(opts.newsLockActive) || Boolean(activeLockEvent)) {
+      const evTitle = activeLockEvent && activeLockEvent.title ? ` (${activeLockEvent.title})` : '';
+      const res = createDecision(baseMeta, 'WAIT', 'NEWS_LOCK_30M', detectedFacts.concat([
+        `News Lock ±30 menit aktif di sekitar rilis High Impact${evTitle}.`
+      ]), {
+        direction: dr.direction,
+        orderType: 'WAIT',
+        poiSummary: `WAIT: News Lock ±30 menit aktif${evTitle}.`
+      });
+      lockedSignalCache.set(signalId, res);
+      return res;
+    }
+
+    const rawNewsBias = (opts.newsBias || '').toUpperCase();
+    const validNewsBias = rawNewsBias === 'BUY' || rawNewsBias === 'SELL' ? rawNewsBias : '';
+    if (validNewsBias && validNewsBias !== dr.direction) {
+      const res = createDecision(baseMeta, 'WAIT', 'NEWS_BIAS_CONFLICT', detectedFacts.concat([
+        `Bias kalender news (${validNewsBias}) bertentangan dengan arah engine (${dr.direction}).`
+      ]), {
+        direction: dr.direction,
+        orderType: 'WAIT',
+        poiSummary: `WAIT: Bias news (${validNewsBias}) berlawanan dengan arah ${dr.direction}.`
+      });
+      lockedSignalCache.set(signalId, res);
+      return res;
+    }
+
+    // Hitung SL berbasis ATR per timeframe + batas keras pip per TF + spread
+    const spreadPips = Number.isFinite(Number(opts.spreadPips)) && Number(opts.spreadPips) >= 0
+      ? Number(opts.spreadPips)
+      : spec.defaultSpreadPips;
+    const spreadPrice = spreadPips * spec.pipSize;
+
+    const maxAllowedSlPips = (spec.maxSlPips && spec.maxSlPips[timeframe]) || 60;
+    const minAllowedSlPips = spec.minSlPips || 8;
+    const maxAllowedSlPrice = maxAllowedSlPips * spec.pipSize;
+    const minAllowedSlPrice = minAllowedSlPips * spec.pipSize;
 
     const direction = dr.direction;
-
-    // P2: Jika bias news bertentangan dengan bias engine -> WAIT
-    if (newsBias && (newsBias === 'BUY' || newsBias === 'SELL') && newsBias !== direction) {
-      return createDecisionState(baseMeta, 'WAIT', 'NEWS_ENGINE_BIAS_CONFLICT', detectedFacts.concat([
-        `Bias news (${newsBias}) bertentangan dengan bias struktur engine (${direction}).`
-      ]), {
-        direction,
-        orderType: 'WAIT',
-        poiSummary: `WAIT: Bias news (${newsBias}) berlawanan dengan bias engine (${direction}).`,
-        educationHtml: ''
-      });
-    }
-
     const orderType = direction === 'BUY' ? 'BUY LIMIT' : 'SELL LIMIT';
-    let entry = livePrice;
-    let zoneLow = livePrice;
-    let zoneHigh = livePrice;
-    let sl = livePrice;
-    let tp1 = livePrice;
-    let tp2 = livePrice;
-    let tp3 = livePrice;
-
-    let entryNote = '';
-    let slReason = '';
-    let tp1Reason = '';
-    let tp2Reason = '';
-    let tp3Reason = '';
-    let poiSummary = '';
-    let educationHtml = '';
-    let score = methodMeta.baseScore + sopScoreBonus;
-    const expiryMinutes = tfCfg.expiryMin;
-
     const shFmt = dr.swingHighFmt;
     const slFmt = dr.swingLowFmt;
     const eqFmt = dr.equilibriumFmt;
 
+    let entry = livePrice;
+    let zoneLow = livePrice;
+    let zoneHigh = livePrice;
+    let sl = livePrice;
+    let slReason = '';
+    let entryNote = '';
+    let poiSummary = '';
+
+    // Perhitungan level & zona berbeda per metode
     if (direction === 'BUY') {
-      const entryOffset = methodKey === 'sweep' ? 0.12 : methodKey === 'ote' ? 0.18 : 0.16;
-      entry = Math.min(livePrice - dr.unitAtr * entryOffset, dr.swingLow + dr.totalRange * 0.35);
-      if (entry >= livePrice) entry = livePrice - dr.unitAtr * 0.18;
+      if (methodKey === 'ote') {
+        // FIB OTE: zona retracement 0.618 - 0.786 (titik acuan 0.705)
+        const fib705 = dr.swingHigh - dr.totalRange * 0.705;
+        const fib786 = dr.swingHigh - dr.totalRange * 0.786;
+        const fib618 = dr.swingHigh - dr.totalRange * 0.618;
+        entry = Math.min(livePrice - spec.pipSize * 4, fib705);
+        zoneLow = Math.min(fib786, entry - dr.unitAtr * 0.08);
+        zoneHigh = Math.max(fib618, entry + dr.unitAtr * 0.08);
+        entryNote = 'FIB OTE 0.705 (Zona 0.618–0.786)';
+        poiSummary = `OTE Fibo BUY: Area 0.618–0.786 di sekitar ${formatPrice(pair, entry)}.`;
+      } else if (methodKey === 'smc_ob') {
+        // SMC Order Block + FVG: zona OB di bagian bawah range
+        const obBottom = dr.swingLow + dr.totalRange * 0.12;
+        const obTop = dr.swingLow + dr.totalRange * 0.24;
+        entry = Math.min(livePrice - spec.pipSize * 4, (obBottom + obTop) / 2);
+        zoneLow = obBottom;
+        zoneHigh = obTop;
+        entryNote = 'SMC Bullish OB + FVG Mean Threshold';
+        poiSummary = `SMC OB+FVG BUY: Zona OB ${formatPrice(pair, zoneLow)} – ${formatPrice(pair, zoneHigh)}.`;
+      } else if (methodKey === 'sweep') {
+        // Liquidity Sweep: reaksi setelah menyapu area low/EQL
+        entry = Math.min(livePrice - spec.pipSize * 4, dr.swingLow + spec.pipSize * 6);
+        zoneLow = dr.swingLow - spec.pipSize * 4;
+        zoneHigh = entry + spec.pipSize * 5;
+        entryNote = 'Reversal setelah Liquidity Sweep Low';
+        poiSummary = `Liquidity Sweep BUY: Area pantulan dekat low ${slFmt}.`;
+      } else if (methodKey === 'judas') {
+        // Judas Swing: retest setelah manipulasi awal sesi ke bawah
+        entry = Math.min(livePrice - spec.pipSize * 4, dr.swingLow + dr.unitAtr * 0.15);
+        zoneLow = entry - dr.unitAtr * 0.08;
+        zoneHigh = entry + dr.unitAtr * 0.08;
+        entryNote = 'Retest pasca Judas Swing Low';
+        poiSummary = `Judas Swing BUY: Retest area bawah setelah gerakan awal sesi.`;
+      } else if (methodKey === 'silver_bullet') {
+        // Silver Bullet: FVG dalam jam killzone spesifik
+        entry = Math.min(livePrice - spec.pipSize * 4, livePrice - dr.unitAtr * 0.18);
+        zoneLow = entry - dr.unitAtr * 0.08;
+        zoneHigh = entry + dr.unitAtr * 0.08;
+        entryNote = 'Silver Bullet FVG Window';
+        poiSummary = `Silver Bullet BUY: Zona FVG pada jendela waktu aktif.`;
+      } else {
+        // Auto Sniper: konfluensi area discount / equilibrium
+        entry = Math.min(livePrice - spec.pipSize * 4, livePrice - dr.unitAtr * 0.20);
+        zoneLow = entry - dr.unitAtr * 0.10;
+        zoneHigh = entry + dr.unitAtr * 0.10;
+        entryNote = 'Auto Sniper Discount POI';
+        poiSummary = `Auto Sniper BUY: Zona POI ${formatPrice(pair, zoneLow)} – ${formatPrice(pair, zoneHigh)}.`;
+      }
 
-      zoneLow = entry - dr.unitAtr * 0.11;
-      zoneHigh = entry + dr.unitAtr * 0.11;
-      sl = Math.max(dr.swingLow - dr.unitAtr * 0.15, entry - dr.unitAtr * 0.68);
+      const rawSlDist = dr.unitAtr * tfCfg.slAtrFactor + spreadPrice;
+      const clampedSlDist = Math.min(maxAllowedSlPrice, Math.max(minAllowedSlPrice, rawSlDist));
+      sl = entry - clampedSlDist;
 
-      const riskDist = Math.abs(entry - sl);
-      tp1 = entry + riskDist * 1.30;
-      tp2 = entry + riskDist * 2.10;
-      tp3 = entry + riskDist * 2.90;
-
-      entryNote = `${methodMeta.shortTag} Bullish POI (${formatPrice(pair, entry)})`;
-      slReason = `Di bawah struktur Swing Low (${slFmt})`;
-      tp1Reason = '1:1.3 Target Awal';
-      tp2Reason = `1:2.1 Equilibrium / Likuiditas (${eqFmt})`;
-      tp3Reason = `1:2.9 Area High (${shFmt})`;
-      poiSummary = `Bias BUY (${dr.pdPercent}% range): Zona POI ${formatPrice(pair, zoneLow)} – ${formatPrice(pair, zoneHigh)} di bawah harga ${formatPrice(pair, livePrice)}.`;
+      if (clampedSlDist >= maxAllowedSlPrice - 1e-9) {
+        slReason = `Dibatasi plafon ${timeframe} (${maxAllowedSlPips} pip termasuk spread ${spreadPips} pip)`;
+      } else if (clampedSlDist <= minAllowedSlPrice + 1e-9) {
+        slReason = `Dibatasi minimum jarak SL (${minAllowedSlPips} pip termasuk spread ${spreadPips} pip)`;
+      } else {
+        slReason = `Berbasis ${tfCfg.slAtrFactor}x ATR ${timeframe} + spread ${spreadPips} pip`;
+      }
     } else {
-      const entryOffset = methodKey === 'sweep' ? 0.12 : methodKey === 'ote' ? 0.18 : 0.16;
-      entry = Math.max(livePrice + dr.unitAtr * entryOffset, dr.swingHigh - dr.totalRange * 0.35);
-      if (entry <= livePrice) entry = livePrice + dr.unitAtr * 0.18;
+      // SELL
+      if (methodKey === 'ote') {
+        const fib705 = dr.swingLow + dr.totalRange * 0.705;
+        const fib618 = dr.swingLow + dr.totalRange * 0.618;
+        const fib786 = dr.swingLow + dr.totalRange * 0.786;
+        entry = Math.max(livePrice + spec.pipSize * 4, fib705);
+        zoneLow = Math.min(fib618, entry - dr.unitAtr * 0.08);
+        zoneHigh = Math.max(fib786, entry + dr.unitAtr * 0.08);
+        entryNote = 'FIB OTE 0.705 (Zona 0.618–0.786)';
+        poiSummary = `OTE Fibo SELL: Area 0.618–0.786 di sekitar ${formatPrice(pair, entry)}.`;
+      } else if (methodKey === 'smc_ob') {
+        const obBottom = dr.swingHigh - dr.totalRange * 0.24;
+        const obTop = dr.swingHigh - dr.totalRange * 0.12;
+        entry = Math.max(livePrice + spec.pipSize * 4, (obBottom + obTop) / 2);
+        zoneLow = obBottom;
+        zoneHigh = obTop;
+        entryNote = 'SMC Bearish OB + FVG Mean Threshold';
+        poiSummary = `SMC OB+FVG SELL: Zona OB ${formatPrice(pair, zoneLow)} – ${formatPrice(pair, zoneHigh)}.`;
+      } else if (methodKey === 'sweep') {
+        entry = Math.max(livePrice + spec.pipSize * 4, dr.swingHigh - spec.pipSize * 6);
+        zoneLow = entry - spec.pipSize * 5;
+        zoneHigh = dr.swingHigh + spec.pipSize * 4;
+        entryNote = 'Reversal setelah Liquidity Sweep High';
+        poiSummary = `Liquidity Sweep SELL: Area penolakan dekat high ${shFmt}.`;
+      } else if (methodKey === 'judas') {
+        entry = Math.max(livePrice + spec.pipSize * 4, dr.swingHigh - dr.unitAtr * 0.15);
+        zoneLow = entry - dr.unitAtr * 0.08;
+        zoneHigh = entry + dr.unitAtr * 0.08;
+        entryNote = 'Retest pasca Judas Swing High';
+        poiSummary = `Judas Swing SELL: Retest area atas setelah gerakan awal sesi.`;
+      } else if (methodKey === 'silver_bullet') {
+        entry = Math.max(livePrice + spec.pipSize * 4, livePrice + dr.unitAtr * 0.18);
+        zoneLow = entry - dr.unitAtr * 0.08;
+        zoneHigh = entry + dr.unitAtr * 0.08;
+        entryNote = 'Silver Bullet FVG Window';
+        poiSummary = `Silver Bullet SELL: Zona FVG pada jendela waktu aktif.`;
+      } else {
+        entry = Math.max(livePrice + spec.pipSize * 4, livePrice + dr.unitAtr * 0.20);
+        zoneLow = entry - dr.unitAtr * 0.10;
+        zoneHigh = entry + dr.unitAtr * 0.10;
+        entryNote = 'Auto Sniper Premium POI';
+        poiSummary = `Auto Sniper SELL: Zona POI ${formatPrice(pair, zoneLow)} – ${formatPrice(pair, zoneHigh)}.`;
+      }
 
-      zoneLow = entry - dr.unitAtr * 0.11;
-      zoneHigh = entry + dr.unitAtr * 0.11;
-      sl = Math.min(dr.swingHigh + dr.unitAtr * 0.15, entry + dr.unitAtr * 0.68);
+      const rawSlDist = dr.unitAtr * tfCfg.slAtrFactor + spreadPrice;
+      const clampedSlDist = Math.min(maxAllowedSlPrice, Math.max(minAllowedSlPrice, rawSlDist));
+      sl = entry + clampedSlDist;
 
-      const riskDist = Math.abs(sl - entry);
-      tp1 = entry - riskDist * 1.30;
-      tp2 = entry - riskDist * 2.10;
-      tp3 = entry - riskDist * 2.90;
-
-      entryNote = `${methodMeta.shortTag} Bearish POI (${formatPrice(pair, entry)})`;
-      slReason = `Di atas struktur Swing High (${shFmt})`;
-      tp1Reason = '1:1.3 Target Awal';
-      tp2Reason = `1:2.1 Equilibrium / Likuiditas (${eqFmt})`;
-      tp3Reason = `1:2.9 Area Low (${slFmt})`;
-      poiSummary = `Bias SELL (${dr.pdPercent}% range): Zona POI ${formatPrice(pair, zoneLow)} – ${formatPrice(pair, zoneHigh)} di atas harga ${formatPrice(pair, livePrice)}.`;
+      if (clampedSlDist >= maxAllowedSlPrice - 1e-9) {
+        slReason = `Dibatasi plafon ${timeframe} (${maxAllowedSlPips} pip termasuk spread ${spreadPips} pip)`;
+      } else if (clampedSlDist <= minAllowedSlPrice + 1e-9) {
+        slReason = `Dibatasi minimum jarak SL (${minAllowedSlPips} pip termasuk spread ${spreadPips} pip)`;
+      } else {
+        slReason = `Berbasis ${tfCfg.slAtrFactor}x ATR ${timeframe} + spread ${spreadPips} pip`;
+      }
     }
+
+    const riskDist = Math.abs(entry - sl);
+    const tp1 = direction === 'BUY' ? entry + riskDist * tfCfg.tpMults[0] : entry - riskDist * tfCfg.tpMults[0];
+    const tp2 = direction === 'BUY' ? entry + riskDist * tfCfg.tpMults[1] : entry - riskDist * tfCfg.tpMults[1];
+    const tp3 = direction === 'BUY' ? entry + riskDist * tfCfg.tpMults[2] : entry - riskDist * tfCfg.tpMults[2];
 
     const slPips = toPips(pair, entry - sl);
     const tp1Pips = toPips(pair, tp1 - entry);
     const tp2Pips = toPips(pair, tp2 - entry);
     const tp3Pips = toPips(pair, tp3 - entry);
 
-    const maxAllowedSl = (spec.maxSlPips && spec.maxSlPips[timeframe]) || 80;
-    const minAllowedSl = spec.minSlPips || 5;
+    // Skor lebih terukur dari konfluensi aktual + bonus SOP (tanpa melebihi 9.9)
+    let score = methodMeta.baseScore + (Number(opts.sopScoreBonus) || 0);
+    if (dr.hasRealAtr) score += 0.3;
+    if (dr.hasRealSwing) score += 0.3;
+    if (methodKey === 'silver_bullet' && nyCtx.isSilverBulletWindow) score += 0.4;
+    if (methodKey === 'judas' && nyCtx.isJudasWindow) score += 0.3;
+    const finalScore = Math.min(9.9, Math.max(6.0, Number(score.toFixed(1))));
 
-    // P2: Jika jarak SL di luar batas wajar ATR/timeframe atau RR TP2 < 1.5, jangan keluarkan sinyal
-    const rrTp2 = slPips > 0 ? tp2Pips / slPips : 0;
-    if (slPips < minAllowedSl || slPips > maxAllowedSl || rrTp2 < 1.5) {
-      const gateReasons = [];
-      if (slPips < minAllowedSl) gateReasons.push(`Jarak SL (${slPips} pips) terlalu sempit (minimum ${minAllowedSl} pips).`);
-      if (slPips > maxAllowedSl) gateReasons.push(`Jarak SL (${slPips} pips) melewati batas ${timeframe} (${maxAllowedSl} pips).`);
-      if (rrTp2 < 1.5) gateReasons.push(`Rasio Risk:Reward TP2 (${rrTp2.toFixed(2)}) di bawah batas minimum 1.5.`);
-
-      return createDecisionState(baseMeta, 'NO_TRADE', 'STRUCTURE_ATR_FILTER_REJECTED', detectedFacts.concat(gateReasons), {
-        direction,
-        orderType: 'NO TRADE',
-        slPips,
-        tp1Pips,
-        tp2Pips,
-        tp3Pips,
-        poiSummary: `NO TRADE: Syarat struktur/ATR/RR pada ${pair} ${timeframe} tidak terpenuhi.`,
-        educationHtml: ''
-      });
-    }
-
-    if (dr.isSilverBulletWindow && methodKey === 'silver_bullet') {
-      score += 0.5;
-    }
-
-    const finalScore = Math.min(9.9, Math.max(6.5, Number(score.toFixed(1))));
-
-    educationHtml = buildEducationTemplate({
-      conceptTitle: `${methodMeta.name} (${pair} ${timeframe})`,
-      whyBias: `Arah ${direction} terdeteksi pada posisi ${dr.pdPercent}% dalam range ${slFmt} – ${shFmt} pada sesi ${dr.sessionName}.`,
-      facts: detectedFacts,
-      confirmation: `Tunggu harga menyentuh area ${formatPrice(pair, zoneLow)} – ${formatPrice(pair, zoneHigh)} dan terkonfirmasi pada penutupan candle ${timeframe}.`
-    });
-
-    return createDecisionState(baseMeta, 'SIGNAL', 'VALID_SETUP', detectedFacts, {
+    const result = createDecision(baseMeta, 'SIGNAL', 'VALID_SETUP', detectedFacts.concat([
+      `Jarak SL terhitung ${slPips} pip (batas ${timeframe}: maks ${maxAllowedSlPips} pip, spread ${spreadPips} pip).`
+    ]), {
       direction,
       orderType,
       entry,
@@ -510,24 +689,23 @@
       sl,
       slFmt: formatPrice(pair, sl),
       slPips,
+      spreadPips,
       slReason,
       tp1,
       tp1Fmt: formatPrice(pair, tp1),
       tp1Pips,
-      tp1Reason,
+      tp1Reason: `1:${tfCfg.tpMults[0]} Target 1`,
       tp2,
       tp2Fmt: formatPrice(pair, tp2),
       tp2Pips,
-      tp2Reason,
+      tp2Reason: `1:${tfCfg.tpMults[1]} Target 2`,
       tp3,
       tp3Fmt: formatPrice(pair, tp3),
       tp3Pips,
-      tp3Reason,
-      rrTp2: Number(rrTp2.toFixed(2)),
+      tp3Reason: `1:${tfCfg.tpMults[2]} Target 3`,
       score: finalScore,
-      expiryMinutes,
+      expiryMinutes: tfCfg.expiryMin,
       poiSummary,
-      educationHtml,
       swingHigh: dr.swingHigh,
       swingHighFmt: shFmt,
       swingLow: dr.swingLow,
@@ -537,37 +715,36 @@
       pdPercent: dr.pdPercent,
       pipValuePerLot: spec.pipValuePerLot
     });
+
+    lockedSignalCache.set(signalId, result);
+    return result;
   }
 
-  function buildEducationTemplate(cfg) {
-    const factsHtml = (cfg.facts || [])
-      .map(
-        (fact) =>
-          `<div class="rounded-lg bg-slate-950/80 border border-slate-800 p-2 text-slate-300">${fact}</div>`
-      )
-      .join('');
-
-    return `
-      <div class="space-y-2">
-        <div class="font-extrabold text-amber-300 text-xs">📚 Ringkasan Kondisi Terdeteksi: ${cfg.conceptTitle}</div>
-        <p class="text-slate-300"><strong class="text-white">Posisi Struktur:</strong> ${cfg.whyBias}</p>
-        <div class="space-y-1.5">
-          <div class="font-bold text-slate-200">Fakta Terukur dari Engine:</div>
-          ${factsHtml}
-        </div>
-        <div class="rounded-lg bg-emerald-950/35 border border-emerald-500/30 p-2 text-emerald-200">
-          <strong>✅ Rencana Pantauan:</strong> ${cfg.confirmation}
-        </div>
-      </div>
-    `;
-  }
-
+  /**
+   * Sizing aman: tidak memaksa lot naik melewati batas risiko/akun secara diam-diam.
+   */
   function calculatePositionSize(account, signal) {
     if (!signal || signal.status !== 'SIGNAL') {
       return {
         lot: 0,
-        wasCapped: false,
-        isMinFloorApplied: false,
+        isBlocked: true,
+        blockReason: 'Sinyal tidak dalam status eksekusi (SIGNAL).',
+        actualRiskDollar: 0,
+        tp1Dollar: 0,
+        tp2Dollar: 0,
+        tp3Dollar: 0
+      };
+    }
+
+    const equity = Number(account && (account.equity !== undefined ? account.equity : account.balance));
+    const riskPct = Number(account && account.riskPct);
+    const hardMaxLot = Number(account && account.maxLot);
+
+    if (!Number.isFinite(equity) || equity <= 0 || !Number.isFinite(riskPct) || riskPct <= 0) {
+      return {
+        lot: 0,
+        isBlocked: true,
+        blockReason: 'Equity atau persentase risiko akun belum terisi valid.',
         actualRiskDollar: 0,
         tp1Dollar: 0,
         tp2Dollar: 0,
@@ -576,26 +753,30 @@
     }
 
     const spec = getPairSpec(signal.pair);
-    const equity = Number(account && (account.equity || account.balance)) || 1000;
-    const riskPct = Number(account && account.riskPct) || 0.4;
-    const hardMaxLot = Number(account && account.maxLot) || 0.15;
-
+    const slPips = Math.max(1, Number(signal.slPips) || 1);
     const targetRiskDollar = equity * (riskPct / 100);
-    const slPips = Math.max(1, Number(signal.slPips) || 20);
     const rawLot = targetRiskDollar / (slPips * spec.pipValuePerLot);
 
     let finalLot = Math.floor(rawLot * 100) / 100;
-    let isMinFloorApplied = false;
     let wasCapped = false;
 
-    if (finalLot < 0.01) {
-      finalLot = 0.01;
-      isMinFloorApplied = true;
+    if (Number.isFinite(hardMaxLot) && hardMaxLot > 0 && finalLot > hardMaxLot) {
+      finalLot = Math.floor(hardMaxLot * 100) / 100;
+      wasCapped = true;
     }
 
-    if (finalLot > hardMaxLot) {
-      finalLot = hardMaxLot;
-      wasCapped = true;
+    // Jika hasil pembulatan 0.00 (karena risk terlalu kecil untuk 0.01 lot), jangan dipaksa naik di luar target risiko
+    if (finalLot < 0.01) {
+      return {
+        lot: 0,
+        isBlocked: true,
+        blockReason: 'Ukuran lot di bawah 0.01; dipaksa 0.01 akan melewati batas risiko target.',
+        targetRiskDollar: Number(targetRiskDollar.toFixed(2)),
+        actualRiskDollar: 0,
+        tp1Dollar: 0,
+        tp2Dollar: 0,
+        tp3Dollar: 0
+      };
     }
 
     const actualRiskDollar = finalLot * slPips * spec.pipValuePerLot;
@@ -605,8 +786,8 @@
 
     return {
       lot: Number(finalLot.toFixed(2)),
+      isBlocked: false,
       wasCapped,
-      isMinFloorApplied,
       targetRiskDollar: Number(targetRiskDollar.toFixed(2)),
       actualRiskDollar: Number(actualRiskDollar.toFixed(2)),
       tp1Dollar: Number(tp1Dollar.toFixed(2)),
@@ -624,9 +805,10 @@
     getPairSpec,
     formatPrice,
     toPips,
-    getWibContext,
+    getNySessionContext,
     getCandleCloseTimestamp,
     buildDeterministicSignalId,
+    clearLockedSignal,
     analyzeDealingRange,
     buildSignalSetup,
     calculatePositionSize
