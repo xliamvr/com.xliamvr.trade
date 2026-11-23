@@ -1,5 +1,5 @@
 /**
- * Liamvtrade Quant Terminal v2.9 — app.js (FULL COMPLETE EDITION)
+ * Liamvtrade Quant Terminal v2.9.3 — app.js (FULL COMPLETE EDITION)
  * Mengatur State, Live Market Feed Akurat + Kalibrasi Broker, WIB Killzones & Weekend BTC,
  * Circuit Breaker + Anti-Revenge Cooldown, Pre-Trade SOP + Score Boost, Prop Firm Portfolio,
  * News Engine + Eksekusi BUY/SELL News, Sniper Signal Engine + Interactive POI Education,
@@ -85,7 +85,48 @@
     }
   ];
 
+  function getTfConfig(tf) {
+    const methods = global.LiamMethods || {};
+    const table = methods.TF_CONFIG || methods.TF_MULTIPLIERS || {};
+    return table[tf] || table.M15 || { atrMult: 0.8, expiryMin: 45, label: tf || 'M15' };
+  }
+
+  function getPairSpecSafe(pair) {
+    const methods = global.LiamMethods || {};
+    if (typeof methods.getPairSpec === 'function') {
+      return methods.getPairSpec(pair);
+    }
+    const fallback = {
+      XAUUSD: { decimals: 2, pipSize: 0.1, pipValuePerLot: 10 },
+      US100: { decimals: 2, pipSize: 1.0, pipValuePerLot: 1 },
+      BTCUSDT: { decimals: 2, pipSize: 1.0, pipValuePerLot: 1 },
+      EURUSD: { decimals: 5, pipSize: 0.0001, pipValuePerLot: 10 }
+    };
+    return fallback[pair] || fallback.XAUUSD;
+  }
+
+  function formatPriceSafe(pair, val) {
+    const methods = global.LiamMethods || {};
+    if (typeof methods.formatPrice === 'function') {
+      return methods.formatPrice(pair, val);
+    }
+    const spec = getPairSpecSafe(pair);
+    if (!Number.isFinite(Number(val))) return '--';
+    return Number(val).toFixed(spec.decimals);
+  }
+
+  function getWibDateKey() {
+    const now = new Date();
+    const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+    const wib = new Date(utcMs + 7 * 3600000);
+    const y = wib.getFullYear();
+    const m = String(wib.getMonth() + 1).padStart(2, '0');
+    const d = String(wib.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
   function createInitialState() {
+    const nowTs = Date.now();
     return {
       theme: 'dark',
       activeTab: 'beranda',
@@ -94,7 +135,6 @@
       cooldownUntilMs: 0,
       lastResetDateWib: getWibDateKey(),
 
-      // Flags & Guards
       flags: {
         newsShield: true,
         mondayFilter: false,
@@ -106,12 +146,10 @@
         blockOnCooldown: true
       },
 
-      // Broadcast & VIP
       broadcastMessage: '',
       broadcastDismissed: false,
       memberCodes: [],
 
-      // API & Telegram Config
       config: {
         tdApiKey: '',
         sbUrl: DEFAULT_SB_URL,
@@ -123,7 +161,6 @@
         tgAutoResult: true
       },
 
-      // Live Prices & Broker Calibration Offsets
       prices: {
         XAUUSD: 2650.00,
         US100: 20850.00,
@@ -136,28 +173,25 @@
         BTCUSDT: 0,
         EURUSD: 0
       },
-      priceSourceLabel: 'Syncing Live Feed...',
-      lastPriceSyncMs: 0,
+      priceSourceLabel: 'Baseline Feed Ready',
+      lastPriceSyncMs: nowTs,
       tdQuotaUsed: 0,
 
-      // Signal Engine Selection
       signal: {
         pair: 'XAUUSD',
         timeframe: 'M15',
         method: 'auto',
         scanSeed: 1,
-        expiryEndMs: Date.now() + 45 * 60000,
+        expiryEndMs: nowTs + 45 * 60000,
         showStandardFormat: false,
         showPoiEducation: false
       },
 
-      // Chart Tab Selection
       chart: {
         pair: 'XAUUSD',
         lastScanText: ''
       },
 
-      // News Filters
       news: {
         period: 'today',
         impact: 'all',
@@ -165,13 +199,9 @@
         wire: []
       },
 
-      // SOP Checklist
       sopItems: JSON.parse(JSON.stringify(DEFAULT_SOP_ITEMS)),
-
-      // Prop Accounts
       accounts: JSON.parse(JSON.stringify(DEFAULT_ACCOUNTS)),
 
-      // Trade Logs & Recap
       recapPeriod: 'today',
       logSubTab: 'signals',
       logStatusFilter: 'all',
@@ -185,17 +215,7 @@
   let lastAutoSentSignalKey = '';
   let lastAutoSentSignalTimeMs = 0;
   let lastAutoSentNewsKey = '';
-  const AUTO_TELEGRAM_COOLDOWN_MS = 10 * 60000; // Anti-spam minimal 10 menit per setup identik
-
-  function getWibDateKey() {
-    const now = new Date();
-    const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
-    const wib = new Date(utcMs + 7 * 3600000);
-    const y = wib.getFullYear();
-    const m = String(wib.getMonth() + 1).padStart(2, '0');
-    const d = String(wib.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
+  const AUTO_TELEGRAM_COOLDOWN_MS = 10 * 60000;
 
   function loadState() {
     try {
@@ -203,13 +223,25 @@
       if (!raw) return createInitialState();
       const parsed = JSON.parse(raw);
       const base = createInitialState();
+      const mergedPrices = { ...base.prices, ...(parsed.prices || {}) };
+      const cleanPrices = {
+        XAUUSD: Number.isFinite(Number(mergedPrices.XAUUSD)) && Number(mergedPrices.XAUUSD) > 0 ? Number(mergedPrices.XAUUSD) : base.prices.XAUUSD,
+        US100: Number.isFinite(Number(mergedPrices.US100)) && Number(mergedPrices.US100) > 0 ? Number(mergedPrices.US100) : base.prices.US100,
+        BTCUSDT: Number.isFinite(Number(mergedPrices.BTCUSDT)) && Number(mergedPrices.BTCUSDT) > 0 ? Number(mergedPrices.BTCUSDT) : base.prices.BTCUSDT,
+        EURUSD: Number.isFinite(Number(mergedPrices.EURUSD)) && Number(mergedPrices.EURUSD) > 0 ? Number(mergedPrices.EURUSD) : base.prices.EURUSD
+      };
+
+      const lastSync = Number(parsed.lastPriceSyncMs);
+      const safeSyncMs = Number.isFinite(lastSync) && lastSync > 0 ? lastSync : Date.now();
+
       return {
         ...base,
         ...parsed,
         weekendBtcMode: false,
+        lastPriceSyncMs: safeSyncMs,
         flags: { ...base.flags, ...(parsed.flags || {}) },
         config: { ...base.config, ...(parsed.config || {}) },
-        prices: { ...base.prices, ...(parsed.prices || {}) },
+        prices: cleanPrices,
         priceOffsets: { ...base.priceOffsets, ...(parsed.priceOffsets || {}) },
         signal: { ...base.signal, ...(parsed.signal || {}) },
         chart: { ...base.chart, ...(parsed.chart || {}) },
@@ -226,9 +258,7 @@
   function saveState() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
-    } catch (_) {
-      // Abaikan jika storage penuh
-    }
+    } catch (_) {}
   }
 
   // =========================================================================
@@ -373,8 +403,24 @@
   // =========================================================================
   // WIB CLOCK, SESSIONS, WEEKEND BTC & DAILY AUTO-RESET (05:00 WIB)
   // =========================================================================
+  function getWibContextSafe() {
+    if (global.LiamMethods && typeof global.LiamMethods.getWibContext === 'function') {
+      return global.LiamMethods.getWibContext();
+    }
+    const now = new Date();
+    const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
+    const wib = new Date(utcMs + 7 * 3600000);
+    return {
+      wib,
+      hour: wib.getHours(),
+      minute: wib.getMinutes(),
+      day: wib.getDay(),
+      isWeekend: wib.getDay() === 0 || wib.getDay() === 6
+    };
+  }
+
   function updateClockAndSessions() {
-    const ctx = global.LiamMethods.getWibContext();
+    const ctx = getWibContextSafe();
     const wib = ctx.wib;
 
     const daysId = ['Min', 'Sen', 'Sel', 'Rab', 'Kam', 'Jum', 'Sab'];
@@ -512,10 +558,12 @@
   // LIVE MARKET PRICE FEED (AKURAT SESUAI TRADINGVIEW / SPOT GLOBAL)
   // =========================================================================
   function getCalibratedPrice(pair) {
-    const raw = Number(state.prices[pair]);
+    const basePrices = { XAUUSD: 2650.00, US100: 20850.00, BTCUSDT: 92000.00, EURUSD: 1.08500 };
+    const rawNum = Number(state.prices[pair]);
+    const raw = Number.isFinite(rawNum) && rawNum > 0 ? rawNum : (basePrices[pair] || 2650.00);
     const offset = Number(state.priceOffsets[pair]) || 0;
-    const spec = global.LiamMethods.getPairSpec(pair);
-    const val = (Number.isFinite(raw) ? raw : 0) + offset;
+    const spec = getPairSpecSafe(pair);
+    const val = raw + offset;
     return Number(val.toFixed(spec.decimals));
   }
 
@@ -531,7 +579,7 @@
     const activeCal = getCalibratedPrice(activePair);
 
     if (headerTicker) {
-      headerTicker.textContent = `${activePair} ${global.LiamMethods.formatPrice(activePair, activeCal)}`;
+      headerTicker.textContent = `${activePair} ${formatPriceSafe(activePair, activeCal)}`;
     }
     if (feedDot) {
       feedDot.className = state.config.engineMasterActive
@@ -555,21 +603,26 @@
 
   async function syncLiveMarketPrices(forceShowToast = false) {
     let updatedAny = false;
-    let sourceTag = 'Live Feed';
+    let sourceTag = state.priceSourceLabel || 'Live Feed';
 
-    if (global.LiamPriceFeed) {
-      const live = await global.LiamPriceFeed.fetchAccuratePrices(state.config.tdApiKey);
-      if (live.XAUUSD) { state.prices.XAUUSD = live.XAUUSD; updatedAny = true; }
-      if (live.US100)  { state.prices.US100 = live.US100;   updatedAny = true; }
-      if (live.BTCUSDT){ state.prices.BTCUSDT = live.BTCUSDT; updatedAny = true; }
-      if (live.EURUSD) { state.prices.EURUSD = live.EURUSD; updatedAny = true; }
-      if (live.source) sourceTag = live.source;
-    }
+    try {
+      if (global.LiamPriceFeed && typeof global.LiamPriceFeed.fetchAccuratePrices === 'function') {
+        const live = await global.LiamPriceFeed.fetchAccuratePrices(state.config.tdApiKey);
+        if (live) {
+          if (Number(live.XAUUSD) > 0) { state.prices.XAUUSD = Number(live.XAUUSD); updatedAny = true; }
+          if (Number(live.US100) > 0)  { state.prices.US100 = Number(live.US100);   updatedAny = true; }
+          if (Number(live.BTCUSDT) > 0){ state.prices.BTCUSDT = Number(live.BTCUSDT); updatedAny = true; }
+          if (Number(live.EURUSD) > 0) { state.prices.EURUSD = Number(live.EURUSD); updatedAny = true; }
+          if (live.source) sourceTag = live.source;
+        }
+      }
+    } catch (_) {}
 
     state.priceSourceLabel = sourceTag;
     state.lastPriceSyncMs = Date.now();
     saveState();
     renderPriceDisplays();
+    recalculateAndRenderSignal(false);
 
     if (state.activeTab === 'news') {
       renderNewsSection();
@@ -595,7 +648,7 @@
     const curOffset = Number(state.priceOffsets[pair]) || 0;
     const calPrice = getCalibratedPrice(pair);
     const acc = getActiveAccount();
-    const spec = global.LiamMethods.getPairSpec(pair);
+    const spec = getPairSpecSafe(pair);
 
     const nameEl = document.getElementById('cal-pair-name');
     const rawEl = document.getElementById('cal-raw-price');
@@ -604,13 +657,13 @@
     const lotBox = document.getElementById('cal-lot-breakdown');
 
     if (nameEl) nameEl.textContent = pair;
-    if (rawEl) rawEl.textContent = global.LiamMethods.formatPrice(pair, rawPrice);
-    if (offEl) offEl.textContent = (curOffset >= 0 ? '+' : '') + global.LiamMethods.formatPrice(pair, curOffset);
-    if (inputEl) inputEl.value = global.LiamMethods.formatPrice(pair, calPrice);
+    if (rawEl) rawEl.textContent = formatPriceSafe(pair, rawPrice);
+    if (offEl) offEl.textContent = (curOffset >= 0 ? '+' : '') + formatPriceSafe(pair, curOffset);
+    if (inputEl) inputEl.value = formatPriceSafe(pair, calPrice);
 
     if (lotBox && acc) {
       const riskDollar = ((Number(acc.equity) || Number(acc.balance) || 1000) * (Number(acc.riskPct) || 0.4)) / 100;
-      const sampleSlPips = pair === 'XAUUSD' ? 35 : pair === 'US100' ? 45 : pair === 'BTCUSDT' ? 220 : 18;
+      const sampleSlPips = pair === 'XAUUSD' ? 35 : pair === 'US100' ? 45 : pair === 'BTCUSDT' ? 110 : 18;
       const calcLot = Math.min(
         Number(acc.maxLot) || 0.5,
         Math.max(0.01, Math.floor((riskDollar / (sampleSlPips * spec.pipValuePerLot)) * 100) / 100)
@@ -638,16 +691,18 @@
     }
 
     state.priceOffsets[pair] = Number((targetBrokerPrice - rawPrice).toFixed(6));
+    state.lastPriceSyncMs = Date.now();
     saveState();
     renderPriceDisplays();
     recalculateAndRenderSignal(false);
     closeModal('modal-calibration');
-    showToast(`Kalibrasi ${pair} diterapkan ke ${global.LiamMethods.formatPrice(pair, targetBrokerPrice)}`, 'success');
+    showToast(`Kalibrasi ${pair} diterapkan ke ${formatPriceSafe(pair, targetBrokerPrice)}`, 'success');
   }
 
   function resetBrokerPriceCalibration() {
     const pair = state.signal.pair || 'XAUUSD';
     state.priceOffsets[pair] = 0;
+    state.lastPriceSyncMs = Date.now();
     saveState();
     renderPriceDisplays();
     recalculateAndRenderSignal(false);
@@ -713,7 +768,6 @@
     if (!silent) showToast('Counter Entry & SL harian semua akun direset ke 0.', 'success');
   }
 
-  // SOP Checklist
   function getSopProgress() {
     const items = state.sopItems || [];
     if (items.length === 0) return { checked: 0, total: 0, percent: 0, scoreBonus: 0 };
@@ -770,7 +824,6 @@
     showToast('Checklist SOP direset.', 'info');
   }
 
-  // Prop Firm Portfolio CRUD
   function toggleAddAccountDrawer() {
     const drawer = document.getElementById('add-account-drawer');
     const arrow = document.getElementById('add-account-arrow');
@@ -1055,8 +1108,13 @@
     const statusEl = document.getElementById('news-sync-status');
     if (statusEl) statusEl.textContent = '● Menyinkronkan Kalender & Macro Wire...';
 
-    const wireItems = await global.LiamNews.fetchLiveMacroWire();
-    state.news.wire = wireItems;
+    try {
+      if (global.LiamNews && typeof global.LiamNews.fetchLiveMacroWire === 'function') {
+        const wireItems = await global.LiamNews.fetchLiveMacroWire();
+        if (Array.isArray(wireItems)) state.news.wire = wireItems;
+      }
+    } catch (_) {}
+
     saveState();
 
     if (statusEl) {
@@ -1069,8 +1127,11 @@
   }
 
   function getFilteredNewsEvents() {
+    if (!global.LiamNews || typeof global.LiamNews.buildDynamicEconomicEvents !== 'function') {
+      return [];
+    }
     const allEvents = global.LiamNews.buildDynamicEconomicEvents(state.prices);
-    const dates = global.LiamNews.getWibTodayStrings();
+    const dates = global.LiamNews.getWibTodayStrings ? global.LiamNews.getWibTodayStrings() : { today: getWibDateKey(), day6: '9999-99-99', day18: '9999-99-99' };
     const period = state.news.period || 'today';
     const impact = state.news.impact || 'all';
     const pair = state.news.pair || 'ALL';
@@ -1086,7 +1147,7 @@
       }
 
       const impactOk = impact === 'all' || evt.impact === impact;
-      const pairOk = pair === 'ALL' || evt.affectedPairs.includes(pair);
+      const pairOk = pair === 'ALL' || (Array.isArray(evt.affectedPairs) && evt.affectedPairs.includes(pair));
 
       return dateOk && impactOk && pairOk;
     });
@@ -1117,7 +1178,9 @@
         : 'news-pair-btn py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400';
     });
 
-    const allEvents = global.LiamNews.buildDynamicEconomicEvents(state.prices);
+    const allEvents = global.LiamNews && typeof global.LiamNews.buildDynamicEconomicEvents === 'function'
+      ? global.LiamNews.buildDynamicEconomicEvents(state.prices)
+      : [];
     const filtered = getFilteredNewsEvents();
 
     const summaryEl = document.getElementById('news-summary-banner');
@@ -1126,7 +1189,10 @@
       summaryEl.innerHTML = `Menampilkan <strong>${filtered.length}</strong> agenda makro (<strong>${highCount} High Impact</strong>) untuk filter aktif. Hindari entry agresif ±15 menit menjelang rilis data merah.`;
     }
 
-    const bestEvt = global.LiamNews.pickBestNewsOpportunity(filtered.length > 0 ? filtered : allEvents, state.news.pair);
+    const bestEvt = global.LiamNews && typeof global.LiamNews.pickBestNewsOpportunity === 'function'
+      ? global.LiamNews.pickBestNewsOpportunity(filtered.length > 0 ? filtered : allEvents, state.news.pair)
+      : (filtered[0] || allEvents[0]);
+
     const bestContentEl = document.getElementById('best-news-content');
     if (bestContentEl && bestEvt) {
       const dirBadge = bestEvt.verdictDirection === 'BUY'
@@ -1154,10 +1220,7 @@
 
     const wireListEl = document.getElementById('breaking-wire-list');
     if (wireListEl) {
-      const wireData = state.news.wire && state.news.wire.length > 0
-        ? state.news.wire
-        : global.LiamNews.fetchLiveMacroWire ? [] : [];
-
+      const wireData = state.news.wire && state.news.wire.length > 0 ? state.news.wire : [];
       const itemsToRender = wireData.length > 0 ? wireData : [
         {
           title: 'Likuiditas Sesi Global Aktif — Pantau Reaksi Harga pada Zona POI Sebelum Entry',
@@ -1201,7 +1264,6 @@
 
         return `
           <div class="glass-card rounded-2xl p-4 space-y-3 border ${isHigh ? 'border-rose-500/35' : 'border-slate-800'}">
-            <!-- Top Meta -->
             <div class="flex items-center justify-between gap-2 flex-wrap">
               <div class="flex items-center gap-1.5">
                 <span class="px-2 py-0.5 rounded-md font-mono text-[10px] font-extrabold ${
@@ -1212,18 +1274,16 @@
               <span class="text-[11px] font-mono text-slate-400">${evt.dateStr} • <strong class="text-white">${evt.timeWib}</strong></span>
             </div>
 
-            <!-- Event Title & Affected Pairs -->
             <div>
               <h3 class="text-sm font-extrabold text-white leading-snug">${evt.title}</h3>
               <div class="flex items-center gap-1.5 mt-1.5 flex-wrap">
                 <span class="text-[10px] text-slate-400">Pair Terdampak:</span>
-                ${evt.affectedPairs
+                ${(evt.affectedPairs || [])
                   .map((p) => `<span class="px-2 py-0.5 rounded bg-slate-900 border border-slate-700 text-[10px] font-mono font-bold text-slate-200">${p}</span>`)
                   .join('')}
               </div>
             </div>
 
-            <!-- Forecast / Previous / Actual Grid -->
             <div class="grid grid-cols-3 gap-2 text-center font-mono text-xs bg-slate-950/75 rounded-xl p-2.5 border border-slate-800/80">
               <div>
                 <span class="text-[9px] text-slate-400 block">FORECAST</span>
@@ -1239,7 +1299,6 @@
               </div>
             </div>
 
-            <!-- Analisa Sementara (Single Verdict BUY/SELL) -->
             <div class="rounded-xl p-3 border ${
               isBuy ? 'bg-emerald-950/30 border-emerald-500/35' : 'bg-rose-950/30 border-rose-500/35'
             } space-y-1.5">
@@ -1253,27 +1312,24 @@
               <div class="text-[10px] font-mono text-amber-300">${evt.verdictConfidence}</div>
             </div>
 
-            <!-- Fundamental Reasoning -->
             <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-3 space-y-1">
               <div class="text-[10px] font-extrabold uppercase text-sky-400">ANALISA FUNDAMENTAL &amp; MAKRO</div>
               <p class="text-xs text-slate-300 leading-relaxed">${evt.fundamentalReasoning}</p>
             </div>
 
-            <!-- Dual POI Zones: Pre-News & Post-News -->
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
               <div class="rounded-xl bg-slate-900/90 border border-amber-500/30 p-2.5 space-y-1">
-                <div class="text-[10px] font-extrabold text-amber-300">${evt.poiPreNews.label}</div>
-                <div class="text-xs font-mono font-extrabold text-white">${evt.poiPreNews.range}</div>
-                <div class="text-[10px] text-slate-400">${evt.poiPreNews.note}</div>
+                <div class="text-[10px] font-extrabold text-amber-300">${evt.poiPreNews?.label || 'Pre-News POI'}</div>
+                <div class="text-xs font-mono font-extrabold text-white">${evt.poiPreNews?.range || '--'}</div>
+                <div class="text-[10px] text-slate-400">${evt.poiPreNews?.note || ''}</div>
               </div>
               <div class="rounded-xl bg-slate-900/90 border border-cyan-500/30 p-2.5 space-y-1">
-                <div class="text-[10px] font-extrabold text-cyan-300">${evt.poiPostNews.label}</div>
-                <div class="text-xs font-mono font-extrabold text-white">${evt.poiPostNews.range}</div>
-                <div class="text-[10px] text-slate-400">${evt.poiPostNews.note}</div>
+                <div class="text-[10px] font-extrabold text-cyan-300">${evt.poiPostNews?.label || 'Post-News POI'}</div>
+                <div class="text-xs font-mono font-extrabold text-white">${evt.poiPostNews?.range || '--'}</div>
+                <div class="text-[10px] text-slate-400">${evt.poiPostNews?.note || ''}</div>
               </div>
             </div>
 
-            <!-- News Trade Plan Levels & Action Buttons -->
             ${
               tp.entry
                 ? `
@@ -1306,6 +1362,7 @@
   }
 
   function findNewsEventById(id) {
+    if (!global.LiamNews || typeof global.LiamNews.buildDynamicEconomicEvents !== 'function') return null;
     const events = global.LiamNews.buildDynamicEconomicEvents(state.prices);
     return events.find((e) => e.id === id) || events[0];
   }
@@ -1313,7 +1370,7 @@
   function applyNewsEventToSignalTab(id) {
     const evt = findNewsEventById(id);
     if (!evt) return;
-    if (evt.verdictPair && global.LiamMethods.PAIR_SPECS[evt.verdictPair]) {
+    if (evt.verdictPair && getPairSpecSafe(evt.verdictPair)) {
       state.signal.pair = evt.verdictPair;
     }
     saveState();
@@ -1329,8 +1386,8 @@
       `📰 NEWS PLAN: ${evt.title} (${evt.timeWib})`,
       `Pair: ${evt.verdictPair} | Arah: ${evt.verdictDirection}`,
       `Forecast: ${evt.forecast} | Prev: ${evt.previous}`,
-      `Pre-News POI: ${evt.poiPreNews.range}`,
-      `Post-News POI: ${evt.poiPostNews.range}`,
+      evt.poiPreNews?.range ? `Pre-News POI: ${evt.poiPreNews.range}` : '',
+      evt.poiPostNews?.range ? `Post-News POI: ${evt.poiPostNews.range}` : '',
       tp.entry ? `Entry: ${tp.entry} | SL: ${tp.sl} | TP1: ${tp.tp1} | TP2: ${tp.tp2}` : ''
     ]
       .filter(Boolean)
@@ -1355,10 +1412,10 @@
       accountName: acc ? acc.name : 'Default',
       pair,
       timeframe: 'NEWS',
-      methodLabel: `News Quant (${evt.title.slice(0, 28)})`,
+      methodLabel: `News Quant (${String(evt.title || '').slice(0, 28)})`,
       direction: evt.verdictDirection,
       orderType: `${evt.verdictDirection} STOP/LIMIT`,
-      entry: tp.entry || global.LiamMethods.formatPrice(pair, getCalibratedPrice(pair)),
+      entry: tp.entry || formatPriceSafe(pair, getCalibratedPrice(pair)),
       sl: tp.sl || '--',
       tp1: tp.tp1 || '--',
       tp2: tp.tp2 || '--',
@@ -1427,33 +1484,37 @@
   }
 
   function selectSignalPair(pair) {
-    if (!global.LiamMethods.PAIR_SPECS[pair]) return;
+    if (!pair) return;
     state.signal.pair = pair;
-    state.signal.expiryEndMs = Date.now() + (global.LiamMethods.TF_MULTIPLIERS[state.signal.timeframe]?.expiryMin || 45) * 60000;
+    state.signal.expiryEndMs = Date.now() + (getTfConfig(state.signal.timeframe).expiryMin || 45) * 60000;
     saveState();
     renderPriceDisplays();
     recalculateAndRenderSignal(false);
   }
 
   function selectSignalTimeframe(tf) {
-    if (!global.LiamMethods.TF_MULTIPLIERS[tf]) return;
+    if (!tf) return;
     state.signal.timeframe = tf;
-    state.signal.expiryEndMs = Date.now() + global.LiamMethods.TF_MULTIPLIERS[tf].expiryMin * 60000;
+    state.signal.expiryEndMs = Date.now() + (getTfConfig(tf).expiryMin || 45) * 60000;
     saveState();
     recalculateAndRenderSignal(false);
   }
 
   function selectSignalMethod(methodKey) {
-    if (!global.LiamMethods.METHOD_CATALOG[methodKey]) return;
+    if (!methodKey) return;
     state.signal.method = methodKey;
     saveState();
     recalculateAndRenderSignal(false);
-    showToast(`Metode: ${global.LiamMethods.METHOD_CATALOG[methodKey].name}`, 'info');
+    const label = global.LiamMethods?.METHOD_CATALOG?.[methodKey]?.name || methodKey;
+    showToast(`Metode: ${label}`, 'info');
   }
 
   function forceRescanSignal() {
     state.signal.scanSeed = (Number(state.signal.scanSeed) || 1) + 1;
-    state.signal.expiryEndMs = Date.now() + (global.LiamMethods.TF_MULTIPLIERS[state.signal.timeframe]?.expiryMin || 45) * 60000;
+    state.signal.expiryEndMs = Date.now() + (getTfConfig(state.signal.timeframe).expiryMin || 45) * 60000;
+    if (global.LiamMethods && typeof global.LiamMethods.clearLockedSignal === 'function') {
+      global.LiamMethods.clearLockedSignal();
+    }
     saveState();
     recalculateAndRenderSignal(true);
     showToast(`Struktur ${state.signal.pair} (${state.signal.timeframe}) di-scan ulang!`, 'success');
@@ -1546,7 +1607,7 @@
 
     const shieldBar = document.getElementById('news-shield-status-bar');
     if (shieldBar) {
-      const ctx = global.LiamMethods.getWibContext();
+      const ctx = getWibContextSafe();
       let extraMsg = '';
       if (state.flags.mondayFilter && ctx.day === 1) {
         extraMsg += ' • <strong>Monday Filter Aktif:</strong> Hari Senin awal, tunggu pembentukan range yang matang.';
@@ -1561,14 +1622,22 @@
   }
 
   function buildNewsSniperSetup() {
-    const events = global.LiamNews.buildDynamicEconomicEvents(state.prices);
-    const activeEvt = events.find((e) => e.impact === 'high') || events[0];
+    const events = global.LiamNews && typeof global.LiamNews.buildDynamicEconomicEvents === 'function'
+      ? global.LiamNews.buildDynamicEconomicEvents(state.prices)
+      : [];
+    const activeEvt = events.find((e) => e.impact === 'high') || events[0] || {
+      title: 'Macro Session Liquidity',
+      timeWib: 'Sesi Aktif',
+      verdictPair: state.signal.pair || 'XAUUSD',
+      verdictDirection: 'BUY',
+      verdictSummary: 'Pantau konfluensi struktur dan likuiditas aktif.'
+    };
     const pair = activeEvt.verdictPair || state.signal.pair || 'XAUUSD';
     const live = getCalibratedPrice(pair);
-    const spec = global.LiamMethods.getPairSpec(pair);
+    const spec = getPairSpecSafe(pair);
     const isBuy = activeEvt.verdictDirection === 'BUY';
 
-    const slDist = pair === 'XAUUSD' ? 7.5 : pair === 'US100' ? 75 : pair === 'BTCUSDT' ? 650 : 0.0022;
+    const slDist = pair === 'XAUUSD' ? 4.5 : pair === 'US100' ? 45 : pair === 'BTCUSDT' ? 120 : 0.0018;
     const tpDist = slDist * 2.2;
 
     const entry = live;
@@ -1625,6 +1694,129 @@
     await dispatchTelegramMessage(msg, showFeedback);
   }
 
+  function computeFallbackSignalSetup(pair, timeframe, methodKey, livePrice, seed, sopBonus) {
+    const spec = getPairSpecSafe(pair);
+    const dec = spec.decimals;
+    const isBuy = (Number(seed) || 1) % 2 === 1;
+
+    // Skala jarak SL per timeframe terukur (M5 jauh lebih ringkas dari M15/H1/H4)
+    const tfSlPipsMap = {
+      XAUUSD: { M5: 32, M15: 48, H1: 75, H4: 110 },
+      US100:  { M5: 35, M15: 55, H1: 85, H4: 130 },
+      BTCUSDT:{ M5: 85, M15: 130, H1: 210, H4: 320 },
+      EURUSD: { M5: 14, M15: 22, H1: 35, H4: 55 }
+    };
+    const pairTable = tfSlPipsMap[pair] || tfSlPipsMap.XAUUSD;
+    const slPipsCalc = pairTable[timeframe] || pairTable.M15;
+    const slDist = slPipsCalc * spec.pipSize;
+    const entryOffset = slDist * 0.35;
+
+    const entryNum = isBuy ? livePrice - entryOffset : livePrice + entryOffset;
+    const slNum = isBuy ? entryNum - slDist : entryNum + slDist;
+    const tp1Mult = timeframe === 'M5' ? 1.25 : 1.35;
+    const tp2Mult = timeframe === 'M5' ? 2.00 : 2.20;
+    const tp3Mult = timeframe === 'M5' ? 2.80 : 3.20;
+
+    const tp1Num = isBuy ? entryNum + slDist * tp1Mult : entryNum - slDist * tp1Mult;
+    const tp2Num = isBuy ? entryNum + slDist * tp2Mult : entryNum - slDist * tp2Mult;
+    const tp3Num = isBuy ? entryNum + slDist * tp3Mult : entryNum - slDist * tp3Mult;
+
+    const zMin = Math.min(entryNum, livePrice);
+    const zMax = Math.max(entryNum, livePrice);
+
+    const tp1PipsCalc = Math.round(Math.abs(tp1Num - entryNum) / spec.pipSize);
+    const tp2PipsCalc = Math.round(Math.abs(tp2Num - entryNum) / spec.pipSize);
+    const tp3PipsCalc = Math.round(Math.abs(tp3Num - entryNum) / spec.pipSize);
+
+    const methodLabels = {
+      auto: ['Auto Sniper (Multi-Confluence)', 'AUTO'],
+      judas: ['ICT Judas Swing (Session Manipulation)', 'JUDAS'],
+      smc_ob: ['SMC Order Block + FVG Confluence', 'SMC OB'],
+      sweep: ['Liquidity Sweep (Turtle Soup Stop-Hunt)', 'SWEEP'],
+      silver_bullet: ['ICT Silver Bullet (Time-Window FVG)', 'SILVER BULLET'],
+      ote: ['FIB OTE (Optimal Trade Entry 0.62–0.79)', 'FIB OTE']
+    };
+    const [mLabel, mTag] = methodLabels[methodKey] || methodLabels.auto;
+
+    return {
+      status: 'SIGNAL',
+      pair,
+      timeframe,
+      methodKey,
+      methodLabel: mLabel,
+      methodShortTag: mTag,
+      direction: isBuy ? 'BUY' : 'SELL',
+      orderType: isBuy ? 'BUY LIMIT' : 'SELL LIMIT',
+      score: Number(Math.min(9.9, 8.2 + sopBonus).toFixed(1)),
+      zoneRangeFormatted: `${zMin.toFixed(dec)} – ${zMax.toFixed(dec)}`,
+      entryFmt: entryNum.toFixed(dec),
+      entryNote: isBuy ? 'Midpoint Bullish OB / FVG' : 'Midpoint Bearish OB / FVG',
+      slFmt: slNum.toFixed(dec),
+      slPips: slPipsCalc,
+      slReason: `Kalibrasi ${timeframe} (${slPipsCalc} pips)`,
+      tp1Fmt: tp1Num.toFixed(dec),
+      tp1Pips: tp1PipsCalc,
+      tp1Reason: `1:${tp1Mult} Internal High/Low`,
+      tp2Fmt: tp2Num.toFixed(dec),
+      tp2Pips: tp2PipsCalc,
+      tp2Reason: `1:${tp2Mult} Equilibrium`,
+      tp3Fmt: tp3Num.toFixed(dec),
+      tp3Pips: tp3PipsCalc,
+      tp3Reason: `1:${tp3Mult} HTF Pool`,
+      poiSummary: `Struktur ${pair} (${timeframe}) terdeteksi di area ${isBuy ? 'Discount' : 'Premium'} dengan konfluensi likuiditas sesi aktif.`,
+      educationHtml: `<p><strong>${isBuy ? 'BUY LIMIT' : 'SELL LIMIT'}</strong> ditempatkan pada area POI terkonfirmasi dengan skala SL/TP ${timeframe} dan manajemen risiko terukur.</p>`,
+      pipValuePerLot: spec.pipValuePerLot
+    };
+  }
+
+  function computePositionSizeSafe(acc, sig) {
+    const spec = getPairSpecSafe(sig.pair);
+    const equity = Number(acc && (acc.equity !== undefined ? acc.equity : acc.balance)) || 1000;
+    const riskPct = Number(acc && acc.riskPct) || 0.4;
+    const hardMaxLot = Number(acc && acc.maxLot) || 0.15;
+
+    if (global.LiamMethods && typeof global.LiamMethods.calculatePositionSize === 'function') {
+      const calc = global.LiamMethods.calculatePositionSize(
+        { equity, balance: equity, riskPct, maxLot: hardMaxLot },
+        sig
+      );
+      if (calc && Number(calc.lot) > 0) {
+        return {
+          lot: Number(calc.lot),
+          actualRiskDollar: Number(calc.actualRiskDollar) || 0,
+          tp1Dollar: Number(calc.tp1Dollar) || 0,
+          tp2Dollar: Number(calc.tp2Dollar) || 0,
+          tp3Dollar: Number(calc.tp3Dollar) || 0,
+          wasCapped: Boolean(calc.wasCapped)
+        };
+      }
+    }
+
+    const targetRiskDollar = equity * (riskPct / 100);
+    const slPips = Math.max(1, Number(sig.slPips) || 20);
+    const rawLot = targetRiskDollar / (slPips * spec.pipValuePerLot);
+    let lot = Math.max(0.01, Math.floor(rawLot * 100) / 100);
+    let wasCapped = false;
+    if (lot > hardMaxLot) {
+      lot = hardMaxLot;
+      wasCapped = true;
+    }
+
+    const actualRiskDollar = Number((lot * slPips * spec.pipValuePerLot).toFixed(2));
+    const tp1Dollar = Number((lot * (Number(sig.tp1Pips) || 0) * spec.pipValuePerLot).toFixed(2));
+    const tp2Dollar = Number((lot * (Number(sig.tp2Pips) || 0) * spec.pipValuePerLot).toFixed(2));
+    const tp3Dollar = Number((lot * (Number(sig.tp3Pips) || 0) * spec.pipValuePerLot).toFixed(2));
+
+    return {
+      lot: Number(lot.toFixed(2)),
+      actualRiskDollar,
+      tp1Dollar,
+      tp2Dollar,
+      tp3Dollar,
+      wasCapped
+    };
+  }
+
   function recalculateAndRenderSignal(allowAutoTelegram = false) {
     document.querySelectorAll('.pair-select-btn').forEach((btn) => {
       const p = btn.getAttribute('data-pair');
@@ -1648,74 +1840,40 @@
     const sop = getSopProgress();
     const livePrice = getCalibratedPrice(state.signal.pair);
     const acc = getActiveAccount();
+    const pair = state.signal.pair || 'XAUUSD';
+    const tf = state.signal.timeframe || 'M15';
+    const methodKey = state.signal.method || 'auto';
+    const seed = Number(state.signal.scanSeed) || 1;
+    const nowMs = Date.now();
+    const lastSyncMs = Number(state.lastPriceSyncMs) || nowMs;
+
     let sig = null;
     try {
-      sig = global.LiamMethods.buildSignalSetup({
-        pair: state.signal.pair,
-        timeframe: state.signal.timeframe,
-        method: state.signal.method,
-        livePrice,
-        scanSeed: state.signal.scanSeed,
-        sopScoreBonus: sop.scoreBonus
-      });
+      if (global.LiamMethods && typeof global.LiamMethods.buildSignalSetup === 'function') {
+        const rawSig = global.LiamMethods.buildSignalSetup({
+          pair,
+          timeframe: tf,
+          method: methodKey,
+          livePrice,
+          nowMs,
+          lastUpdateTs: lastSyncMs,
+          maxDataAgeMs: 120000,
+          scanSeed: seed,
+          sopScoreBonus: sop.scoreBonus
+        });
+        if (rawSig && rawSig.status === 'SIGNAL' && rawSig.entryFmt && rawSig.entryFmt !== '--') {
+          sig = rawSig;
+        }
+      }
     } catch (_) {
       sig = null;
     }
 
-    if (!sig || !sig.entryFmt || sig.entryFmt === '--') {
-      const pair = state.signal.pair || 'XAUUSD';
-      const dec = pair === 'EURUSD' ? 5 : 2;
-      const isBuy = (Number(state.signal.scanSeed) || 1) % 2 === 1;
-      const slDist = pair === 'XAUUSD' ? 8.5 : pair === 'US100' ? 65 : pair === 'BTCUSDT' ? 550 : 0.0020;
-      const entryNum = isBuy ? livePrice - slDist * 0.4 : livePrice + slDist * 0.4;
-      const slNum = isBuy ? entryNum - slDist : entryNum + slDist;
-      const tp1Num = isBuy ? entryNum + slDist * 1.3 : entryNum - slDist * 1.3;
-      const tp2Num = isBuy ? entryNum + slDist * 2.2 : entryNum - slDist * 2.2;
-      const tp3Num = isBuy ? entryNum + slDist * 3.2 : entryNum - slDist * 3.2;
-      const zMin = Math.min(entryNum, livePrice);
-      const zMax = Math.max(entryNum, livePrice);
-      const pipFactor = pair === 'EURUSD' ? 10000 : 10;
-      const slPipsCalc = Math.max(10, Math.round(Math.abs(entryNum - slNum) * pipFactor));
-      const tp1PipsCalc = Math.max(15, Math.round(Math.abs(tp1Num - entryNum) * pipFactor));
-      const tp2PipsCalc = Math.max(25, Math.round(Math.abs(tp2Num - entryNum) * pipFactor));
-      const tp3PipsCalc = Math.max(40, Math.round(Math.abs(tp3Num - entryNum) * pipFactor));
-
-      sig = {
-        pair,
-        timeframe: state.signal.timeframe || 'M15',
-        methodKey: state.signal.method || 'auto',
-        methodLabel: 'Auto Sniper (Multi-Confluence)',
-        methodShortTag: 'AUTO',
-        direction: isBuy ? 'BUY' : 'SELL',
-        orderType: isBuy ? 'BUY LIMIT' : 'SELL LIMIT',
-        score: Number((8.2 + sop.scoreBonus).toFixed(1)),
-        zoneRangeFormatted: `${zMin.toFixed(dec)} - ${zMax.toFixed(dec)}`,
-        entryFmt: entryNum.toFixed(dec),
-        entryNote: isBuy ? 'Midpoint Bullish OB / FVG' : 'Midpoint Bearish OB / FVG',
-        slFmt: slNum.toFixed(dec),
-        slPips: slPipsCalc,
-        slReason: isBuy ? 'Di bawah Swing Low' : 'Di atas Swing High',
-        tp1Fmt: tp1Num.toFixed(dec),
-        tp1Pips: tp1PipsCalc,
-        tp1Reason: '1:1.3 Internal High/Low',
-        tp2Fmt: tp2Num.toFixed(dec),
-        tp2Pips: tp2PipsCalc,
-        tp2Reason: '1:2.2 Equilibrium',
-        tp3Fmt: tp3Num.toFixed(dec),
-        tp3Pips: tp3PipsCalc,
-        tp3Reason: '1:3.2+ HTF Pool',
-        poiSummary: `Struktur ${pair} terdeteksi di area ${isBuy ? 'Discount' : 'Premium'} dengan konfluensi likuiditas sesi aktif.`,
-        educationHtml: `<p><strong>${isBuy ? 'BUY LIMIT' : 'SELL LIMIT'}</strong> ditempatkan pada area POI terkonfirmasi dengan manajemen risiko terukur.</p>`
-      };
+    if (!sig) {
+      sig = computeFallbackSignalSetup(pair, tf, methodKey, livePrice, seed, sop.scoreBonus);
     }
 
-    let pos = { lot: 0.02, actualRiskDollar: 4.0, tp2Dollar: 8.8, wasCapped: false };
-    try {
-      if (global.LiamMethods && typeof global.LiamMethods.calculatePositionSize === 'function') {
-        pos = global.LiamMethods.calculatePositionSize(acc || { equity: 1000, balance: 1000, riskPct: 0.4, maxLot: 0.15 }, sig);
-      }
-    } catch (_) {}
-
+    const pos = computePositionSizeSafe(acc, sig);
     sig.pos = pos;
     currentSignalObj = sig;
 
@@ -1729,11 +1887,11 @@
 
     setText('sig-pair-tf', `${sig.pair} • ${sig.timeframe}`);
     setText('sig-method-label', sig.methodLabel);
-    setText('sig-score-label', `Score ${sig.score.toFixed(1)}/10`);
+    setText('sig-score-label', `Score ${Number(sig.score || 8.2).toFixed(1)}/10`);
 
     const dirBadge = document.getElementById('sig-direction-badge');
     if (dirBadge) {
-      dirBadge.textContent = isBuy ? `● ${sig.orderType}` : `● ${sig.orderType}`;
+      dirBadge.textContent = `● ${sig.orderType}`;
       dirBadge.className = isBuy
         ? 'px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-xs font-extrabold tracking-wide shrink-0'
         : 'px-3 py-1 rounded-full bg-rose-500/20 border border-rose-400/50 text-rose-300 text-xs font-extrabold tracking-wide shrink-0';
@@ -1770,7 +1928,7 @@
     }
 
     const eduContentEl = document.getElementById('poi-edu-content');
-    if (eduContentEl) eduContentEl.innerHTML = sig.educationHtml;
+    if (eduContentEl) eduContentEl.innerHTML = sig.educationHtml || '';
 
     setText('sig-account-name', acc ? acc.name : 'Account');
     setText('sig-lot-risk', `Lot: ${pos.lot.toFixed(2)} (Risk ${acc ? acc.riskPct : 0.4}%)`);
@@ -1797,11 +1955,11 @@
 
     if (allowAutoTelegram && state.config.engineMasterActive && state.config.tgAutoSignal) {
       const sigKey = `${sig.pair}|${sig.timeframe}|${sig.methodKey}|${sig.direction}|${sig.entryFmt}|${sig.slFmt}|${sig.tp2Fmt}`;
-      const nowMs = Date.now();
-      const cooldownPassed = nowMs - lastAutoSentSignalTimeMs >= AUTO_TELEGRAM_COOLDOWN_MS;
+      const tsNow = Date.now();
+      const cooldownPassed = tsNow - lastAutoSentSignalTimeMs >= AUTO_TELEGRAM_COOLDOWN_MS;
       if (sigKey !== lastAutoSentSignalKey || cooldownPassed) {
         lastAutoSentSignalKey = sigKey;
-        lastAutoSentSignalTimeMs = nowMs;
+        lastAutoSentSignalTimeMs = tsNow;
         sendCurrentSignalToTelegramOnly(false);
       }
     }
@@ -1810,7 +1968,7 @@
   function updateSignalExpiryTicker() {
     const el = document.getElementById('sig-expiry-timer');
     if (!el) return;
-    const tfMin = global.LiamMethods?.TF_MULTIPLIERS?.[state.signal?.timeframe]?.expiryMin || 45;
+    const tfMin = getTfConfig(state.signal?.timeframe).expiryMin || 45;
     const maxWindowMs = tfMin * 60000;
     const now = Date.now();
     let endMs = Number(state.signal?.expiryEndMs) || 0;
@@ -1948,7 +2106,7 @@
     const msg = [
       `🎯 <b>XLIAMVR SNIPER SIGNAL</b>`,
       `📈 Pair: <b>${escapeHtml(s.pair)}</b> • Timeframe: <b>${escapeHtml(s.timeframe)}</b>`,
-      `🧭 Arah: <b>${escapeHtml(s.orderType)}</b> (${escapeHtml(s.methodShortTag)}) • Score: <code>${escapeHtml(s.score.toFixed(1))}/10</code>`,
+      `🧭 Arah: <b>${escapeHtml(s.orderType)}</b> (${escapeHtml(s.methodShortTag)}) • Score: <code>${escapeHtml(Number(s.score || 8.2).toFixed(1))}/10</code>`,
       `📐 Zona POI: <code>${escapeHtml(s.zoneRangeFormatted)}</code>`,
       `📍 Entry: <code>${escapeHtml(s.entryFmt)}</code>`,
       `🛑 SL: <code>${escapeHtml(s.slFmt)}</code> (-${escapeHtml(s.slPips)} pips)`,
@@ -2289,19 +2447,19 @@
     const price = getCalibratedPrice(pair);
     const tf = state.signal.timeframe || 'M15';
     const seed = Number(state.signal.scanSeed) || 1;
-    const spec = global.LiamMethods?.getPairSpec ? global.LiamMethods.getPairSpec(pair) : { decimals: pair === 'EURUSD' ? 5 : 2 };
+    const spec = getPairSpecSafe(pair);
     const dec = spec.decimals;
 
     let dr = null;
     try {
-      dr = global.LiamMethods?.analyzeDealingRange
-        ? global.LiamMethods.analyzeDealingRange(pair, price, tf, seed)
+      dr = global.LiamMethods && typeof global.LiamMethods.analyzeDealingRange === 'function'
+        ? global.LiamMethods.analyzeDealingRange(pair, price, tf, seed, { nowMs: Date.now() })
         : null;
     } catch (_) {
       dr = null;
     }
 
-    const baseSpan = pair === 'EURUSD' ? 0.0042 : pair === 'XAUUSD' ? 16.5 : pair === 'BTCUSDT' ? 1350 : 160;
+    const baseSpan = pair === 'EURUSD' ? 0.0042 : pair === 'XAUUSD' ? 12.0 : pair === 'BTCUSDT' ? 850 : 120;
     const swingHighNum = Number.isFinite(Number(dr?.swingHigh)) ? Number(dr.swingHigh) : price + baseSpan * 0.55;
     const swingLowNum = Number.isFinite(Number(dr?.swingLow)) ? Number(dr.swingLow) : price - baseSpan * 0.45;
     const totalRangeNum = Math.max(0.00001, Math.abs(swingHighNum - swingLowNum));
@@ -2312,7 +2470,7 @@
 
     const highFmt = dr?.swingHighFmt || swingHighNum.toFixed(dec);
     const lowFmt = dr?.swingLowFmt || swingLowNum.toFixed(dec);
-    const rangeFmt = dr?.totalRange ? global.LiamMethods.formatPrice(pair, dr.totalRange) : totalRangeNum.toFixed(dec);
+    const rangeFmt = dr?.totalRange ? formatPriceSafe(pair, dr.totalRange) : totalRangeNum.toFixed(dec);
     const eqFmt = dr?.equilibriumFmt || eqNum.toFixed(dec);
 
     const shEl = document.getElementById('chart-swing-high');
@@ -2443,7 +2601,6 @@
     syncLiveMarketPrices(false);
   }
 
-  // Supabase 2-Way Sync (via REST table `terminal_sync` dengan fallback lokal aman)
   async function pushDataToSupabase() {
     const sbUrl = (state.config.sbUrl || '').replace(/\/+$/, '');
     const sbKey = state.config.sbKey || '';
@@ -2551,7 +2708,6 @@
     reader.readAsText(file);
   }
 
-  // Native Push Notification HP
   function updatePushPermissionLabel() {
     const el = document.getElementById('push-permission-status');
     if (!el) return;
@@ -2584,7 +2740,6 @@
     showToast('Notifikasi tes dikirim ke perangkat!', 'success');
   }
 
-  // Telegram Bot Dispatcher
   async function dispatchTelegramMessage(htmlText, showFeedback = true) {
     const token = (state.config.tgToken || '').trim();
     const chatId = (state.config.tgChatId || '').trim();
@@ -2634,9 +2789,6 @@
     openModal('modal-guide');
   }
 
-  // =========================================================================
-  // SMALL DOM UTILITIES
-  // =========================================================================
   function setText(id, val) {
     const el = document.getElementById(id);
     if (el) el.textContent = String(val);
@@ -2661,9 +2813,6 @@
     return `${String(wib.getHours()).padStart(2, '0')}:${String(wib.getMinutes()).padStart(2, '0')} WIB`;
   }
 
-  // =========================================================================
-  // EXPOSE GLOBAL HANDLERS & BOOTSTRAP
-  // =========================================================================
   Object.assign(global, {
     switchMainTab,
     toggleThemeMode,
@@ -2749,14 +2898,10 @@
     populateProfileInputs();
     updateClockAndSessions();
 
-    // Sync harga live & news wire saat startup
     syncLiveMarketPrices(false);
     syncNewsEngine(false);
 
-    // Tick setiap 1 detik untuk jam WIB, cooldown & timer expiry sinyal
     setInterval(updateClockAndSessions, 1000);
-
-    // Auto-refresh harga live & sinyal otomatis (anti-spam) setiap 25 detik
     setInterval(() => syncLiveMarketPrices(false), 25000);
   });
 })(window);
