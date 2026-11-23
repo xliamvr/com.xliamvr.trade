@@ -1482,6 +1482,32 @@
     </div>
   </div>
 
+  <!-- SAFE FALLBACK GUARD FOR NEW OPTIONAL HANDLERS -->
+  <script>
+    (function () {
+      const safeDefaults = {
+        toggleNewsLockWarning: function () {
+          const btn = document.getElementById('btn-news-lock-warning');
+          const banner = document.getElementById('news-lock-warning-banner');
+          if (!btn) return;
+          const isOn = btn.dataset.warnOn !== 'false';
+          const nextOn = !isOn;
+          btn.dataset.warnOn = String(nextOn);
+          btn.textContent = nextOn ? '🔔 News Lock Warn: ON' : '🔕 News Lock Warn: OFF';
+          if (banner && !nextOn) banner.classList.add('hidden');
+        },
+        applyManualTpHitForLog: function () {},
+        moveActiveTradeToBreakeven: function () {},
+        cutActiveTradeNow: function () {}
+      };
+      Object.keys(safeDefaults).forEach(function (fnName) {
+        if (typeof window[fnName] !== 'function') {
+          window[fnName] = safeDefaults[fnName];
+        }
+      });
+    })();
+  </script>
+
   <!-- SCRIPTS -->
   <script src="methods.js"></script>
   <script src="news.js"></script>
