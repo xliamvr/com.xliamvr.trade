@@ -540,7 +540,6 @@
     // Perhitungan level & zona berbeda per metode
     if (direction === 'BUY') {
       if (methodKey === 'ote') {
-        // FIB OTE: zona retracement 0.618 - 0.786 (titik acuan 0.705)
         const fib705 = dr.swingHigh - dr.totalRange * 0.705;
         const fib786 = dr.swingHigh - dr.totalRange * 0.786;
         const fib618 = dr.swingHigh - dr.totalRange * 0.618;
@@ -550,7 +549,6 @@
         entryNote = 'FIB OTE 0.705 (Zona 0.618–0.786)';
         poiSummary = `OTE Fibo BUY: Area 0.618–0.786 di sekitar ${formatPrice(pair, entry)}.`;
       } else if (methodKey === 'smc_ob') {
-        // SMC Order Block + FVG: zona OB di bagian bawah range
         const obBottom = dr.swingLow + dr.totalRange * 0.12;
         const obTop = dr.swingLow + dr.totalRange * 0.24;
         entry = Math.min(livePrice - spec.pipSize * 4, (obBottom + obTop) / 2);
@@ -559,28 +557,24 @@
         entryNote = 'SMC Bullish OB + FVG Mean Threshold';
         poiSummary = `SMC OB+FVG BUY: Zona OB ${formatPrice(pair, zoneLow)} – ${formatPrice(pair, zoneHigh)}.`;
       } else if (methodKey === 'sweep') {
-        // Liquidity Sweep: reaksi setelah menyapu area low/EQL
         entry = Math.min(livePrice - spec.pipSize * 4, dr.swingLow + spec.pipSize * 6);
         zoneLow = dr.swingLow - spec.pipSize * 4;
         zoneHigh = entry + spec.pipSize * 5;
         entryNote = 'Reversal setelah Liquidity Sweep Low';
         poiSummary = `Liquidity Sweep BUY: Area pantulan dekat low ${slFmt}.`;
       } else if (methodKey === 'judas') {
-        // Judas Swing: retest setelah manipulasi awal sesi ke bawah
         entry = Math.min(livePrice - spec.pipSize * 4, dr.swingLow + dr.unitAtr * 0.15);
         zoneLow = entry - dr.unitAtr * 0.08;
         zoneHigh = entry + dr.unitAtr * 0.08;
         entryNote = 'Retest pasca Judas Swing Low';
         poiSummary = `Judas Swing BUY: Retest area bawah setelah gerakan awal sesi.`;
       } else if (methodKey === 'silver_bullet') {
-        // Silver Bullet: FVG dalam jam killzone spesifik
         entry = Math.min(livePrice - spec.pipSize * 4, livePrice - dr.unitAtr * 0.18);
         zoneLow = entry - dr.unitAtr * 0.08;
         zoneHigh = entry + dr.unitAtr * 0.08;
         entryNote = 'Silver Bullet FVG Window';
         poiSummary = `Silver Bullet BUY: Zona FVG pada jendela waktu aktif.`;
       } else {
-        // Auto Sniper: konfluensi area discount / equilibrium
         entry = Math.min(livePrice - spec.pipSize * 4, livePrice - dr.unitAtr * 0.20);
         zoneLow = entry - dr.unitAtr * 0.10;
         zoneHigh = entry + dr.unitAtr * 0.10;
@@ -600,7 +594,6 @@
         slReason = `Berbasis ${tfCfg.slAtrFactor}x ATR ${timeframe} + spread ${spreadPips} pip`;
       }
     } else {
-      // SELL
       if (methodKey === 'ote') {
         const fib705 = dr.swingLow + dr.totalRange * 0.705;
         const fib618 = dr.swingLow + dr.totalRange * 0.618;
@@ -796,6 +789,161 @@
     };
   }
 
+  /* =========================================================================
+     TAMBAHAN HELPER: RUNNING STATUS, MANUAL TP / BE / CUT & NEWS LOCK WARN
+     ========================================================================= */
+
+  function evaluateRunningPositionMetrics(tradeOrSignal, currentPrice, options) {
+    const src = tradeOrSignal || {};
+    const opts = options || {};
+    const pair = src.pair || opts.pair || 'XAUUSD';
+    const spec = getPairSpec(pair);
+    const direction = (src.direction || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : 'BUY';
+    const entry = Number(src.entry);
+    const sl = Number(src.sl);
+    const tp1 = Number(src.tp1);
+    const tp2 = Number(src.tp2);
+    const tp3 = Number(src.tp3);
+    const price = Number(currentPrice);
+    const lot = Number.isFinite(Number(opts.lot)) ? Number(opts.lot) : (Number(src.lot) || 0.01);
+    const pipValPerLot = Number(src.pipValuePerLot) || spec.pipValuePerLot;
+
+    const forcedStatus = (opts.forcedStatus || src.status || '').toUpperCase();
+    if (['TP1', 'TP2', 'TP3', 'BE', 'SL', 'CUT', 'CANCEL'].includes(forcedStatus)) {
+      const closedPips = Number.isFinite(Number(opts.closedPips))
+        ? Number(opts.closedPips)
+        : (forcedStatus === 'BE' || forcedStatus === 'CANCEL' ? 0 : (forcedStatus === 'SL' ? -Math.abs(Number(src.slPips) || 0) : Math.abs(Number(src.tp1Pips) || 0)));
+      const closedUsd = Number.isFinite(Number(opts.closedUsd))
+        ? Number(opts.closedUsd)
+        : Number((closedPips * pipValPerLot * lot).toFixed(2));
+      return {
+        isTriggered: true,
+        isClosed: true,
+        status: forcedStatus,
+        deltaPips: closedPips,
+        floatingUsd: closedUsd
+      };
+    }
+
+    if (!Number.isFinite(entry) || !Number.isFinite(price)) {
+      return {
+        isTriggered: false,
+        isClosed: false,
+        status: 'MENUNGGU LIMIT',
+        deltaPips: 0,
+        floatingUsd: 0
+      };
+    }
+
+    const isTriggered = direction === 'BUY'
+      ? (price <= entry || Boolean(opts.isTriggered))
+      : (price >= entry || Boolean(opts.isTriggered));
+
+    if (!isTriggered) {
+      return {
+        isTriggered: false,
+        isClosed: false,
+        status: 'MENUNGGU LIMIT',
+        deltaPips: 0,
+        floatingUsd: 0
+      };
+    }
+
+    const signedDiff = direction === 'BUY' ? (price - entry) : (entry - price);
+    const absPips = toPips(pair, signedDiff);
+    const deltaPips = signedDiff >= 0 ? absPips : -absPips;
+    const floatingUsd = Number((deltaPips * pipValPerLot * lot).toFixed(2));
+
+    let status = 'RUNNING';
+    if (Number.isFinite(tp3) && (direction === 'BUY' ? price >= tp3 : price <= tp3)) {
+      status = 'TP3';
+    } else if (Number.isFinite(tp2) && (direction === 'BUY' ? price >= tp2 : price <= tp2)) {
+      status = 'TP2';
+    } else if (Number.isFinite(tp1) && (direction === 'BUY' ? price >= tp1 : price <= tp1)) {
+      status = 'TP1';
+    } else if (Number.isFinite(sl) && Math.abs(sl - entry) <= spec.pipSize * 0.5 && Math.abs(price - entry) <= spec.pipSize * 1.5) {
+      status = 'BE';
+    } else if (Number.isFinite(sl) && (direction === 'BUY' ? price <= sl : price >= sl)) {
+      status = 'SL';
+    }
+
+    return {
+      isTriggered: true,
+      isClosed: ['TP1', 'TP2', 'TP3', 'SL'].includes(status),
+      status,
+      deltaPips,
+      floatingUsd
+    };
+  }
+
+  function calculateManualTpMetrics(tradeOrSignal, manualTpPrice, lot) {
+    const src = tradeOrSignal || {};
+    const pair = src.pair || 'XAUUSD';
+    const spec = getPairSpec(pair);
+    const direction = (src.direction || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : 'BUY';
+    const entry = Number(src.entry);
+    const tpVal = Number(manualTpPrice);
+    const safeLot = Number.isFinite(Number(lot)) && Number(lot) > 0 ? Number(lot) : (Number(src.lot) || 0.01);
+    const pipValPerLot = Number(src.pipValuePerLot) || spec.pipValuePerLot;
+
+    if (!Number.isFinite(entry) || !Number.isFinite(tpVal)) {
+      return { valid: false, tpPips: 0, tpDollar: 0 };
+    }
+
+    const signedMove = direction === 'BUY' ? (tpVal - entry) : (entry - tpVal);
+    const absPips = toPips(pair, signedMove);
+    const tpPips = signedMove >= 0 ? absPips : -absPips;
+    const tpDollar = Number((tpPips * pipValPerLot * safeLot).toFixed(2));
+
+    return {
+      valid: true,
+      tpPips,
+      tpDollar,
+      tpFmt: formatPrice(pair, tpVal)
+    };
+  }
+
+  function evaluateNewsLockStatus(options) {
+    const opts = options || {};
+    const nowMs = Number.isFinite(Number(opts.nowMs)) ? Number(opts.nowMs) : Date.now();
+    const lockWindowMs = Number.isFinite(Number(opts.lockWindowMs)) ? Number(opts.lockWindowMs) : 30 * 60 * 1000;
+    const highImpactEvents = Array.isArray(opts.highImpactEvents) ? opts.highImpactEvents : [];
+
+    const matchedEvent = highImpactEvents.find((ev) => {
+      const evTs = Number(ev && (ev.timestampMs || ev.timeMs || ev.ts));
+      return Number.isFinite(evTs) && Math.abs(nowMs - evTs) <= lockWindowMs;
+    });
+
+    const isLocked = Boolean(opts.newsLockActive) || Boolean(matchedEvent);
+    const direction = (opts.direction || '').toUpperCase();
+    const rawNewsBias = (opts.newsBias || '').toUpperCase();
+    const hasConflict = Boolean(direction && (rawNewsBias === 'BUY' || rawNewsBias === 'SELL') && rawNewsBias !== direction);
+
+    let severity = 'NONE';
+    let warningTitle = '';
+    let warningMessage = '';
+
+    if (isLocked) {
+      severity = 'LOCK';
+      const evTitle = matchedEvent && matchedEvent.title ? ` — ${matchedEvent.title}` : '';
+      warningTitle = `⚠️ NEWS LOCK AKTIF${evTitle}`;
+      warningMessage = `Waspada volatilitas tinggi & pelebaran spread di sekitar jendela news ±${Math.round(lockWindowMs / 60000)} menit.`;
+    } else if (hasConflict) {
+      severity = 'CONFLICT';
+      warningTitle = '⚠️ KONFLIK BIAS NEWS';
+      warningMessage = `Bias kalender news (${rawNewsBias}) berbeda dengan arah setup (${direction}); perhatikan reaksi rilis data.`;
+    }
+
+    return {
+      isLocked,
+      hasConflict,
+      severity,
+      matchedEvent: matchedEvent || null,
+      warningTitle,
+      warningMessage
+    };
+  }
+
   global.LiamMethods = {
     ENGINE_VERSION,
     DEFAULT_MAX_DATA_AGE_MS,
@@ -811,6 +959,9 @@
     clearLockedSignal,
     analyzeDealingRange,
     buildSignalSetup,
-    calculatePositionSize
+    calculatePositionSize,
+    evaluateRunningPositionMetrics,
+    calculateManualTpMetrics,
+    evaluateNewsLockStatus
   };
 })(window);
