@@ -1,10 +1,10 @@
 /*!
- * Liamvtrade — Service Worker & Offline Cache Controller v2.6
+ * Liamvtrade — Service Worker & Offline Cache Controller v2.7
  * Copyright (c) 2026 Ilham Maulana Nur Al Rasyid (@xliamvr)
  * Package ID: com.xliamvr.trade — All Rights Reserved.
  */
 
-const CACHE_NAME = 'liamvtrade-cache-v2.6';
+const CACHE_NAME = 'liamvtrade-cache-v2.7';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -44,18 +44,18 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url);
 
-  // Jangan cache API live market, news, atau Supabase
   if (
     url.hostname.includes('twelvedata.com') ||
     url.hostname.includes('cryptocompare.com') ||
     url.hostname.includes('coingecko.com') ||
+    url.hostname.includes('frankfurter.app') ||
+    url.hostname.includes('goldprice.org') ||
     url.hostname.includes('supabase.co') ||
     url.hostname.includes('telegram.org')
   ) {
     return;
   }
 
-  // Network-first untuk HTML & JS lokal agar update v2.6 langsung muncul
   if (url.origin === self.location.origin) {
     event.respondWith(
       fetch(req)
@@ -69,7 +69,6 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Cache-first untuk font & aset eksternal
   event.respondWith(
     caches.match(req).then((cached) => cached || fetch(req))
   );
