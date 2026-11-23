@@ -95,7 +95,6 @@
       color: #0f172a !important;
     }
 
-    /* Pertahankan teks putih pada tombol berlatar warna pekat */
     html:not(.dark) .bg-blue-600,
     html:not(.dark) .bg-blue-600 *,
     html:not(.dark) .bg-emerald-600,
@@ -222,7 +221,6 @@
   <!-- STICKY TOP HEADER -->
   <header class="sticky top-0 z-40 bg-[#070d19]/95 backdrop-blur-md border-b border-slate-800/80 px-3.5 py-2.5">
     <div class="max-w-lg mx-auto flex items-center justify-between gap-2">
-      <!-- Brand + Owner + WIB Clock -->
       <div class="flex items-center gap-2 min-w-0">
         <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-500/25 to-cyan-400/10 border border-sky-400/40 flex items-center justify-center shrink-0">
           <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
@@ -238,14 +236,12 @@
         </div>
       </div>
 
-      <!-- Live Price Ticker Pill (Tap to Calibrate Broker Price) -->
       <button type="button" onclick="openCalibrationModal()" title="Ketuk untuk Kalibrasi Harga Broker"
         class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-900/90 border border-slate-700/80 active:scale-95 transition shrink-0">
         <span id="header-feed-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
         <span id="header-ticker-text" class="text-[11px] font-mono font-bold text-emerald-300">XAUUSD --</span>
       </button>
 
-      <!-- Help & Theme Buttons -->
       <div class="flex items-center gap-1.5 shrink-0">
         <button type="button" onclick="openGuideModal()" aria-label="Panduan"
           class="w-8 h-8 rounded-full bg-slate-900 border border-slate-700/80 text-slate-300 text-xs font-bold flex items-center justify-center active:scale-95">
@@ -258,7 +254,6 @@
       </div>
     </div>
 
-    <!-- Global Broadcast Banner -->
     <div id="global-broadcast-bar" class="hidden max-w-lg mx-auto mt-2 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-400/40 text-amber-200 text-[11px] flex items-center justify-between gap-2">
       <span id="global-broadcast-text" class="truncate"></span>
       <button type="button" onclick="dismissBroadcastBanner()" class="text-amber-300 font-bold text-xs">✕</button>
@@ -273,7 +268,6 @@
          ===================================================================== -->
     <section id="tab-beranda" class="tab-pane active space-y-4">
 
-      <!-- Card 1: ICT Killzone & Session WIB -->
       <div class="glass-card rounded-2xl p-4 space-y-2.5">
         <div class="flex items-center justify-between gap-2">
           <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">ICT KILLZONE &amp; SESSION WIB</span>
@@ -297,7 +291,6 @@
         </div>
       </div>
 
-      <!-- Card 2: Circuit Breaker Harian & Anti-Revenge Cooldown -->
       <div class="glass-card rounded-2xl p-4 space-y-3">
         <div class="flex items-center justify-between gap-2">
           <span class="text-[10px] font-extrabold tracking-wider uppercase text-rose-400">CIRCUIT BREAKER HARIAN</span>
@@ -307,7 +300,6 @@
           </button>
         </div>
 
-        <!-- Active Account Quick Selector -->
         <div class="space-y-1">
           <label for="active-account-select" class="text-[11px] text-slate-400">Akun Aktif Dipantau:</label>
           <select id="active-account-select" onchange="switchActiveAccount(this.value)"
@@ -315,7 +307,6 @@
           </select>
         </div>
 
-        <!-- Anti-Revenge Cooldown Timer Banner -->
         <div id="cooldown-banner" class="hidden rounded-xl bg-rose-950/60 border border-rose-500/50 p-3 flex items-center justify-between gap-2">
           <div>
             <div class="text-[10px] font-extrabold uppercase tracking-wider text-rose-300">🧊 ANTI-REVENGE COOLDOWN AKTIF</div>
@@ -326,9 +317,7 @@
           </button>
         </div>
 
-        <!-- Max Entry / Hari & Max SL / Hari -->
         <div class="grid grid-cols-2 gap-2.5">
-          <!-- Max Entry -->
           <div class="rounded-xl bg-slate-900/75 border border-slate-800 p-3 space-y-2">
             <div class="flex items-center justify-between">
               <span class="text-[10px] font-extrabold uppercase text-slate-400">MAX ENTRY / HARI</span>
@@ -349,7 +338,6 @@
             </div>
           </div>
 
-          <!-- Max SL -->
           <div class="rounded-xl bg-slate-900/75 border border-slate-800 p-3 space-y-2">
             <div class="flex items-center justify-between">
               <span class="text-[10px] font-extrabold uppercase text-slate-400">MAX SL / HARI</span>
@@ -376,7 +364,6 @@
         </p>
       </div>
 
-      <!-- Card 3: Pre-Trade SOP Checklist -->
       <div class="glass-card rounded-2xl p-4 space-y-3">
         <div class="flex items-center justify-between gap-2">
           <div>
@@ -399,7 +386,6 @@
 
         <div id="sop-list-container" class="space-y-2"></div>
 
-        <!-- Add Custom SOP Item -->
         <div class="flex items-center gap-2 pt-1">
           <input id="new-sop-input" type="text" placeholder="Tambah aturan SOP kustom..."
             class="flex-1 rounded-xl bg-slate-900 border border-slate-700/80 px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500" />
@@ -414,7 +400,6 @@
         </div>
       </div>
 
-      <!-- Card 4: Prop Firm Portfolio & Accounts -->
       <div class="glass-card rounded-2xl p-4 space-y-3">
         <div class="flex items-center justify-between">
           <div>
@@ -426,7 +411,6 @@
           </span>
         </div>
 
-        <!-- 3 Summary Boxes -->
         <div class="grid grid-cols-3 gap-2">
           <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2.5">
             <div class="text-[9px] font-bold uppercase text-slate-400">TOTAL EKUITAS</div>
@@ -442,10 +426,8 @@
           </div>
         </div>
 
-        <!-- Account Cards List -->
         <div id="prop-accounts-list" class="space-y-2.5"></div>
 
-        <!-- Collapsible Add Account Drawer -->
         <div class="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
           <button type="button" onclick="toggleAddAccountDrawer()"
             class="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-bold text-sky-400">
@@ -531,7 +513,6 @@
           </button>
         </div>
 
-        <!-- Period Filter -->
         <div class="grid grid-cols-4 gap-1.5">
           <button type="button" data-news-period="today" onclick="setNewsPeriodFilter('today')" class="news-period-btn py-2 rounded-xl text-xs font-bold bg-blue-600 text-white">Hari Ini</button>
           <button type="button" data-news-period="week" onclick="setNewsPeriodFilter('week')" class="news-period-btn py-2 rounded-xl text-xs font-bold bg-slate-900 border border-slate-800 text-slate-300">Minggu Ini</button>
@@ -539,14 +520,12 @@
           <button type="button" data-news-period="all" onclick="setNewsPeriodFilter('all')" class="news-period-btn py-2 rounded-xl text-xs font-bold bg-slate-900 border border-slate-800 text-slate-300">Semua</button>
         </div>
 
-        <!-- Impact Filter -->
         <div class="grid grid-cols-3 gap-1.5">
           <button type="button" data-news-impact="all" onclick="setNewsImpactFilter('all')" class="news-impact-btn py-2 rounded-xl text-xs font-bold bg-blue-600 text-white">Semua Dampak</button>
           <button type="button" data-news-impact="high" onclick="setNewsImpactFilter('high')" class="news-impact-btn py-2 rounded-xl text-xs font-bold bg-slate-900 border border-slate-800 text-rose-300">🔴 High</button>
           <button type="button" data-news-impact="medium" onclick="setNewsImpactFilter('medium')" class="news-impact-btn py-2 rounded-xl text-xs font-bold bg-slate-900 border border-slate-800 text-amber-300">🟠 Medium</button>
         </div>
 
-        <!-- Pair Focus Filter -->
         <div class="grid grid-cols-5 gap-1">
           <button type="button" data-news-pair="ALL" onclick="setNewsPairFilter('ALL')" class="news-pair-btn py-1.5 rounded-lg text-[11px] font-bold bg-sky-500/20 border border-sky-400/50 text-sky-300">ALL</button>
           <button type="button" data-news-pair="XAUUSD" onclick="setNewsPairFilter('XAUUSD')" class="news-pair-btn py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">XAUUSD</button>
@@ -555,12 +534,10 @@
           <button type="button" data-news-pair="BTCUSDT" onclick="setNewsPairFilter('BTCUSDT')" class="news-pair-btn py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">BTCUSDT</button>
         </div>
 
-        <!-- Summary Banner -->
         <div id="news-summary-banner" class="rounded-xl bg-slate-900/90 border border-slate-800 p-3 text-xs text-slate-300 leading-relaxed">
           Memuat agenda berita makroekonomi...
         </div>
 
-        <!-- Banner: Scan Peluang News Terbaik -->
         <div id="best-news-opportunity-card" class="rounded-2xl bg-gradient-to-br from-amber-500/15 via-slate-900 to-cyan-500/15 border border-amber-400/40 p-3.5 space-y-2">
           <div class="flex items-center justify-between gap-2">
             <span class="text-[10px] font-extrabold tracking-wider uppercase text-amber-300">⚡ SCAN PELUANG NEWS TERBAIK</span>
@@ -572,7 +549,6 @@
         </div>
       </div>
 
-      <!-- Breaking Wire Section -->
       <div class="glass-card rounded-2xl p-4 space-y-2.5">
         <div class="flex items-center justify-between">
           <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">🌐 LIVE NEWS WIRE &amp; GEOPOLITIK</span>
@@ -581,16 +557,14 @@
         <div id="breaking-wire-list" class="space-y-2.5"></div>
       </div>
 
-      <!-- Economic Calendar Event Cards -->
       <div id="news-events-list" class="space-y-3.5"></div>
     </section>
 
     <!-- =====================================================================
-         TAB 3: SIGNALS (SNIPER ENGINE, INTERACTIVE POI, NEWS SNIPER, JOURNAL)
+         TAB 3: SIGNALS (SNIPER ENGINE, LIVE RUNNING, NEWS SNIPER, JOURNAL)
          ===================================================================== -->
     <section id="tab-signals" class="tab-pane space-y-4">
 
-      <!-- Engine Control Card -->
       <div class="glass-card rounded-2xl p-4 space-y-3">
         <div class="flex items-center justify-between gap-2">
           <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">ICT / SMC SNIPER ENGINE</span>
@@ -610,7 +584,6 @@
           </div>
         </div>
 
-        <!-- Collapsible Extra Filter Drawer -->
         <div id="signal-filter-drawer" class="hidden rounded-xl bg-slate-900/90 border border-slate-800 p-3 space-y-2 text-xs">
           <div class="font-bold text-slate-200">Filter Perlindungan Eksekusi Prop Firm:</div>
           <label class="flex items-center justify-between text-slate-300">
@@ -623,11 +596,14 @@
           </label>
         </div>
 
-        <!-- Quick Shield & Time Filter Chips -->
         <div class="flex flex-wrap gap-1.5">
           <button type="button" id="btn-news-shield" onclick="toggleTerminalFlag('newsShield')"
             class="px-2.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[11px] font-bold">
             🛡️ News Shield: ON
+          </button>
+          <button type="button" id="btn-news-lock-warning" onclick="toggleNewsLockWarning()"
+            class="px-2.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 text-[11px] font-bold">
+            🔔 News Lock Warn: ON
           </button>
           <button type="button" id="btn-monday-filter" onclick="toggleTerminalFlag('mondayFilter')"
             class="px-2.5 py-1.5 rounded-full bg-slate-900 border border-slate-700 text-slate-400 text-[11px] font-bold">
@@ -639,7 +615,6 @@
           </button>
         </div>
 
-        <!-- 4 Pair Selector Cards with Live Prices -->
         <div class="grid grid-cols-4 gap-1.5">
           <button type="button" data-pair="XAUUSD" onclick="selectSignalPair('XAUUSD')"
             class="pair-select-btn rounded-xl p-2 bg-blue-600 text-white text-center border border-blue-400/60 transition active:scale-95">
@@ -663,7 +638,6 @@
           </button>
         </div>
 
-        <!-- Timeframe Pills (Full Width 4 Columns) -->
         <div class="grid grid-cols-4 gap-1.5">
           <button type="button" data-tf="M5" onclick="selectSignalTimeframe('M5')" class="tf-select-btn py-2 rounded-xl text-xs font-extrabold bg-slate-900 border border-slate-800 text-slate-400">M5</button>
           <button type="button" data-tf="M15" onclick="selectSignalTimeframe('M15')" class="tf-select-btn py-2 rounded-xl text-xs font-extrabold bg-cyan-500 text-slate-950">M15</button>
@@ -671,7 +645,6 @@
           <button type="button" data-tf="H4" onclick="selectSignalTimeframe('H4')" class="tf-select-btn py-2 rounded-xl text-xs font-extrabold bg-slate-900 border border-slate-800 text-slate-400">H4</button>
         </div>
 
-        <!-- Full-Width Analysis Method Selector + Rescan Button (No Truncation!) -->
         <div class="flex items-center gap-2">
           <select id="signal-method-select" onchange="selectSignalMethod(this.value)"
             class="flex-1 min-w-0 rounded-xl bg-blue-600 text-white text-xs font-extrabold px-3 py-2.5 border border-blue-400/50 focus:outline-none">
@@ -703,7 +676,6 @@
           </button>
         </div>
 
-        <!-- Active News Sniper Signal Panel (Shown when ON) -->
         <div id="news-sniper-live-panel" class="hidden rounded-xl bg-amber-950/35 border border-amber-400/40 p-3 space-y-2">
           <div class="flex items-center justify-between gap-2">
             <span id="news-sniper-event-title" class="text-xs font-extrabold text-white">US High Impact News</span>
@@ -731,6 +703,9 @@
         </div>
       </div>
 
+      <!-- News Lock Warning Banner (Non-blocking warning) -->
+      <div id="news-lock-warning-banner" class="hidden rounded-2xl bg-amber-500/15 border border-amber-400/50 px-3.5 py-2.5 text-xs text-amber-200 leading-relaxed"></div>
+
       <!-- News Shield Status Banner -->
       <div id="news-shield-status-bar" class="rounded-2xl bg-amber-500/10 border border-amber-400/35 px-3.5 py-2.5 text-xs text-amber-200 leading-relaxed">
         🛡️ <strong>News Shield Aktif:</strong> Terminal memantau jadwal High Impact USD/EUR di tab News. Hindari entry ±15 menit saat rilis data merah.
@@ -738,13 +713,15 @@
 
       <!-- MAIN SNIPER SIGNAL CARD -->
       <div id="main-sniper-card" class="glass-card rounded-2xl p-4 border border-emerald-500/40 space-y-3.5">
-        <!-- Header Row -->
         <div class="flex items-start justify-between gap-2">
           <div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <h2 id="sig-pair-tf" class="text-xl font-extrabold text-white">XAUUSD • M15</h2>
               <span id="sig-expiry-timer" class="px-2 py-0.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-mono text-amber-300">
                 ⏳ 45:00
+              </span>
+              <span id="sig-live-status-badge" class="px-2.5 py-1 rounded-full border border-slate-700 bg-slate-800 text-[10px] font-mono font-extrabold text-slate-300">
+                ● MENUNGGU LIMIT
               </span>
             </div>
             <p class="text-xs text-slate-400 mt-0.5">
@@ -756,7 +733,35 @@
           </span>
         </div>
 
-        <!-- Zona Range Area Entry POI -->
+        <!-- Live Running Pips & Floating Readout -->
+        <div class="rounded-xl bg-slate-950/75 border border-slate-800/90 px-3 py-2 flex items-center justify-between gap-2 text-[11px] font-mono">
+          <span id="sig-live-delta-pips" class="text-cyan-300 font-bold">--</span>
+          <span id="sig-live-floating-usd" class="text-slate-300 font-bold">--</span>
+        </div>
+
+        <!-- Active Position Controls: Manual TP Input/Hit + SL->BE + Cut Now -->
+        <div id="sig-running-action-panel" class="hidden rounded-xl bg-slate-900/95 border border-cyan-500/35 p-3 space-y-2">
+          <div class="text-[10px] font-extrabold uppercase tracking-wider text-cyan-300">
+            ⚡ KONTROL POSISI RUNNING (MANUAL TP / SL→BE / CUT)
+          </div>
+          <div class="flex items-center gap-1.5">
+            <input id="sig-manual-tp-input" type="number" step="any" placeholder="Input TP manual..."
+              class="flex-1 min-w-0 rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-1.5 text-xs font-mono text-white" />
+            <button type="button" onclick="applyManualTpHitForLog()"
+              class="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-extrabold active:scale-95 shrink-0">
+              ✅ Hit TP
+            </button>
+            <button type="button" onclick="moveActiveTradeToBreakeven()"
+              class="px-2.5 py-1.5 rounded-lg bg-amber-500/20 border border-amber-400/40 text-amber-300 text-[11px] font-extrabold active:scale-95 shrink-0">
+              SL→BE
+            </button>
+            <button type="button" onclick="cutActiveTradeNow()"
+              class="px-2.5 py-1.5 rounded-lg bg-rose-500/20 border border-rose-400/40 text-rose-300 text-[11px] font-extrabold active:scale-95 shrink-0">
+              ✂️ Cut
+            </button>
+          </div>
+        </div>
+
         <div class="rounded-xl bg-slate-900/90 border border-sky-500/35 p-3 flex items-center justify-between gap-2">
           <div>
             <span class="text-[9px] font-extrabold uppercase tracking-wider text-sky-400 block">ZONA RANGE AREA ENTRY POI</span>
@@ -768,9 +773,7 @@
           </button>
         </div>
 
-        <!-- Entry & Stop Loss Grid -->
         <div class="grid grid-cols-2 gap-2.5">
-          <!-- Entry Card -->
           <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-3 space-y-1">
             <div class="flex items-center justify-between gap-1">
               <span id="sig-entry-type-label" class="text-[10px] font-extrabold uppercase text-slate-400">BUY LIMIT</span>
@@ -783,7 +786,6 @@
             <div id="sig-entry-note" class="text-[10px] text-slate-400 leading-tight">Midpoint Bullish OB / FVG</div>
           </div>
 
-          <!-- Stop Loss Card -->
           <div class="rounded-xl bg-rose-950/35 border border-rose-500/40 p-3 space-y-1">
             <div class="flex items-center justify-between gap-1">
               <span id="sig-sl-pips-label" class="text-[10px] font-extrabold uppercase text-rose-300">STOP LOSS (-0 pips)</span>
@@ -797,9 +799,7 @@
           </div>
         </div>
 
-        <!-- TP 1, TP 2, TP 3 Grid -->
         <div class="grid grid-cols-3 gap-2">
-          <!-- TP 1 -->
           <div class="rounded-xl bg-emerald-950/35 border border-emerald-500/35 p-2.5 space-y-1">
             <div class="flex items-center justify-between gap-1">
               <span id="sig-tp1-pips" class="text-[10px] font-extrabold text-emerald-300">TP 1 (+0)</span>
@@ -809,7 +809,6 @@
             <div id="sig-tp1-reason" class="text-[9px] text-slate-400 leading-tight">1:1.3 Internal High</div>
           </div>
 
-          <!-- TP 2 -->
           <div class="rounded-xl bg-emerald-950/35 border border-emerald-500/35 p-2.5 space-y-1">
             <div class="flex items-center justify-between gap-1">
               <span id="sig-tp2-pips" class="text-[10px] font-extrabold text-emerald-300">TP 2 (+0)</span>
@@ -819,7 +818,6 @@
             <div id="sig-tp2-reason" class="text-[9px] text-slate-400 leading-tight">1:2.2 Equilibrium</div>
           </div>
 
-          <!-- TP 3 -->
           <div class="rounded-xl bg-emerald-950/35 border border-emerald-500/35 p-2.5 space-y-1">
             <div class="flex items-center justify-between gap-1">
               <span id="sig-tp3-pips" class="text-[10px] font-extrabold text-emerald-300">TP 3 (+0)</span>
@@ -830,7 +828,6 @@
           </div>
         </div>
 
-        <!-- Interactive Struktur POI & Educational Accordion -->
         <div class="rounded-xl bg-slate-900/85 border border-slate-800 overflow-hidden">
           <button type="button" onclick="togglePoiEducationDrawer()"
             class="w-full p-3 text-left flex items-start justify-between gap-2 active:bg-slate-800/60 transition">
@@ -842,13 +839,11 @@
             </span>
           </button>
 
-          <!-- Expanded Educational Breakdown -->
           <div id="poi-education-drawer" class="hidden px-3 pb-3 pt-2 border-t border-slate-800/90 bg-slate-950/60 space-y-2 text-xs">
             <div id="poi-edu-content" class="space-y-2 text-slate-300 leading-relaxed"></div>
           </div>
         </div>
 
-        <!-- Account Risk & Lot Summary Box -->
         <div class="rounded-xl bg-slate-900/90 border border-slate-800 p-3 flex items-center justify-between gap-2">
           <div>
             <div class="text-xs font-extrabold text-white">
@@ -863,12 +858,10 @@
           </span>
         </div>
 
-        <!-- Lot Capped Warning -->
         <div id="sig-lot-warning" class="hidden rounded-xl bg-rose-950/50 border border-rose-500/40 px-3 py-2 text-[11px] text-rose-300">
           ⚠️ Lot dibatasi otomatis sesuai Hard Lot Max akun agar aturan Prop Firm tetap aman.
         </div>
 
-        <!-- Primary Action Buttons -->
         <button type="button" onclick="takeSetupAndSendTelegram()"
           class="w-full py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-400 text-slate-950 font-extrabold text-sm shadow-lg shadow-cyan-500/20 active:scale-98 transition">
           ⚡ Ambil Setup &amp; Kirim Tele
@@ -889,7 +882,6 @@
           </button>
         </div>
 
-        <!-- Standard Text Format Preview -->
         <pre id="standard-format-preview" class="hidden rounded-xl bg-slate-950 border border-slate-800 p-3 text-[11px] font-mono text-slate-300 whitespace-pre-wrap leading-relaxed"></pre>
       </div>
 
@@ -905,7 +897,6 @@
           </span>
         </div>
 
-        <!-- Period Filter -->
         <div class="grid grid-cols-5 gap-1">
           <button type="button" data-recap-period="today" onclick="setRecapPeriod('today')" class="recap-period-btn py-1.5 rounded-xl text-[11px] font-bold bg-blue-600 text-white">Hari Ini</button>
           <button type="button" data-recap-period="week" onclick="setRecapPeriod('week')" class="recap-period-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">Minggu</button>
@@ -914,7 +905,6 @@
           <button type="button" data-recap-period="all" onclick="setRecapPeriod('all')" class="recap-period-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">Semua</button>
         </div>
 
-        <!-- 8 Performance Metric Cards -->
         <div class="grid grid-cols-4 gap-1.5 text-center font-mono">
           <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2">
             <div class="text-[9px] text-slate-400">TP HIT</div>
@@ -950,7 +940,6 @@
           </div>
         </div>
 
-        <!-- Copy Rekap & Export CSV -->
         <div class="grid grid-cols-2 gap-2">
           <button type="button" onclick="copyPerformanceRecap()"
             class="py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-slate-200 active:scale-95">
@@ -962,7 +951,6 @@
           </button>
         </div>
 
-        <!-- Sub-tabs: Jurnal Sinyal vs Riwayat Eksekusi -->
         <div class="grid grid-cols-2 gap-1.5 bg-slate-950/80 p-1 rounded-2xl border border-slate-800">
           <button type="button" data-log-tab="signals" onclick="switchLogSubTab('signals')"
             class="log-subtab-btn py-2 rounded-xl text-xs font-extrabold bg-blue-600 text-white">
@@ -974,7 +962,6 @@
           </button>
         </div>
 
-        <!-- Status & Pair Filters -->
         <div class="flex items-center justify-between gap-2">
           <div class="flex gap-1.5">
             <button type="button" data-log-status="all" onclick="setLogStatusFilter('all')" class="log-status-btn px-3 py-1.5 rounded-full text-xs font-bold bg-cyan-500 text-slate-950">Semua</button>
@@ -994,7 +981,6 @@
           <button type="button" data-log-pair="EURUSD" onclick="setLogPairFilter('EURUSD')" class="log-pair-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">EURUSD</button>
         </div>
 
-        <!-- Trade Log Entries List -->
         <div id="trade-logs-container" class="space-y-2.5"></div>
       </div>
     </section>
@@ -1015,7 +1001,6 @@
           </button>
         </div>
 
-        <!-- Full-Width Pair Selector (Unlocked Symbols for TradingView Embed) -->
         <select id="chart-pair-select" onchange="changeChartPair(this.value)"
           class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2.5 text-xs font-extrabold text-white focus:outline-none focus:border-sky-500">
           <option value="XAUUSD">🥇 XAUUSD (OANDA:XAUUSD)</option>
@@ -1024,10 +1009,8 @@
           <option value="EURUSD">💱 EURUSD (FX:EURUSD)</option>
         </select>
 
-        <!-- TradingView Interactive Widget Container -->
         <div id="tv-chart-wrapper" class="w-full h-[380px] rounded-2xl overflow-hidden border border-slate-800 bg-slate-950"></div>
 
-        <!-- Structural Dealing Range Readout -->
         <div class="grid grid-cols-3 gap-2 text-center font-mono">
           <div class="rounded-xl bg-slate-900/85 border border-slate-800 p-2.5">
             <span class="text-[9px] text-slate-400 block">SWING HIGH</span>
@@ -1054,7 +1037,6 @@
          ===================================================================== -->
     <section id="tab-profil" class="tab-pane space-y-4">
 
-      <!-- Card 1: Super Admin Console -->
       <div class="glass-card rounded-2xl p-4 space-y-3 border border-amber-500/35">
         <div class="flex items-center justify-between gap-2">
           <div>
@@ -1068,7 +1050,6 @@
           Kelola siaran global, status mesin sinyal, sinkronisasi cloud Supabase 2-arah, dan distribusi kode akses member komersial.
         </p>
 
-        <!-- Global Broadcast -->
         <div class="space-y-1.5">
           <label class="text-[11px] font-bold text-slate-300 block">Pesan Global Broadcast (Tampil di Header):</label>
           <div class="flex gap-2">
@@ -1081,13 +1062,11 @@
           </div>
         </div>
 
-        <!-- Master Signal Engine Toggle -->
         <button type="button" id="btn-engine-master-toggle" onclick="toggleSignalEngineMaster()"
           class="w-full py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-extrabold active:scale-95 transition">
           🟢 Mesin Sinyal: AKTIF (Ketuk untuk Jeda)
         </button>
 
-        <!-- Supabase 2-Way Sync -->
         <div class="grid grid-cols-2 gap-2">
           <button type="button" onclick="pushDataToSupabase()"
             class="py-2.5 rounded-xl bg-blue-600 text-white text-xs font-extrabold active:scale-95">
@@ -1099,7 +1078,6 @@
           </button>
         </div>
 
-        <!-- Backup & Restore JSON -->
         <div class="grid grid-cols-2 gap-2">
           <button type="button" onclick="exportBackupJson()"
             class="py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-slate-200 active:scale-95">
@@ -1111,7 +1089,6 @@
           </label>
         </div>
 
-        <!-- Commercial Member Code Generator -->
         <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-3 space-y-2">
           <div class="flex items-center justify-between">
             <span class="text-xs font-bold text-slate-200">🔑 Manajemen Kode Member VIP</span>
@@ -1127,7 +1104,6 @@
         </div>
       </div>
 
-      <!-- Card 2: Native Push Notification HP -->
       <div class="glass-card rounded-2xl p-4 space-y-2.5">
         <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">REAL-TIME PUSH ALERT HP</span>
         <h3 class="text-base font-extrabold text-white">Notifikasi Layar Kunci &amp; Pop-Up</h3>
@@ -1144,7 +1120,6 @@
         </div>
       </div>
 
-      <!-- Card 3: Twelve Data & Supabase API Configuration -->
       <div class="glass-card rounded-2xl p-4 space-y-3">
         <div class="flex items-center justify-between">
           <div>
@@ -1173,7 +1148,6 @@
         </div>
       </div>
 
-      <!-- Card 4: VIP Telegram Bot Integration -->
       <div class="glass-card rounded-2xl p-4 space-y-3">
         <div>
           <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">TELEGRAM VIP DISPATCHER</span>
@@ -1193,7 +1167,6 @@
           </div>
         </div>
 
-        <!-- Auto Broadcast Switches -->
         <div class="space-y-2 pt-1 text-xs">
           <label class="flex items-center justify-between text-slate-300">
             <span>Auto-Kirim Sinyal Baru saat Pair/TF berubah</span>
@@ -1222,16 +1195,13 @@
       </div>
     </section>
 
-    <!-- FOOTER: CREDIT & COPYRIGHT -->
     <footer class="max-w-lg mx-auto pt-2 pb-4 text-center text-[11px] text-slate-400 space-y-0.5">
       <div class="font-mono font-semibold text-slate-300">Liamvtrade Quant Terminal v2.9</div>
       <div>Crafted by <span class="font-semibold text-sky-400">@xliamvr</span> • &copy; 2026 Liamvtrade. All rights reserved.</div>
     </footer>
   </main>
 
-  <!-- =========================================================================
-       BOTTOM NAVIGATION BAR (5 TABS WITH FLOATING CENTER SIGNALS BUTTON)
-       ========================================================================= -->
+  <!-- BOTTOM NAVIGATION BAR -->
   <nav class="fixed bottom-0 inset-x-0 z-40 bg-[#070d19]/95 backdrop-blur-lg border-t border-slate-800/90 px-2 py-1.5">
     <div class="max-w-lg mx-auto grid grid-cols-5 items-center">
       <button type="button" data-nav="beranda" onclick="switchMainTab('beranda')"
@@ -1250,7 +1220,6 @@
         <span class="text-[10px] font-bold">News</span>
       </button>
 
-      <!-- Floating Diamond Center Button: Signals -->
       <div class="flex flex-col items-center -mt-6">
         <button type="button" data-nav="signals" onclick="switchMainTab('signals')"
           aria-label="Signals Terminal"
@@ -1279,9 +1248,7 @@
     </div>
   </nav>
 
-  <!-- =========================================================================
-       MODAL 1: KALIBRASI HARGA BROKER & KALKULATOR LOT
-       ========================================================================= -->
+  <!-- MODAL 1: KALIBRASI HARGA BROKER & KALKULATOR LOT -->
   <div id="modal-calibration" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-3">
     <div class="glass-card w-full max-w-md rounded-2xl p-4 space-y-3 border border-slate-700">
       <div class="flex items-center justify-between">
@@ -1323,9 +1290,7 @@
     </div>
   </div>
 
-  <!-- =========================================================================
-       MODAL 2: EDIT SALDO & PARAMETER AKUN PROP FIRM LENGKAP
-       ========================================================================= -->
+  <!-- MODAL 2: EDIT SALDO & PARAMETER AKUN PROP FIRM LENGKAP -->
   <div id="modal-edit-account" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-3 overflow-y-auto">
     <div class="glass-card w-full max-w-md rounded-2xl p-4 space-y-3 border border-slate-700 my-auto">
       <div class="flex items-center justify-between">
@@ -1424,9 +1389,7 @@
     </div>
   </div>
 
-  <!-- =========================================================================
-       MODAL 3: PANDUAN CEPAT TERMINAL
-       ========================================================================= -->
+  <!-- MODAL 3: PANDUAN CEPAT TERMINAL -->
   <div id="modal-guide" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="glass-card w-full max-w-md rounded-2xl p-4 space-y-3 border border-slate-700">
       <div class="flex items-center justify-between">
