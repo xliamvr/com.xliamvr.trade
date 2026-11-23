@@ -6,7 +6,7 @@
   <meta name="theme-color" content="#070B14" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <title>Liamvtrade Quant Terminal v2.6 — @xliamvr</title>
+  <title>Liamvtrade Quant Terminal v2.7 — @xliamvr</title>
   <link rel="manifest" href="./manifest.json" />
 
   <!-- Institutional Font Pairing: Space Grotesk + Plus Jakarta Sans + JetBrains Mono -->
@@ -19,17 +19,17 @@
   <style>
     :root[data-theme="dark"] {
       --bg-primary: #070B14;
-      --bg-card: rgba(14, 21, 38, 0.86);
+      --bg-card: rgba(14, 21, 38, 0.88);
       --text-primary: #F1F5F9;
-      --border-subtle: rgba(148, 163, 184, 0.14);
-      --nav-bg: rgba(10, 16, 30, 0.94);
+      --border-subtle: rgba(148, 163, 184, 0.15);
+      --nav-bg: rgba(10, 16, 30, 0.95);
     }
     :root[data-theme="light"] {
       --bg-primary: #F1F5F9;
-      --bg-card: rgba(255, 255, 255, 0.92);
+      --bg-card: rgba(255, 255, 255, 0.94);
       --text-primary: #0F172A;
       --border-subtle: rgba(15, 23, 42, 0.10);
-      --nav-bg: rgba(255, 255, 255, 0.95);
+      --nav-bg: rgba(255, 255, 255, 0.96);
     }
 
     * {
@@ -79,7 +79,7 @@
     }
 
     .safe-bottom-space {
-      padding-bottom: calc(7.5rem + env(safe-area-inset-bottom));
+      padding-bottom: calc(8.5rem + env(safe-area-inset-bottom));
     }
 
     .page-enter {
@@ -124,7 +124,7 @@
         <path stroke-linecap="round" stroke-linejoin="round" d="M3 17l6-6 4 4 8-8M14 7h7v7" />
       </svg>
     </div>
-    <h1 class="font-display text-2xl font-extrabold text-white tracking-tight">Liamvtrade <span class="text-cyan-400">v2.6</span></h1>
+    <h1 class="font-display text-2xl font-extrabold text-white tracking-tight">Liamvtrade <span class="text-cyan-400">v2.7</span></h1>
     <p class="text-xs text-slate-400 mt-1">Institutional ICT / SMC Quant Terminal • @xliamvr</p>
     <div class="w-44 h-1.5 bg-white/10 rounded-full overflow-hidden mt-5">
       <div id="splash-bar" class="h-full w-1/4 bg-gradient-to-r from-cyan-400 to-blue-500 rounded-full transition-all duration-700"></div>
@@ -137,50 +137,48 @@
 
   <!-- UPDATE DETECTOR BANNER -->
   <div id="update-banner" class="hidden fixed top-14 left-3 right-3 z-[85] max-w-md mx-auto p-3 rounded-2xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white text-xs font-extrabold shadow-xl flex items-center justify-between gap-2">
-    <span>⚡ Update v2.6 Baru Tersedia!</span>
+    <span>⚡ Update v2.7 Baru Tersedia!</span>
     <button onclick="window.location.reload()" class="px-3 py-1 rounded-xl bg-white text-slate-900 text-[11px] font-extrabold active:scale-95">
       Muat Ulang
     </button>
   </div>
 
-  <!-- STICKY TOP HEADER -->
-  <header class="sticky top-0 z-40 px-3.5 pt-2.5 pb-2 backdrop-blur-xl bg-[var(--bg-primary)]/85 border-b border-[var(--border-subtle)]">
-    <div class="max-w-md mx-auto flex items-center justify-between gap-2">
-      <!-- Brand + Live WIB Clock (Anti-Terpotong) -->
-      <div class="flex items-center gap-2 min-w-0">
-        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-400/30 flex items-center justify-center shrink-0">
-          <svg class="w-5 h-5 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+  <!-- STICKY TOP HEADER (WIB Anti-Terpotong) -->
+  <header class="sticky top-0 z-40 px-3 pt-2.5 pb-2 backdrop-blur-xl bg-[var(--bg-primary)]/90 border-b border-[var(--border-subtle)]">
+    <div class="max-w-md mx-auto flex items-center justify-between gap-1.5">
+      <!-- Brand + Live WIB Clock -->
+      <div class="flex items-center gap-2 shrink-0">
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-cyan-500/20 to-blue-600/20 border border-cyan-400/30 flex items-center justify-center shrink-0">
+          <svg class="w-4 h-4 text-cyan-400" fill="none" stroke="currentColor" stroke-width="2.3" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 17l6-6 4 4 8-8" />
           </svg>
         </div>
-        <div class="min-w-0">
-          <div class="flex items-center gap-1.5">
-            <span class="font-display text-sm font-extrabold tracking-tight">Xliamvr</span>
-            <span id="header-user-badge" class="px-1.5 py-0.5 rounded bg-blue-600 text-white text-[8.5px] font-extrabold">OWNER</span>
+        <div>
+          <div class="flex items-center gap-1">
+            <span class="font-display text-[13px] font-extrabold tracking-tight">Xliamvr</span>
+            <span id="header-user-badge" class="px-1.5 py-0.5 rounded bg-blue-600 text-white text-[8px] font-extrabold">OWNER</span>
           </div>
-          <span id="live-clock-wib" class="font-mono-num text-[10px] opacity-75 block whitespace-nowrap">Min, 21:00:00 WIB</span>
+          <span id="live-clock-wib" class="font-mono-num text-[9.5px] opacity-80 block whitespace-nowrap">Sen, 07:30:00 WIB</span>
         </div>
       </div>
 
-      <!-- Right Controls: Live Ticker + Quick Guide (?) + Theme -->
-      <div class="flex items-center gap-1.5 shrink-0">
-        <div onclick="switchTab('signals')" class="px-2.5 py-1.5 rounded-full glass-card flex items-center gap-1.5 cursor-pointer active:scale-95">
-          <span class="relative flex h-2 w-2">
-            <span id="header-price-status" class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-          </span>
-          <span id="header-pair-label" class="font-display text-[10px] font-extrabold opacity-80">XAUUSD</span>
-          <span id="header-pair-price" class="font-mono-num text-[11px] font-extrabold">2,712.50</span>
+      <!-- Right Controls: Compact Live Ticker + Quick Guide (?) + Theme -->
+      <div class="flex items-center gap-1 min-w-0">
+        <div onclick="switchTab('signals')" class="px-2 py-1.5 rounded-full glass-card flex items-center gap-1 cursor-pointer active:scale-95 min-w-0">
+          <span id="header-price-status" class="relative inline-flex rounded-full h-2 w-2 bg-emerald-500 shrink-0"></span>
+          <span id="header-pair-label" class="font-display text-[9.5px] font-extrabold opacity-80 shrink-0">XAUUSD</span>
+          <span id="header-pair-price" class="font-mono-num text-[10.5px] font-extrabold truncate">3,576.20</span>
         </div>
 
-        <button onclick="openQuickGuideModal()" aria-label="Panduan Cepat" class="w-8 h-8 rounded-full glass-card flex items-center justify-center text-xs font-extrabold text-cyan-400 active:scale-95">
+        <button onclick="openQuickGuideModal()" aria-label="Panduan Cepat" class="w-7 h-7 rounded-full glass-card flex items-center justify-center text-[11px] font-extrabold text-cyan-400 active:scale-95 shrink-0">
           ?
         </button>
 
-        <button onclick="toggleTheme()" aria-label="Ganti Tema" class="w-8 h-8 rounded-full glass-card flex items-center justify-center active:scale-95">
-          <svg id="theme-icon-sun" class="w-4 h-4 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <button onclick="toggleTheme()" aria-label="Ganti Tema" class="w-7 h-7 rounded-full glass-card flex items-center justify-center active:scale-95 shrink-0">
+          <svg id="theme-icon-sun" class="w-3.5 h-3.5 text-amber-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M4.93 19.07l1.41-1.41m11.32-11.32l1.41-1.41" />
           </svg>
-          <svg id="theme-icon-moon" class="w-4 h-4 text-slate-700 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <svg id="theme-icon-moon" class="w-3.5 h-3.5 text-slate-700 hidden" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
             <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
           </svg>
         </button>
@@ -200,7 +198,7 @@
     <!-- ==================== TAB 1: BERANDA ==================== -->
     <section id="tab-home" class="space-y-3.5 page-enter">
       <!-- ICT Killzone & Session Card -->
-      <div class="glass-card p-4 space-y-2.5 card-3d">
+      <div class="glass-card p-4 space-y-2.5">
         <div class="flex items-center justify-between gap-2">
           <span class="text-[9.5px] font-extrabold uppercase tracking-wider text-blue-400">ICT KILLZONE & SESSION WIB</span>
           <div class="flex items-center gap-1.5">
@@ -218,15 +216,27 @@
         </div>
       </div>
 
-      <!-- Circuit Breaker & Daily Profit Target Lock Card -->
+      <!-- Circuit Breaker & Custom Account Drawer Trigger -->
       <div class="glass-card p-4 space-y-3">
         <div class="flex items-center justify-between gap-2">
           <div class="shrink-0">
             <span class="text-[9.5px] font-extrabold uppercase tracking-wider text-blue-400 block">CIRCUIT BREAKER HARIAN</span>
             <h3 class="font-display text-base font-extrabold leading-tight">Kontrol Disiplin Akun</h3>
           </div>
-          <select id="active-account-select" onchange="selectActiveAccount(this.value)" class="min-w-0 max-w-[165px] px-2.5 py-2 rounded-xl bg-black/[0.04] dark:bg-white/[0.06] border border-[var(--border-subtle)] text-[11px] font-bold outline-none truncate">
-          </select>
+
+          <!-- Custom Modern Account Drawer Button (Replaces Basic Select) -->
+          <button onclick="openAccountDrawer()" class="min-w-0 max-w-[175px] px-3 py-2 rounded-2xl bg-blue-600/15 border border-cyan-500/35 text-left flex items-center gap-2 active:scale-95 transition">
+            <div class="w-6 h-6 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center shrink-0">
+              <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M3 7h18M3 12h18M3 17h12" />
+              </svg>
+            </div>
+            <div class="min-w-0 flex-1">
+              <strong id="account-trigger-label" class="text-[11px] font-extrabold block truncate">BrightFunded #4</strong>
+              <span id="account-trigger-sub" class="font-mono-num text-[9px] text-cyan-300 block truncate">$984.94</span>
+            </div>
+            <span class="text-[10px] text-cyan-400 shrink-0">▾</span>
+          </button>
         </div>
 
         <div id="circuit-breaker-alert" class="hidden p-3 rounded-2xl bg-rose-500/15 border border-rose-500/35 text-rose-400 text-xs font-bold">
@@ -303,11 +313,11 @@
         <div class="grid grid-cols-3 gap-2 p-3 rounded-2xl bg-white/[0.04] border border-white/10 text-center">
           <div>
             <span class="text-[9px] text-slate-400 uppercase block">TOTAL EQUITY</span>
-            <strong id="portfolio-total-equity" class="font-mono-num text-xs font-extrabold mt-0.5 block">$17,985</strong>
+            <strong id="portfolio-total-equity" class="font-mono-num text-xs font-extrabold mt-0.5 block">$18,949</strong>
           </div>
           <div>
             <span class="text-[9px] text-slate-400 uppercase block">NET PROFIT</span>
-            <strong id="portfolio-total-profit" class="font-mono-num text-xs font-extrabold text-emerald-400 mt-0.5 block">+$485.00</strong>
+            <strong id="portfolio-total-profit" class="font-mono-num text-xs font-extrabold text-emerald-400 mt-0.5 block">+$449.64</strong>
           </div>
           <div>
             <span class="text-[9px] text-slate-400 uppercase block">AVG WINRATE</span>
@@ -324,7 +334,7 @@
           </summary>
           <div class="mt-2.5 space-y-2">
             <div class="grid grid-cols-2 gap-2">
-              <input id="new-acc-name" type="text" placeholder="Nama Akun (cth: Akun #4)" class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs outline-none" />
+              <input id="new-acc-name" type="text" placeholder="Nama Akun (cth: Akun #5)" class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs outline-none" />
               <input id="new-acc-firm" type="text" placeholder="Prop Firm (The5ers/dll)" class="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs outline-none" />
             </div>
             <div class="grid grid-cols-3 gap-2">
@@ -383,28 +393,34 @@
     <section id="tab-signals" class="hidden space-y-3.5 page-enter">
       <!-- Signal Terminal Selector -->
       <div class="glass-card p-4 space-y-3">
-        <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center justify-between gap-1.5">
           <div>
-            <span class="text-[9.5px] font-extrabold uppercase tracking-wider text-blue-400 block">ICT / SMC SNIPER ENGINE</span>
-            <h2 class="font-display text-lg font-extrabold leading-tight">Signal Terminal</h2>
+            <span class="text-[9px] font-extrabold uppercase tracking-wider text-blue-400 block">ICT / SMC SNIPER ENGINE</span>
+            <h2 class="font-display text-base font-extrabold leading-tight">Signal Terminal</h2>
           </div>
-          <div class="flex items-center gap-1.5">
-            <button onclick="openLotCalcModal()" class="px-2.5 py-1.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 text-[10.5px] font-extrabold active:scale-95">
+          <div class="flex items-center gap-1 shrink-0">
+            <button onclick="openLotCalcModal()" class="px-2.5 py-1.5 rounded-xl bg-cyan-500/15 border border-cyan-500/30 text-cyan-400 text-[10px] font-extrabold active:scale-95">
               🧮 Lot
             </button>
-            <button id="auto-notif-btn" onclick="toggleAutoNotif()" class="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-500 text-[10.5px] font-extrabold flex items-center gap-1.5 active:scale-95">
-              <span class="w-2 h-2 rounded-full bg-emerald-500"></span>
-              <span id="auto-notif-badge">SMART ALERT: ON</span>
+            <button onclick="openFilterDrawer()" class="px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-500/35 text-amber-400 text-[10px] font-extrabold active:scale-95">
+              🎛️ Filter
+            </button>
+            <button id="auto-notif-btn" onclick="toggleAutoNotif()" class="px-2.5 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-400 text-[10px] font-extrabold flex items-center gap-1 active:scale-95">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+              <span id="auto-notif-badge">ALERT: ON</span>
             </button>
           </div>
         </div>
 
-        <!-- Pair Switcher -->
+        <!-- Quick Active Filter Pills (Toggleable 1-Tap) -->
+        <div id="active-filters-strip" class="flex items-center gap-1.5 flex-wrap"></div>
+
+        <!-- Pair Switcher with Icons -->
         <div class="grid grid-cols-4 gap-1.5">
-          <button id="pair-btn-XAUUSD" onclick="setSignalPair('XAUUSD')" class="py-2 rounded-xl border border-[var(--border-subtle)] text-[11px] font-extrabold transition">XAUUSD</button>
-          <button id="pair-btn-US100" onclick="setSignalPair('US100')" class="py-2 rounded-xl border border-[var(--border-subtle)] text-[11px] font-extrabold transition">US100</button>
-          <button id="pair-btn-BTCUSDT" onclick="setSignalPair('BTCUSDT')" class="py-2 rounded-xl border border-[var(--border-subtle)] text-[11px] font-extrabold transition">BTC</button>
-          <button id="pair-btn-EURUSD" onclick="setSignalPair('EURUSD')" class="py-2 rounded-xl border border-[var(--border-subtle)] text-[11px] font-extrabold transition">EURUSD</button>
+          <button id="pair-btn-XAUUSD" onclick="setSignalPair('XAUUSD')" class="py-2 rounded-xl border border-[var(--border-subtle)] text-[10.5px] font-extrabold transition">🥇 XAUUSD</button>
+          <button id="pair-btn-US100" onclick="setSignalPair('US100')" class="py-2 rounded-xl border border-[var(--border-subtle)] text-[10.5px] font-extrabold transition">📈 US100</button>
+          <button id="pair-btn-BTCUSDT" onclick="setSignalPair('BTCUSDT')" class="py-2 rounded-xl border border-[var(--border-subtle)] text-[10.5px] font-extrabold transition">₿ BTC</button>
+          <button id="pair-btn-EURUSD" onclick="setSignalPair('EURUSD')" class="py-2 rounded-xl border border-[var(--border-subtle)] text-[10.5px] font-extrabold transition">💱 EURUSD</button>
         </div>
 
         <!-- Timeframe + Custom Method Bottom-Sheet Trigger -->
@@ -416,7 +432,6 @@
             <button id="tf-btn-H4" onclick="setSignalTF('H4')" class="py-2 rounded-xl border border-[var(--border-subtle)] font-mono-num text-[11px] font-extrabold">H4</button>
           </div>
 
-          <!-- Custom Method Drawer Button (Replaces Basic Chrome Select!) -->
           <button onclick="openMethodDrawer()" class="px-3 py-2 rounded-xl bg-blue-600/15 border border-blue-500/35 text-blue-400 text-[11px] font-extrabold flex items-center gap-1.5 active:scale-95 shrink-0">
             <span id="method-trigger-badge" class="px-1.5 py-0.5 rounded bg-blue-600 text-white font-mono-num text-[9px]">AUTO</span>
             <span id="method-trigger-label">Auto Sniper</span>
@@ -546,16 +561,20 @@
     <section id="tab-chart" class="hidden space-y-3.5 page-enter">
       <div class="glass-card p-4 space-y-3">
         <div class="flex items-center justify-between gap-2">
-          <div>
+          <div class="shrink-0">
             <span class="text-[9.5px] font-extrabold uppercase tracking-wider text-blue-400 block">LIVE CHART & RADAR</span>
-            <h2 class="font-display text-lg font-extrabold leading-tight">TradingView Radar</h2>
+            <h2 class="font-display text-base font-extrabold leading-tight">TradingView Radar</h2>
           </div>
-          <select id="chart-symbol-select" onchange="changeChartSymbol()" class="px-3 py-2 rounded-xl bg-black/[0.04] dark:bg-white/[0.06] border border-[var(--border-subtle)] text-xs font-extrabold outline-none">
-            <option value="OANDA:XAUUSD|XAU/USD">XAUUSD (Gold)</option>
-            <option value="NASDAQ:NDX|NDX">US100 (Nasdaq)</option>
-            <option value="BINANCE:BTCUSDT|BTCUSDT">BTCUSDT (24/7 Live)</option>
-            <option value="FX:EURUSD|EUR/USD">EURUSD (Forex)</option>
-          </select>
+
+          <!-- Custom Chart Pair Drawer Trigger (Replaces Basic Chrome Select) -->
+          <button onclick="openChartPairDrawer()" class="min-w-0 max-w-[195px] px-3 py-2 rounded-2xl bg-blue-600/15 border border-cyan-500/35 text-left flex items-center gap-2 active:scale-95 transition">
+            <span id="chart-pair-trigger-icon" class="text-base shrink-0">🥇</span>
+            <div class="min-w-0 flex-1">
+              <strong id="chart-pair-trigger-label" class="text-[11px] font-extrabold block truncate">XAUUSD (Spot Gold)</strong>
+              <span id="chart-pair-trigger-sub" class="font-mono-num text-[9px] text-cyan-300 block truncate">OANDA:XAUUSD</span>
+            </div>
+            <span class="text-[10px] text-cyan-400 shrink-0">▾</span>
+          </button>
         </div>
 
         <div id="tv-chart-wrapper" class="w-full h-[360px] rounded-2xl overflow-hidden border border-[var(--border-subtle)]"></div>
@@ -623,7 +642,7 @@
         <!-- Kill Switch + Sync Supabase -->
         <div class="grid grid-cols-1 gap-2">
           <button id="owner-killswitch-btn" onclick="toggleSignalKillSwitch()" class="w-full py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-extrabold active:scale-95">
-            🟢 Mesin Sinyal: AKTIF (Pause Darurat)
+            🟢 Mesin Sinyal: AKTIF (Ketuk untuk Jeda)
           </button>
 
           <button onclick="syncToSupabaseCloud(true)" class="w-full py-2.5 rounded-xl bg-blue-600 text-white text-xs font-extrabold active:scale-95">
@@ -681,12 +700,12 @@
             <h3 class="font-display text-base font-extrabold">Konfigurasi Data Live</h3>
           </div>
           <span id="td-quota-badge" class="font-mono-num px-2 py-0.5 rounded-full bg-white/10 text-[9.5px] font-bold">
-            Kuota: 0 / 800
+            Kuota TD: 0 / 800
           </span>
         </div>
 
         <div class="space-y-1">
-          <label class="text-[9.5px] font-extrabold uppercase opacity-70 block">TWELVE DATA API KEY (XAUUSD, US100, EURUSD)</label>
+          <label class="text-[9.5px] font-extrabold uppercase opacity-70 block">TWELVE DATA API KEY (OPSIONAL — SUDAH ADA FALLBACK LIVE GRATIS)</label>
           <input id="cfg-twelvedata-key" type="password" placeholder="Tempel API Key Twelve Data..." class="w-full px-3 py-2.5 rounded-xl bg-black/[0.04] dark:bg-white/[0.05] border border-[var(--border-subtle)] text-xs outline-none" />
         </div>
 
@@ -722,7 +741,7 @@
         </button>
       </div>
 
-      <!-- Roadmap Ekspansi Aset (Dilipat agar rapi) -->
+      <!-- Roadmap Ekspansi Aset -->
       <details class="glass-card p-4 text-xs">
         <summary class="font-display text-sm font-extrabold cursor-pointer select-none flex items-center justify-between">
           <span>🗺️ Roadmap Ekspansi Aset Berikutnya</span>
@@ -734,7 +753,7 @@
       <!-- Copyright & Credits -->
       <div class="glass-card p-4 space-y-2">
         <span class="text-[9.5px] font-extrabold uppercase tracking-wider text-blue-400 block">COPYRIGHT & CREDITS</span>
-        <h3 class="font-display text-base font-extrabold">Liamvtrade Quant Terminal v2.6</h3>
+        <h3 class="font-display text-base font-extrabold">Liamvtrade Quant Terminal v2.7</h3>
         <p class="text-xs opacity-75 leading-relaxed">
           Dirancang dan dikembangkan secara eksklusif oleh <strong>Ilham Maulana Nur Al Rasyid (@xliamvr)</strong> untuk sistem analisis teknikal Inner Circle Trader (ICT), Smart Money Concepts (SMC), Liquidity, dan manajemen risiko Multi-Account Prop Firm.
         </p>
@@ -785,7 +804,37 @@
     </div>
   </nav>
 
-  <!-- ==================== CUSTOM BOTTOM-SHEET DRAWER: PILIHAN METODE ==================== -->
+  <!-- ==================== DRAWER 1: PILIH AKUN PROP FIRM ==================== -->
+  <div id="account-drawer-modal" onclick="closeAccountDrawer()" class="hidden fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm flex items-end justify-center">
+    <div onclick="event.stopPropagation()" class="w-full max-w-md rounded-t-3xl bg-[#0D1526] border-t border-cyan-500/30 p-4 pb-8 space-y-3 sheet-animate text-white">
+      <div class="w-10 h-1 rounded-full bg-white/20 mx-auto"></div>
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-[9.5px] font-extrabold uppercase tracking-wider text-cyan-400 block">MANAJEMEN RISIKO & LOT</span>
+          <h3 class="font-display text-base font-extrabold">Pilih Akun Prop Firm Aktif</h3>
+        </div>
+        <button onclick="closeAccountDrawer()" class="w-8 h-8 rounded-full bg-white/10 text-xs font-extrabold">✕</button>
+      </div>
+      <div id="account-drawer-list" class="space-y-2 max-h-[65vh] overflow-y-auto pr-0.5"></div>
+    </div>
+  </div>
+
+  <!-- ==================== DRAWER 2: PILIH PAIR LIVE CHART ==================== -->
+  <div id="chart-pair-drawer-modal" onclick="closeChartPairDrawer()" class="hidden fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm flex items-end justify-center">
+    <div onclick="event.stopPropagation()" class="w-full max-w-md rounded-t-3xl bg-[#0D1526] border-t border-cyan-500/30 p-4 pb-8 space-y-3 sheet-animate text-white">
+      <div class="w-10 h-1 rounded-full bg-white/20 mx-auto"></div>
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-[9.5px] font-extrabold uppercase tracking-wider text-cyan-400 block">TRADINGVIEW RADAR FEED</span>
+          <h3 class="font-display text-base font-extrabold">Pilih Instrumen Chart</h3>
+        </div>
+        <button onclick="closeChartPairDrawer()" class="w-8 h-8 rounded-full bg-white/10 text-xs font-extrabold">✕</button>
+      </div>
+      <div id="chart-pair-drawer-list" class="space-y-2 max-h-[65vh] overflow-y-auto pr-0.5"></div>
+    </div>
+  </div>
+
+  <!-- ==================== DRAWER 3: PILIHAN METODE SNIPER ==================== -->
   <div id="method-drawer-modal" onclick="closeMethodDrawer()" class="hidden fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm flex items-end justify-center">
     <div onclick="event.stopPropagation()" class="w-full max-w-md rounded-t-3xl bg-[#0D1526] border-t border-cyan-500/30 p-4 pb-8 space-y-3 sheet-animate text-white">
       <div class="w-10 h-1 rounded-full bg-white/20 mx-auto"></div>
@@ -800,11 +849,26 @@
     </div>
   </div>
 
-  <!-- ==================== MODAL: KALKULATOR LOT MANUAL CEPAT ==================== -->
+  <!-- ==================== DRAWER 4: KONTROL FILTER MANDIRI ==================== -->
+  <div id="filter-drawer-modal" onclick="closeFilterDrawer()" class="hidden fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm flex items-end justify-center">
+    <div onclick="event.stopPropagation()" class="w-full max-w-md rounded-t-3xl bg-[#0D1526] border-t border-amber-500/35 p-4 pb-8 space-y-3 sheet-animate text-white">
+      <div class="w-10 h-1 rounded-full bg-white/20 mx-auto"></div>
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-[9.5px] font-extrabold uppercase tracking-wider text-amber-400 block">DISCIPLINE & TIMING SWITCH</span>
+          <h3 class="font-display text-base font-extrabold">Kontrol Filter Trading Mandiri</h3>
+        </div>
+        <button onclick="closeFilterDrawer()" class="w-8 h-8 rounded-full bg-white/10 text-xs font-extrabold">✕</button>
+      </div>
+      <div id="filter-drawer-list" class="space-y-2 max-h-[65vh] overflow-y-auto pr-0.5"></div>
+    </div>
+  </div>
+
+  <!-- ==================== MODAL: KALKULATOR LOT & KALIBRASI BROKER ==================== -->
   <div id="lot-calc-modal" onclick="closeLotCalcModal()" class="hidden fixed inset-0 z-[80] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4">
     <div onclick="event.stopPropagation()" class="w-full max-w-sm glass-card p-5 space-y-3.5 text-white border border-cyan-500/30">
       <div class="flex items-center justify-between">
-        <h3 class="font-display text-base font-extrabold">🧮 Kalkulator Lot Cepat</h3>
+        <h3 class="font-display text-base font-extrabold">🧮 Kalkulator Lot & Kalibrasi</h3>
         <button onclick="closeLotCalcModal()" class="w-7 h-7 rounded-full bg-white/10 text-xs font-extrabold">✕</button>
       </div>
 
@@ -825,6 +889,20 @@
       </div>
 
       <div id="lot-calc-result" class="p-3.5 rounded-2xl bg-cyan-500/10 border border-cyan-500/30"></div>
+
+      <!-- Broker Price Calibration -->
+      <div class="pt-2.5 border-t border-white/10 space-y-2">
+        <label class="text-[9.5px] font-extrabold uppercase text-amber-400 block">🎯 KALIBRASI HARGA BROKER (MT5 / CTRADER)</label>
+        <div class="flex gap-1.5">
+          <input id="broker-calibrate-price" type="number" step="any" placeholder="Ketik harga riil broker saat ini..." class="flex-1 min-w-0 px-3 py-2 rounded-xl bg-white/5 border border-white/10 font-mono-num text-xs outline-none" />
+          <button onclick="applyBrokerPriceCalibration()" class="px-3 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-extrabold active:scale-95 shrink-0">
+            Pas
+          </button>
+          <button onclick="resetBrokerPriceCalibration()" class="px-2.5 py-2 rounded-xl bg-white/10 text-xs font-extrabold active:scale-95 shrink-0">
+            ↺
+          </button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -868,9 +946,9 @@
         <button onclick="closeQuickGuideModal()" class="w-7 h-7 rounded-full bg-white/10 text-xs font-extrabold">✕</button>
       </div>
       <div class="space-y-2 text-xs opacity-90 leading-relaxed">
-        <p><strong>1. Cek Jam Killzone & News:</strong> Fokus entry saat London Open (14.00–17.00 WIB) atau NY AM (19.30–22.30 WIB), serta hindari open baru 15 menit sebelum berita High-Impact USD.</p>
-        <p><strong>2. Salin Limit, SL & TP:</strong> Masuk ke tab tengah (Sinyal), ketuk tombol <strong>Copy</strong> pada harga Limit, SL, TP1, dan TP2 lalu tempel ke MT5/cTrader sesuai ukuran lot yang tertera.</p>
-        <p><strong>3. Catat & Amankan BE:</strong> Ketuk <strong>Ambil Setup</strong> agar masuk ke Jurnal Saya & terpantau otomatis. Saat TP1 tersentuh, geser SL ke harga masuk (Break Even).</p>
+        <p><strong>1. Kontrol Filter & Sesi:</strong> Ketuk <strong>🎛️ Filter</strong> di tab Sinyal kapan saja untuk menyalakan atau mematikan <em>Monday Range Filter</em>, <em>Filter Pagi</em>, atau <em>Mesin Sinyal</em> sesuai kondisi market.</p>
+        <p><strong>2. Kalibrasi & Salin Limit:</strong> Jika harga broker MT5/cTrader selisih tipis dengan spot, samakan di tombol <strong>🧮 Lot</strong>, lalu salin Limit, SL, dan TP1–TP3.</p>
+        <p><strong>3. Catat & Amankan BE:</strong> Ketuk <strong>⚡ Ambil Setup</strong> agar tercatat di <em>Jurnal Saya</em>. Saat TP1 tersentuh, geser SL ke harga masuk (Break Even).</p>
       </div>
     </div>
   </div>
