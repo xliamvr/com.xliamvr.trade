@@ -203,18 +203,20 @@
       const base = createInitialState();
       return {
         ...base,
-        ...parsed,
-        flags: { ...base.flags, ...(parsed.flags || {}) },
-        config: { ...base.config, ...(parsed.config || {}) },
-        prices: { ...base.prices, ...(parsed.prices || {}) },
-        priceOffsets: { ...base.priceOffsets, ...(parsed.priceOffsets || {}) },
-        signal: { ...base.signal, ...(parsed.signal || {}) },
-        chart: { ...base.chart, ...(parsed.chart || {}) },
-        news: { ...base.news, ...(parsed.news || {}) },
-        sopItems: Array.isArray(parsed.sopItems) && parsed.sopItems.length > 0 ? parsed.sopItems : base.sopItems,
-        accounts: Array.isArray(parsed.accounts) && parsed.accounts.length > 0 ? parsed.accounts : base.accounts,
-        tradeLogs: Array.isArray(parsed.tradeLogs) ? parsed.tradeLogs : []
-      };
+        ...parsed, 
+      weekendBtcMode: false,
+      flags: { ...base.flags, ...(parsed.flags || {}) },
+      config: { ...base.config, ...(parsed.config || {}) },
+      prices: { ...base.prices, ...(parsed.prices || {}) },
+      priceOffsets: { ...base.priceOffsets, ...(parsed.priceOffsets || {}) },
+      signal: { ...base.signal, ...(parsed.signal || {}) },
+      chart: { ...base.chart, ...(parsed.chart || {}) },
+      news: { ...base.news, ...(parsed.news || {}) },
+      sopItems: Array.isArray(parsed.sopItems) && parsed.sopItems.length > 0 ? parsed.sopItems : base.sopItems,
+      accounts: Array.isArray(parsed.accounts) && parsed.accounts.length > 0 ? parsed.accounts : base.accounts,
+      tradeLogs: Array.isArray(parsed.tradeLogs) ? parsed.tradeLogs : []
+    };
+
     } catch (_) {
       return createInitialState();
     }
@@ -2590,6 +2592,175 @@ async function syncLiveMarketPrices(forceShowToast = false) {
     const wib = new Date(utcMs + 7 * 3600000);
     return `${String(wib.getHours()).padStart(2, '0')}:${String(wib.getMinutes()).padStart(2, '0')} WIB`;
   }
+    function fallbackCopy(text, label) {
+    try {
+      const ta = document.createElement('textarea');
+      ta.value = String(text);
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      const ok = document.execCommand('copy');
+      ta.remove();
+      if (typeof showToast === 'function') {
+        showToast(ok ? `${label} disalin: ${text}` : 'Gagal menyalin otomatis', ok ? 'success' : 'error');
+      }
+    } catch (_) {
+      if (typeof showToast === 'function') showToast('Gagal menyalin otomatis', 'error');
+    }
+  }
+
+  function copyTextValue(text, label = 'Nilai') {
+    const safe = text === undefined || text === null ? '' : String(text).trim();
+    if (!safe || safe === '--') {
+      if (typeof showToast === 'function') showToast(`${label} belum tersedia`, 'warn');
+      return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(safe).then(
+        () => { if (typeof showToast === 'function') showToast(`${label} disalin: ${safe}`, 'success'); },
+        () => fallbackCopy(safe, label)
+      );
+    } else {
+      fallbackCopy(safe, label);
+    }
+  }
+
+  function copySignalField(field) {
+    if (!currentSignalObj) return;
+    const map = {
+      entry: [currentSignalObj.entryFmt, 'Entry'],
+      sl: [currentSignalObj.slFmt, 'Stop Loss'],
+      tp1: [currentSignalObj.tp1Fmt, 'TP 1'],
+      tp2: [currentSignalObj.tp2Fmt, 'TP 2'],
+      tp3: [currentSignalObj.tp3Fmt, 'TP 3']
+    };
+    if (map[field]) copyTextValue(map[field][0], map[field][1]);
+  }
+
+  function buildSignalSummaryText(sig) {
+    if (!sig) return '';
+    return [
+      `${sig.pair} (${sig.timeframe}) - ${sig.orderType || sig.direction}`,
+      `Entry: ${sig.entryFmt} | SL: ${sig.slFmt}`,
+      `TP1: ${sig.tp1Fmt} | TP2: ${sig.tp2Fmt} | TP3: ${sig.tp3Fmt}`
+    ].join('\n');
+  }
+
+  function copyFullSignalSetup() {
+    if (!currentSignalObj) return;
+    copyTextValue(buildSignalSummaryText(currentSignalObj), 'Full Setup');
+  }
+
+  async function dispatchTelegramMessage(text) {
+    const token = (state.config?.tgToken || '').trim();
+    const chatId = (state.config?.tgChatId || '').trim();
+    if (!token || !chatId) {
+      if (typeof showToast === 'function') showToast('Isi Bot Token & Chat ID Telegram di tab Profil dulu', 'warn');
+      return false;
+    }
+    try {
+      const res = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text })
+      });
+      if (res.ok) {
+        if (typeof showToast === 'function') showToast('Setup terkirim ke Telegram', 'success');
+        return true;
+      }
+      if (typeof showToast === 'function') showToast('Gagal kirim ke Telegram (cek Token/Chat ID)', 'error');
+      return false;
+    } catch (_) {
+      if (typeof showToast === 'function') showToast('Koneksi gagal saat kirim ke Telegram', 'error');
+      return false;
+    }
+  }
+
+  function takeSignalSetupOnly() {
+    if (!currentSignalObj) return;
+    if (typeof showToast === 'function') {
+      showToast(`Setup ${currentSignalObj.pair} ${currentSignalObj.orderType || currentSignalObj.direction} diambil`, 'success');
+    }
+  }
+
+  async function sendSignalToTelegramOnly() {
+    if (!currentSignalObj) return;
+    await dispatchTelegramMessage(buildSignalSummaryText(currentSignalObj));
+  }
+
+  async function takeAndSendSignalToTelegram() {
+    if (!currentSignalObj) return;
+    takeSignalSetupOnly();
+    await dispatchTelegramMessage(buildSignalSummaryText(currentSignalObj));
+  }
+
+  function updateChartSwingMetrics() {
+    const pair = state.chart?.pair || state.signal?.pair || 'US100';
+    const price = Number(state.prices?.[pair]) || 0;
+    if (!price) return;
+    const dec = pair === 'EURUSD' ? 5 : 2;
+    const span = pair === 'EURUSD' ? 0.0045 : pair === 'XAUUSD' ? 18 : pair === 'BTCUSDT' ? 1400 : 180;
+    const sh = document.getElementById('chart-swing-high') || document.querySelector('[data-metric="swing-high"]');
+    const sl = document.getElementById('chart-swing-low') || document.querySelector('[data-metric="swing-low"]');
+    const ar = document.getElementById('chart-active-range') || document.querySelector('[data-metric="active-range"]');
+    const highVal = price + span * 0.55;
+    const lowVal = price - span * 0.45;
+    if (sh) sh.textContent = highVal.toFixed(dec);
+    if (sl) sl.textContent = lowVal.toFixed(dec);
+    if (ar) ar.textContent = `${lowVal.toFixed(dec)} - ${highVal.toFixed(dec)}`;
+  }
+
+  function updateSignalExpiryTicker() {
+    const el = document.getElementById('sig-expiry-timer');
+    if (!el) return;
+    const tfMin = global.LiamMethods?.TF_MULTIPLIERS?.[state.signal?.timeframe]?.expiryMin || 30;
+    const windowMs = tfMin * 60000;
+    const now = Date.now();
+    let endMs = Number(state.signal?.expiryEndMs) || 0;
+    if (!Number.isFinite(endMs) || endMs <= now || endMs - now > windowMs) {
+      endMs = now + windowMs;
+      state.signal.expiryEndMs = endMs;
+    }
+    const rem = Math.max(0, Math.floor((endMs - now) / 1000));
+    const mm = String(Math.floor(rem / 60)).padStart(2, '0');
+    const ss = String(rem % 60).padStart(2, '0');
+    el.textContent = `${mm}:${ss}`;
+  }
+
+  document.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+    const txt = (btn.textContent || '').trim().toLowerCase();
+    const id = btn.id || '';
+
+    if (id.includes('take-send') || txt.includes('ambil setup & kirim tele')) {
+      e.preventDefault();
+      takeAndSendSignalToTelegram();
+    } else if (id.includes('send-only') || txt === 'kirim saja') {
+      e.preventDefault();
+      sendSignalToTelegramOnly();
+    } else if (id.includes('copy-setup') || txt.includes('copy setup')) {
+      e.preventDefault();
+      copyFullSignalSetup();
+    } else if (txt === 'copy' || id.startsWith('btn-copy-')) {
+      const card = btn.closest('[data-copy-field]') || btn.parentElement;
+      const field = card?.dataset?.copyField ||
+        (txt.includes('copy') && card?.textContent?.toLowerCase().includes('stop loss') ? 'sl' :
+         card?.textContent?.toLowerCase().includes('tp 1') ? 'tp1' :
+         card?.textContent?.toLowerCase().includes('tp 2') ? 'tp2' :
+         card?.textContent?.toLowerCase().includes('tp 3') ? 'tp3' : 'entry');
+      e.preventDefault();
+      copySignalField(field);
+    }
+  });
+
+  setInterval(() => {
+    updateSignalExpiryTicker();
+    updateChartSwingMetrics();
+  }, 1000);
+
 
   // =========================================================================
   // EXPOSE GLOBAL HANDLERS & BOOTSTRAP
