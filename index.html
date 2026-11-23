@@ -2,7 +2,7 @@
 <html lang="id" class="dark">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#060b16" />
   <title>Liamvtrade Quant Terminal v2.9 — Institutional ICT/SMC</title>
   <script src="https://cdn.tailwindcss.com"></script>
@@ -74,6 +74,10 @@
     html:not(.dark) header {
       background-color: rgba(255, 255, 255, 0.95) !important;
       border-bottom-color: #cbd5e1 !important;
+    }
+
+    html:not(.dark) footer {
+      color: #475569 !important;
     }
 
     html:not(.dark) nav {
@@ -210,7 +214,7 @@
     }
   </style>
 </head>
-<body class="min-h-screen pb-24 selection:bg-cyan-500 selection:text-slate-950">
+<body class="min-h-screen pb-28 selection:bg-cyan-500 selection:text-slate-950">
 
   <!-- TOAST NOTIFICATION -->
   <div id="toast-container" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-md pointer-events-none flex flex-col gap-2"></div>
@@ -1217,6 +1221,12 @@
         </div>
       </div>
     </section>
+
+    <!-- FOOTER: CREDIT & COPYRIGHT -->
+    <footer class="max-w-lg mx-auto pt-2 pb-4 text-center text-[11px] text-slate-400 space-y-0.5">
+      <div class="font-mono font-semibold text-slate-300">Liamvtrade Quant Terminal v2.9</div>
+      <div>Crafted by <span class="font-semibold text-sky-400">@xliamvr</span> • &copy; 2026 Liamvtrade. All rights reserved.</div>
+    </footer>
   </main>
 
   <!-- =========================================================================
@@ -1438,14 +1448,8 @@
   <!-- SCRIPTS -->
   <script src="methods.js"></script>
   <script src="news.js"></script>
-  <script src="app.js"></script>
-    <!-- SCRIPTS -->
-  <script src="methods.js"></script>
-  <script src="news.js"></script>
   <script src="price-feed.js"></script>
   <script src="app.js"></script>
   <script src="ui-picker.js"></script>
-</body>
-
 </body>
 </html>
