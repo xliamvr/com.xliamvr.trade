@@ -3,262 +3,384 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-  <meta name="theme-color" content="#070d19" />
-  <title>Liamvtrade Quant Terminal v2.9 — ICT/SMC & Prop Firm OS</title>
+  <meta name="theme-color" content="#060b16" />
+  <title>Liamvtrade Quant Terminal v2.9 — Institutional ICT/SMC</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
       darkMode: 'class',
       theme: {
         extend: {
-          colors: {
-            obsidian: '#070d19',
-            carddark: '#0d1627',
-            cardborder: '#1a2742',
-            accentblue: '#1d9bf0',
-            accentcyan: '#06b6d4'
+          fontFamily: {
+            sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'],
+            mono: ['JetBrains Mono', 'ui-monospace', 'SFMono-Regular', 'monospace']
           }
         }
       }
     };
   </script>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet" />
   <style>
     * {
-      box-sizing: border-box;
       -webkit-tap-highlight-color: transparent;
+      box-sizing: border-box;
     }
+
     body {
-      background-color: #070d19;
+      background-color: #060b16;
       color: #f1f5f9;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Inter, sans-serif;
+      font-family: 'Inter', system-ui, sans-serif;
       overflow-x: hidden;
-      user-select: none;
+      transition: background-color 0.2s ease, color 0.2s ease;
     }
-    input, textarea, select {
-      user-select: text;
-    }
+
     .glass-card {
-      background: linear-gradient(180deg, rgba(16, 27, 48, 0.94) 0%, rgba(10, 18, 34, 0.97) 100%);
-      border: 1px solid rgba(56, 82, 130, 0.32);
-      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.38);
+      background: linear-gradient(145deg, rgba(15, 23, 42, 0.92), rgba(9, 15, 29, 0.96));
+      border: 1px solid rgba(51, 65, 85, 0.55);
+      box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.65);
+      transition: background 0.2s ease, border-color 0.2s ease;
     }
-    html:not(.dark) body {
-      background-color: #f1f5f9;
-      color: #0f172a;
-    }
-    html:not(.dark) .glass-card {
-      background: #ffffff;
-      border: 1px solid #cbd5e1;
-      box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06);
-    }
-    .nav-diamond {
-      background: linear-gradient(135deg, #2563eb 0%, #06b6d4 100%);
-      box-shadow: 0 8px 24px rgba(14, 165, 233, 0.45);
-      transform: rotate(45deg);
-    }
-    .nav-diamond > svg,
-    .nav-diamond > span {
-      transform: rotate(-45deg);
-    }
+
     .tab-pane {
       display: none;
-      animation: fadeIn 0.18s ease-out;
+      animation: fadeSlideIn 0.18s ease-out;
     }
+
     .tab-pane.active {
       display: block;
     }
-    @keyframes fadeIn {
-      from { opacity: 0; transform: translateY(4px); }
-      to { opacity: 1; transform: translateY(0); }
+
+    @keyframes fadeSlideIn {
+      from {
+        opacity: 0;
+        transform: translateY(4px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
     }
-    ::-webkit-scrollbar {
-      width: 4px;
-      height: 4px;
+
+    /* =======================================================================
+       LIGHT MODE HIGH-CONTRAST OVERRIDES (100% READABLE ON MOBILE & DESKTOP)
+       ======================================================================= */
+    html:not(.dark) body {
+      background-color: #eef2f7 !important;
+      color: #0f172a !important;
     }
-    ::-webkit-scrollbar-thumb {
-      background: rgba(100, 116, 139, 0.35);
-      border-radius: 9999px;
+
+    html:not(.dark) header {
+      background-color: rgba(255, 255, 255, 0.95) !important;
+      border-bottom-color: #cbd5e1 !important;
+    }
+
+    html:not(.dark) nav {
+      background-color: rgba(255, 255, 255, 0.96) !important;
+      border-top-color: #cbd5e1 !important;
+    }
+
+    html:not(.dark) .glass-card {
+      background: #ffffff !important;
+      border: 1px solid #cbd5e1 !important;
+      box-shadow: 0 6px 20px -6px rgba(15, 23, 42, 0.1) !important;
+    }
+
+    html:not(.dark) .text-white {
+      color: #0f172a !important;
+    }
+
+    /* Pertahankan teks putih pada tombol berlatar warna pekat */
+    html:not(.dark) .bg-blue-600,
+    html:not(.dark) .bg-blue-600 *,
+    html:not(.dark) .bg-emerald-600,
+    html:not(.dark) .bg-emerald-600 *,
+    html:not(.dark) .bg-rose-600,
+    html:not(.dark) .bg-rose-600 *,
+    html:not(.dark) .bg-rose-500,
+    html:not(.dark) .bg-rose-500 *,
+    html:not(.dark) .bg-indigo-600,
+    html:not(.dark) .bg-indigo-600 *,
+    html:not(.dark) .bg-amber-600,
+    html:not(.dark) .bg-amber-600 * {
+      color: #ffffff !important;
+    }
+
+    html:not(.dark) .text-slate-100,
+    html:not(.dark) .text-slate-200 {
+      color: #1e293b !important;
+    }
+
+    html:not(.dark) .text-slate-300 {
+      color: #334155 !important;
+    }
+
+    html:not(.dark) .text-slate-400 {
+      color: #475569 !important;
+    }
+
+    html:not(.dark) .text-sky-300,
+    html:not(.dark) .text-sky-400 {
+      color: #0369a1 !important;
+    }
+
+    html:not(.dark) .text-cyan-300,
+    html:not(.dark) .text-cyan-400 {
+      color: #0e7490 !important;
+    }
+
+    html:not(.dark) .text-emerald-200,
+    html:not(.dark) .text-emerald-300,
+    html:not(.dark) .text-emerald-400 {
+      color: #047857 !important;
+    }
+
+    html:not(.dark) .text-rose-200,
+    html:not(.dark) .text-rose-300,
+    html:not(.dark) .text-rose-400 {
+      color: #be123c !important;
+    }
+
+    html:not(.dark) .text-amber-200,
+    html:not(.dark) .text-amber-300,
+    html:not(.dark) .text-amber-400 {
+      color: #b45309 !important;
+    }
+
+    html:not(.dark) .bg-slate-950,
+    html:not(.dark) .bg-slate-950\/80,
+    html:not(.dark) .bg-slate-950\/85,
+    html:not(.dark) .bg-slate-950\/90,
+    html:not(.dark) .bg-slate-900,
+    html:not(.dark) .bg-slate-900\/75,
+    html:not(.dark) .bg-slate-900\/80,
+    html:not(.dark) .bg-slate-900\/85,
+    html:not(.dark) .bg-slate-900\/90 {
+      background-color: #f8fafc !important;
+    }
+
+    html:not(.dark) .bg-slate-800,
+    html:not(.dark) .bg-slate-800\/80 {
+      background-color: #e2e8f0 !important;
+    }
+
+    html:not(.dark) .bg-emerald-950\/35,
+    html:not(.dark) .bg-emerald-950\/40,
+    html:not(.dark) .bg-emerald-950\/60 {
+      background-color: #ecfdf5 !important;
+    }
+
+    html:not(.dark) .bg-rose-950\/35,
+    html:not(.dark) .bg-rose-950\/40,
+    html:not(.dark) .bg-rose-950\/55,
+    html:not(.dark) .bg-rose-950\/60 {
+      background-color: #fff1f2 !important;
+    }
+
+    html:not(.dark) .bg-amber-950\/50,
+    html:not(.dark) .bg-amber-500\/10,
+    html:not(.dark) .bg-amber-500\/15 {
+      background-color: #fffbeb !important;
+    }
+
+    html:not(.dark) .bg-cyan-950\/25 {
+      background-color: #ecfeff !important;
+    }
+
+    html:not(.dark) .border-slate-800,
+    html:not(.dark) .border-slate-700 {
+      border-color: #cbd5e1 !important;
+    }
+
+    html:not(.dark) input,
+    html:not(.dark) select,
+    html:not(.dark) textarea {
+      background-color: #ffffff !important;
+      color: #0f172a !important;
+      border-color: #94a3b8 !important;
+    }
+
+    .no-scrollbar::-webkit-scrollbar {
+      display: none;
+    }
+    .no-scrollbar {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
     }
   </style>
 </head>
-<body class="min-h-screen pb-36">
+<body class="min-h-screen pb-24 selection:bg-cyan-500 selection:text-slate-950">
+
+  <!-- TOAST NOTIFICATION -->
+  <div id="toast-container" class="fixed top-16 left-1/2 -translate-x-1/2 z-50 w-[92%] max-w-md pointer-events-none flex flex-col gap-2"></div>
 
   <!-- STICKY TOP HEADER -->
   <header class="sticky top-0 z-40 bg-[#070d19]/95 backdrop-blur-md border-b border-slate-800/80 px-3.5 py-2.5">
     <div class="max-w-lg mx-auto flex items-center justify-between gap-2">
-      <!-- Brand & Clock -->
-      <div class="flex items-center gap-2.5 min-w-0">
-        <div class="w-9 h-9 rounded-xl bg-sky-500/15 border border-sky-400/30 flex items-center justify-center shrink-0">
-          <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
-            <path stroke-linecap="round" stroke-linejoin="round" d="M3 17l6-6 4 4 8-8" />
+      <!-- Brand + Owner + WIB Clock -->
+      <div class="flex items-center gap-2 min-w-0">
+        <div class="w-8 h-8 rounded-xl bg-gradient-to-br from-sky-500/25 to-cyan-400/10 border border-sky-400/40 flex items-center justify-center shrink-0">
+          <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 17l6-6 4 4 8-8M17 7h4v4" />
           </svg>
         </div>
         <div class="min-w-0">
           <div class="flex items-center gap-1.5">
-            <span class="font-bold text-sm tracking-tight text-white truncate">Xliamvr</span>
-            <span class="px-1.5 py-0.5 text-[9px] font-extrabold tracking-wider uppercase rounded bg-blue-600 text-white">OWNER</span>
+            <span class="font-extrabold text-xs tracking-wide text-white truncate">XLIAMVR</span>
+            <span class="px-1.5 py-0.5 rounded bg-blue-600 text-[9px] font-extrabold tracking-wider text-white">OWNER</span>
           </div>
-          <div id="header-wib-clock" class="text-[11px] text-slate-400 font-mono truncate">Memuat waktu WIB...</div>
+          <div id="header-wib-clock" class="text-[10px] font-mono text-slate-400 truncate">Sen, 09:20:00 WIB</div>
         </div>
       </div>
 
-      <!-- Live Ticker Pill + Help + Theme -->
-      <div class="flex items-center gap-1.5 shrink-0">
-        <button id="header-ticker-btn" type="button" onclick="openCalibrationModal()" title="Ketuk untuk Kalibrasi Harga Broker"
-          class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-900 border border-slate-700/80 active:scale-95 transition">
-          <span id="header-feed-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-          <span id="header-ticker-text" class="text-[11px] font-mono font-bold text-emerald-300">XAUUSD ...</span>
-        </button>
+      <!-- Live Price Ticker Pill (Tap to Calibrate Broker Price) -->
+      <button type="button" onclick="openCalibrationModal()" title="Ketuk untuk Kalibrasi Harga Broker"
+        class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-900/90 border border-slate-700/80 active:scale-95 transition shrink-0">
+        <span id="header-feed-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
+        <span id="header-ticker-text" class="text-[11px] font-mono font-bold text-emerald-300">XAUUSD --</span>
+      </button>
 
-        <button id="btn-open-guide" type="button" onclick="openGuideModal()"
-          class="w-8 h-8 rounded-full bg-slate-900 border border-slate-700/80 flex items-center justify-center text-xs font-bold text-slate-300 active:scale-95">
+      <!-- Help & Theme Buttons -->
+      <div class="flex items-center gap-1.5 shrink-0">
+        <button type="button" onclick="openGuideModal()" aria-label="Panduan"
+          class="w-8 h-8 rounded-full bg-slate-900 border border-slate-700/80 text-slate-300 text-xs font-bold flex items-center justify-center active:scale-95">
           ?
         </button>
-
-        <button id="btn-toggle-theme" type="button" onclick="toggleThemeMode()"
-          class="w-8 h-8 rounded-full bg-slate-900 border border-slate-700/80 flex items-center justify-center text-amber-400 active:scale-95">
-          <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="4"></circle>
-            <path d="M12 2v2m0 16v2M4.93 4.93l1.41 1.41m11.32 11.32l1.41 1.41M2 12h2m16 0h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"></path>
-          </svg>
+        <button type="button" onclick="toggleThemeMode()" id="btn-theme-toggle" aria-label="Ganti Tema"
+          class="w-8 h-8 rounded-full bg-slate-900 border border-slate-700/80 text-amber-300 text-xs flex items-center justify-center active:scale-95">
+          ☀️
         </button>
       </div>
     </div>
 
-    <!-- Global Broadcast Banner (Visible when Owner sets a message) -->
+    <!-- Global Broadcast Banner -->
     <div id="global-broadcast-bar" class="hidden max-w-lg mx-auto mt-2 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-400/40 text-amber-200 text-[11px] flex items-center justify-between gap-2">
-      <span id="global-broadcast-text" class="font-medium leading-snug"></span>
-      <button type="button" onclick="dismissBroadcastBanner()" class="text-amber-300 font-bold text-xs px-1">✕</button>
+      <span id="global-broadcast-text" class="truncate"></span>
+      <button type="button" onclick="dismissBroadcastBanner()" class="text-amber-300 font-bold text-xs">✕</button>
     </div>
   </header>
 
-  <!-- MAIN CONTENT CONTAINER -->
+  <!-- MAIN APP CONTAINER -->
   <main class="max-w-lg mx-auto px-3.5 pt-3.5 space-y-4">
 
-    <!-- ==================== TAB 1: BERANDA ==================== -->
+    <!-- =====================================================================
+         TAB 1: BERANDA (SESSION, CIRCUIT BREAKER, SOP, PROP FIRM PORTFOLIO)
+         ===================================================================== -->
     <section id="tab-beranda" class="tab-pane active space-y-4">
 
       <!-- Card 1: ICT Killzone & Session WIB -->
-      <div class="glass-card rounded-2xl p-4 space-y-3">
-        <div class="flex items-start justify-between gap-2">
-          <span class="text-[10px] font-bold tracking-wider uppercase text-sky-400">ICT KILLZONE &amp; SESSION WIB</span>
-          <div class="flex items-center gap-1.5 shrink-0">
-            <button id="btn-weekend-btc" type="button" onclick="toggleWeekendBtcMode()"
+      <div class="glass-card rounded-2xl p-4 space-y-2.5">
+        <div class="flex items-center justify-between gap-2">
+          <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">ICT KILLZONE &amp; SESSION WIB</span>
+          <div class="flex items-center gap-1.5">
+            <button type="button" id="btn-weekend-btc" onclick="toggleWeekendBtcMode()"
               class="px-2.5 py-1 rounded-full text-[10px] font-bold border border-slate-700 bg-slate-800/80 text-slate-300 transition">
               ₿ Weekend BTC: OFF
             </button>
-            <span id="session-badge" class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase bg-blue-600 text-white">
+            <span id="session-badge" class="px-2.5 py-1 rounded-full bg-blue-600 text-[10px] font-extrabold text-white">
               ASIA RANGE
             </span>
           </div>
         </div>
-
-        <div>
-          <h2 id="session-title" class="text-xl font-extrabold text-white tracking-tight">Asia Accumulation Range</h2>
-          <p id="session-desc" class="text-xs text-slate-300 mt-1 leading-relaxed">
-            Pembentukan Asia High &amp; Asia Low sebagai kolam likuiditas (liquidity pool) untuk sesi London.
-          </p>
-        </div>
-
-        <div class="pt-2.5 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-2 text-[11px]">
-          <span id="session-action-tip" class="text-slate-400 font-medium">Tandai High/Low Asia untuk Judas Swing</span>
-          <div class="flex items-center gap-2 font-mono">
-            <span id="next-kz-countdown" class="text-sky-400 font-semibold">Next KZ: --:--</span>
-            <span class="text-slate-500">• Reset 05:00 WIB</span>
-          </div>
+        <h2 id="session-title" class="text-lg font-extrabold text-white leading-tight">Asia Accumulation Range</h2>
+        <p id="session-desc" class="text-xs text-slate-300 leading-relaxed">
+          Pembentukan Asia High &amp; Asia Low sebagai kolam likuiditas (liquidity pool) untuk sesi London.
+        </p>
+        <div class="pt-2 border-t border-slate-800/80 flex items-center justify-between text-[11px] font-mono">
+          <span id="session-action-tip" class="text-amber-300">Tandai High/Low Asia untuk Judas Swing</span>
+          <span id="next-kz-countdown" class="text-slate-400">Next KZ: 3j 40m</span>
         </div>
       </div>
 
       <!-- Card 2: Circuit Breaker Harian & Anti-Revenge Cooldown -->
-      <div class="glass-card rounded-2xl p-4 space-y-3.5">
+      <div class="glass-card rounded-2xl p-4 space-y-3">
         <div class="flex items-center justify-between gap-2">
+          <span class="text-[10px] font-extrabold tracking-wider uppercase text-rose-400">CIRCUIT BREAKER HARIAN</span>
+          <button type="button" onclick="resetAllAccountsDailyTrackers()"
+            class="text-[11px] font-semibold text-sky-400 hover:underline">
+            Reset Harian
+          </button>
+        </div>
+
+        <!-- Active Account Quick Selector -->
+        <div class="space-y-1">
+          <label for="active-account-select" class="text-[11px] text-slate-400">Akun Aktif Dipantau:</label>
+          <select id="active-account-select" onchange="switchActiveAccount(this.value)"
+            class="w-full rounded-xl bg-slate-900 border border-slate-700/90 px-3 py-2.5 text-sm font-bold text-white focus:outline-none focus:border-sky-500">
+          </select>
+        </div>
+
+        <!-- Anti-Revenge Cooldown Timer Banner -->
+        <div id="cooldown-banner" class="hidden rounded-xl bg-rose-950/60 border border-rose-500/50 p-3 flex items-center justify-between gap-2">
           <div>
-            <span class="text-[10px] font-bold tracking-wider uppercase text-sky-400 block">CIRCUIT BREAKER HARIAN</span>
-            <h2 class="text-lg font-extrabold text-white">Kontrol Disiplin Akun</h2>
+            <div class="text-[10px] font-extrabold uppercase tracking-wider text-rose-300">🧊 ANTI-REVENGE COOLDOWN AKTIF</div>
+            <div class="text-xs text-rose-100 mt-0.5">Jeda wajib pasca-SL: <strong id="cooldown-timer-text" class="font-mono text-amber-300">20:00</strong></div>
           </div>
-
-          <!-- Active Prop Account Dropdown -->
-          <div class="relative min-w-[145px]">
-            <select id="active-account-select" onchange="switchActiveAccount(this.value)"
-              class="w-full appearance-none bg-slate-900/90 border border-sky-500/40 rounded-xl px-3 py-2 pr-7 text-xs font-bold text-white focus:outline-none">
-            </select>
-            <span class="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-sky-400 text-[10px]">▼</span>
-          </div>
+          <button type="button" onclick="clearCooldownManual()" class="px-2.5 py-1 rounded-lg bg-rose-800/70 text-[10px] font-bold text-white">
+            Lewati
+          </button>
         </div>
 
-        <!-- Anti-Revenge Cooldown Banner (Shows automatically after SL hit or manual lock) -->
-        <div id="cooldown-banner" class="hidden rounded-xl p-3 bg-rose-950/60 border border-rose-500/50 flex items-center justify-between gap-2">
-          <div class="space-y-0.5">
-            <div class="text-xs font-extrabold text-rose-300 flex items-center gap-1.5">
-              <span>🧊 ANTI-REVENGE COOLDOWN AKTIF</span>
-            </div>
-            <p class="text-[11px] text-rose-200/80">Jeda wajib pasca-SL agar emosi stabil sebelum mencari setup baru.</p>
-          </div>
-          <div class="text-right shrink-0">
-            <div id="cooldown-timer-text" class="text-base font-mono font-extrabold text-rose-300">20:00</div>
-            <button type="button" onclick="clearCooldownManual()" class="text-[10px] underline text-slate-300 hover:text-white">Reset Jeda</button>
-          </div>
-        </div>
-
-        <!-- Daily Entry & Daily SL Counters -->
-        <div class="grid grid-cols-2 gap-3">
-          <!-- Entry Hari Ini -->
-          <div class="rounded-xl bg-slate-900/75 border border-slate-800 p-3 space-y-2.5">
-            <div class="flex items-center justify-between gap-1">
-              <span class="text-[10px] font-bold uppercase text-slate-400 leading-tight">ENTRY<br>HARI INI</span>
-              <div class="flex items-center gap-1 bg-slate-800/90 rounded-lg px-1.5 py-0.5 border border-slate-700">
-                <button type="button" onclick="adjustAccountLimit('maxEntry', -1)" class="text-slate-300 font-bold px-1 text-xs">-</button>
-                <span id="disp-max-entry" class="text-xs font-mono font-bold text-white">2</span>
-                <button type="button" onclick="adjustAccountLimit('maxEntry', 1)" class="text-slate-300 font-bold px-1 text-xs">+</button>
+        <!-- Max Entry / Hari & Max SL / Hari -->
+        <div class="grid grid-cols-2 gap-2.5">
+          <!-- Max Entry -->
+          <div class="rounded-xl bg-slate-900/75 border border-slate-800 p-3 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-extrabold uppercase text-slate-400">MAX ENTRY / HARI</span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="adjustAccountLimit('maxEntry', -1)" class="w-5 h-5 rounded bg-slate-800 text-xs font-bold text-slate-300">-</button>
+                <span id="disp-max-entry" class="text-xs font-mono font-bold text-sky-400 px-1">2</span>
+                <button type="button" onclick="adjustAccountLimit('maxEntry', 1)" class="w-5 h-5 rounded bg-slate-800 text-xs font-bold text-slate-300">+</button>
               </div>
             </div>
-            <div class="flex items-center justify-between">
-              <div class="font-mono text-lg font-extrabold text-white">
-                <span id="disp-cur-entry">0</span> <span class="text-slate-500">/</span> <span id="disp-max-entry-2">2</span>
+            <div class="flex items-center justify-between pt-1">
+              <div class="font-mono text-xl font-extrabold text-white">
+                <span id="disp-cur-entry">0</span> <span class="text-sm text-slate-400">/ <span id="disp-max-entry-2">2</span></span>
               </div>
               <div class="flex items-center gap-1.5">
-                <button type="button" onclick="adjustAccountCounter('curEntry', -1)"
-                  class="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 text-slate-200 font-bold flex items-center justify-center active:scale-90">-</button>
-                <button type="button" onclick="adjustAccountCounter('curEntry', 1)"
-                  class="w-7 h-7 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center active:scale-90">+</button>
+                <button type="button" onclick="adjustAccountCounter('curEntry', -1)" class="w-7 h-7 rounded-full bg-slate-800 text-sm font-bold text-slate-200 active:scale-90">-</button>
+                <button type="button" onclick="adjustAccountCounter('curEntry', 1)" class="w-7 h-7 rounded-full bg-blue-600 text-sm font-bold text-white active:scale-90">+</button>
               </div>
             </div>
           </div>
 
-          <!-- SL Hari Ini -->
-          <div class="rounded-xl bg-slate-900/75 border border-slate-800 p-3 space-y-2.5">
-            <div class="flex items-center justify-between gap-1">
-              <span class="text-[10px] font-bold uppercase text-slate-400 leading-tight">SL HARI<br>INI</span>
-              <div class="flex items-center gap-1 bg-slate-800/90 rounded-lg px-1.5 py-0.5 border border-slate-700">
-                <button type="button" onclick="adjustAccountLimit('maxSl', -1)" class="text-slate-300 font-bold px-1 text-xs">-</button>
-                <span id="disp-max-sl" class="text-xs font-mono font-bold text-white">2</span>
-                <button type="button" onclick="adjustAccountLimit('maxSl', 1)" class="text-slate-300 font-bold px-1 text-xs">+</button>
+          <!-- Max SL -->
+          <div class="rounded-xl bg-slate-900/75 border border-slate-800 p-3 space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-extrabold uppercase text-slate-400">MAX SL / HARI</span>
+              <div class="flex items-center gap-1">
+                <button type="button" onclick="adjustAccountLimit('maxSl', -1)" class="w-5 h-5 rounded bg-slate-800 text-xs font-bold text-slate-300">-</button>
+                <span id="disp-max-sl" class="text-xs font-mono font-bold text-rose-400 px-1">2</span>
+                <button type="button" onclick="adjustAccountLimit('maxSl', 1)" class="w-5 h-5 rounded bg-slate-800 text-xs font-bold text-slate-300">+</button>
               </div>
             </div>
-            <div class="flex items-center justify-between">
-              <div class="font-mono text-lg font-extrabold text-rose-400">
-                <span id="disp-cur-sl">0</span> <span class="text-slate-500">/</span> <span id="disp-max-sl-2" class="text-white">2</span>
+            <div class="flex items-center justify-between pt-1">
+              <div class="font-mono text-xl font-extrabold text-white">
+                <span id="disp-cur-sl">0</span> <span class="text-sm text-slate-400">/ <span id="disp-max-sl-2">2</span></span>
               </div>
               <div class="flex items-center gap-1.5">
-                <button type="button" onclick="adjustAccountCounter('curSl', -1)"
-                  class="w-7 h-7 rounded-full bg-slate-800 border border-slate-700 text-slate-200 font-bold flex items-center justify-center active:scale-90">-</button>
-                <button type="button" onclick="adjustAccountCounter('curSl', 1)"
-                  class="w-7 h-7 rounded-full bg-rose-600 text-white font-bold flex items-center justify-center active:scale-90">+</button>
+                <button type="button" onclick="adjustAccountCounter('curSl', -1)" class="w-7 h-7 rounded-full bg-slate-800 text-sm font-bold text-slate-200 active:scale-90">-</button>
+                <button type="button" onclick="adjustAccountCounter('curSl', 1)" class="w-7 h-7 rounded-full bg-rose-600 text-sm font-bold text-white active:scale-90">+</button>
               </div>
             </div>
           </div>
         </div>
+
+        <p class="text-[11px] text-slate-400 leading-relaxed">
+          *Jika SL harian menyentuh batas atau Cooldown aktif, tahan entry baru &amp; otomatis reset pukul 05:00 WIB.
+        </p>
       </div>
 
-      <!-- Card 3: Pre-Trade SOP Checklist (Interactive & Affects Signal Score) -->
+      <!-- Card 3: Pre-Trade SOP Checklist -->
       <div class="glass-card rounded-2xl p-4 space-y-3">
         <div class="flex items-center justify-between gap-2">
           <div>
-            <span class="text-[10px] font-bold tracking-wider uppercase text-sky-400 block">PRE-TRADE SOP</span>
-            <h2 class="text-lg font-extrabold text-white">Checklist Validasi Struktur</h2>
+            <span class="text-[10px] font-extrabold tracking-wider uppercase text-emerald-400">PRE-TRADE SOP</span>
+            <h3 class="text-base font-extrabold text-white">Checklist Validasi Struktur</h3>
           </div>
           <div class="flex items-center gap-1.5">
-            <span id="sop-score-boost" class="px-2 py-1 rounded-lg bg-sky-500/15 border border-sky-400/30 text-[10px] font-mono font-bold text-sky-300">
+            <span id="sop-score-boost" class="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-[11px] font-mono font-bold text-sky-400">
               +0.0 Score
             </span>
             <span id="sop-percent-badge" class="px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-xs font-mono font-extrabold text-emerald-300">
@@ -268,128 +390,119 @@
         </div>
 
         <p id="sop-status-hint" class="text-[11px] text-slate-400">
-          Centang setiap syarat SOP sebelum entry. Berpengaruh langsung ke Skor Kesiapan di Terminal Sinyal.
+          Ketuk baris SOP di bawah untuk mencentang. Berpengaruh langsung ke Skor Sinyal.
         </p>
 
-        <!-- Dynamic SOP List -->
         <div id="sop-list-container" class="space-y-2"></div>
 
-        <!-- SOP Actions -->
-        <div class="pt-1 flex items-center justify-between gap-2">
-          <div class="flex items-center gap-1.5 flex-1">
-            <input id="new-sop-input" type="text" placeholder="Tambah aturan SOP baru..."
-              class="w-full bg-slate-900/90 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500" />
-            <button type="button" onclick="addCustomSopItem()"
-              class="px-3 py-2 rounded-xl bg-sky-600 hover:bg-sky-500 text-white text-xs font-bold shrink-0 active:scale-95">
-              + SOP
-            </button>
-          </div>
+        <!-- Add Custom SOP Item -->
+        <div class="flex items-center gap-2 pt-1">
+          <input id="new-sop-input" type="text" placeholder="Tambah aturan SOP kustom..."
+            class="flex-1 rounded-xl bg-slate-900 border border-slate-700/80 px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-sky-500" />
+          <button type="button" onclick="addCustomSopItem()"
+            class="px-3.5 py-2 rounded-xl bg-blue-600 text-white text-xs font-extrabold active:scale-95">
+            + Tambah
+          </button>
           <button type="button" onclick="resetSopChecklist()"
-            class="px-2.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-300 text-xs font-semibold shrink-0 active:scale-95">
+            class="px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-xs font-semibold text-slate-300 active:scale-95">
             Reset
           </button>
         </div>
       </div>
 
-      <!-- Card 4: Prop Firm Portfolio (Multi-Account & Drawdown Guard) -->
-      <div class="glass-card rounded-2xl p-4 space-y-3.5">
-        <div class="flex items-start justify-between gap-2">
+      <!-- Card 4: Prop Firm Portfolio & Accounts -->
+      <div class="glass-card rounded-2xl p-4 space-y-3">
+        <div class="flex items-center justify-between">
           <div>
-            <span class="text-[10px] font-bold tracking-wider uppercase text-sky-400 block">PROP FIRM PORTFOLIO</span>
-            <h2 class="text-lg font-extrabold text-white leading-tight">Multi-Account &amp; Drawdown Guard</h2>
+            <span class="text-[10px] font-extrabold tracking-wider uppercase text-cyan-400">PROP FIRM PORTFOLIO</span>
+            <h3 class="text-base font-extrabold text-white">Manajemen Saldo &amp; Drawdown</h3>
           </div>
-          <span id="portfolio-dd-badge" class="px-2.5 py-1 rounded-xl bg-slate-800 border border-slate-700 text-[10px] font-bold text-slate-300 text-center shrink-0">
+          <span id="portfolio-dd-badge" class="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-[10px] font-bold text-emerald-300 text-center leading-tight">
             4% Daily<br>Guard
           </span>
         </div>
 
-        <!-- Portfolio Totals -->
-        <div class="grid grid-cols-3 gap-2 rounded-xl bg-slate-900/80 border border-slate-800 p-3 text-center">
-          <div>
-            <span class="text-[9px] font-bold uppercase text-slate-400 block">TOTAL EQUITY</span>
-            <span id="portfolio-total-equity" class="text-sm font-mono font-extrabold text-white">$0.00</span>
+        <!-- 3 Summary Boxes -->
+        <div class="grid grid-cols-3 gap-2">
+          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2.5">
+            <div class="text-[9px] font-bold uppercase text-slate-400">TOTAL EKUITAS</div>
+            <div id="portfolio-total-equity" class="text-sm font-mono font-extrabold text-white mt-0.5">$16,449.64</div>
           </div>
-          <div>
-            <span class="text-[9px] font-bold uppercase text-slate-400 block">NET PROFIT</span>
-            <span id="portfolio-net-profit" class="text-sm font-mono font-extrabold text-emerald-400">+$0.00</span>
+          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2.5">
+            <div class="text-[9px] font-bold uppercase text-slate-400">NET PROFIT/LOSS</div>
+            <div id="portfolio-net-profit" class="text-sm font-mono font-extrabold text-emerald-400 mt-0.5">+$449.64</div>
           </div>
-          <div>
-            <span class="text-[9px] font-bold uppercase text-slate-400 block">AVG WINRATE</span>
-            <span id="portfolio-avg-winrate" class="text-sm font-mono font-extrabold text-sky-400">0%</span>
+          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2.5">
+            <div class="text-[9px] font-bold uppercase text-slate-400">AVG WINRATE</div>
+            <div id="portfolio-avg-winrate" class="text-sm font-mono font-extrabold text-sky-400 mt-0.5">74%</div>
           </div>
         </div>
 
         <!-- Account Cards List -->
         <div id="prop-accounts-list" class="space-y-2.5"></div>
 
-        <!-- Collapsible Add New Account Form (Clean 2-Column Mobile Layout) -->
-        <div class="pt-1 border-t border-slate-800/80">
+        <!-- Collapsible Add Account Drawer -->
+        <div class="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
           <button type="button" onclick="toggleAddAccountDrawer()"
-            class="w-full py-2 flex items-center justify-between text-xs font-bold text-sky-400">
-            <span>▶ + Tambah Akun Prop Firm Baru</span>
-            <span id="add-account-arrow" class="text-[10px]">Buka</span>
+            class="w-full px-3.5 py-2.5 flex items-center justify-between text-xs font-bold text-sky-400">
+            <span>+ Tambah Akun Prop Firm Baru</span>
+            <span id="add-account-arrow" class="text-slate-400">Buka</span>
           </button>
-
-          <div id="add-account-drawer" class="hidden mt-2.5 space-y-2.5 bg-slate-900/70 border border-slate-800 rounded-xl p-3">
+          <div id="add-account-drawer" class="hidden p-3.5 pt-1 border-t border-slate-800/80 space-y-2.5">
             <div class="grid grid-cols-2 gap-2">
               <div>
-                <label class="text-[10px] text-slate-400 font-semibold block mb-1">Nama Akun</label>
-                <input id="new-acc-name" type="text" placeholder="cth: BrightFunded #5"
-                  class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+                <label class="text-[10px] text-slate-400 block mb-1">Nama Akun</label>
+                <input id="new-acc-name" type="text" placeholder="Contoh: The5ers #2" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-2 text-xs text-white" />
               </div>
               <div>
-                <label class="text-[10px] text-slate-400 font-semibold block mb-1">Prop Firm</label>
-                <input id="new-acc-firm" type="text" placeholder="cth: BrightFunded / The5ers"
-                  class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+                <label class="text-[10px] text-slate-400 block mb-1">Prop Firm</label>
+                <input id="new-acc-firm" type="text" placeholder="The5ers / FTMO" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-2 text-xs text-white" />
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="text-[10px] text-slate-400 block mb-1">Modal ($)</label>
+                <input id="new-acc-balance" type="number" value="5000" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-2 text-xs font-mono text-white" />
               </div>
               <div>
-                <label class="text-[10px] text-slate-400 font-semibold block mb-1">Modal Awal ($)</label>
-                <input id="new-acc-balance" type="number" step="any" placeholder="1000"
-                  class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white" />
+                <label class="text-[10px] text-slate-400 block mb-1">Risk / Trade (%)</label>
+                <input id="new-acc-risk" type="number" step="0.1" value="0.5" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-2 text-xs font-mono text-white" />
               </div>
               <div>
-                <label class="text-[10px] text-slate-400 font-semibold block mb-1">Risk per Trade (%)</label>
-                <input id="new-acc-risk" type="number" step="0.1" placeholder="0.4"
-                  class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white" />
+                <label class="text-[10px] text-slate-400 block mb-1">Hard Lot Max</label>
+                <input id="new-acc-maxlot" type="number" step="0.01" value="0.50" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-2 text-xs font-mono text-white" />
+              </div>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="text-[10px] text-slate-400 block mb-1">Daily DD (%)</label>
+                <input id="new-acc-dailydd" type="number" step="0.5" value="4" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-2 text-xs font-mono text-white" />
               </div>
               <div>
-                <label class="text-[10px] text-slate-400 font-semibold block mb-1">Hard Lot Max</label>
-                <input id="new-acc-maxlot" type="number" step="0.01" placeholder="0.15"
-                  class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white" />
+                <label class="text-[10px] text-slate-400 block mb-1">Max DD (%)</label>
+                <input id="new-acc-maxdd" type="number" step="0.5" value="8" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-2 text-xs font-mono text-white" />
               </div>
               <div>
-                <label class="text-[10px] text-slate-400 font-semibold block mb-1">Daily Drawdown (%)</label>
-                <input id="new-acc-dailydd" type="number" step="0.5" placeholder="4"
-                  class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white" />
+                <label class="text-[10px] text-slate-400 block mb-1">Target (%)</label>
+                <input id="new-acc-target" type="number" step="0.5" value="8" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-2 text-xs font-mono text-white" />
+              </div>
+            </div>
+            <div class="grid grid-cols-2 gap-2">
+              <div>
+                <label class="text-[10px] text-slate-400 block mb-1">Max Entry / Hari</label>
+                <input id="new-acc-maxentry" type="number" value="2" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-2 text-xs font-mono text-white" />
               </div>
               <div>
-                <label class="text-[10px] text-slate-400 font-semibold block mb-1">Max Overall DD (%)</label>
-                <input id="new-acc-maxdd" type="number" step="0.5" placeholder="8"
-                  class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white" />
-              </div>
-              <div>
-                <label class="text-[10px] text-slate-400 font-semibold block mb-1">Target Profit (%)</label>
-                <input id="new-acc-target" type="number" step="0.5" placeholder="8"
-                  class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white" />
-              </div>
-              <div>
-                <label class="text-[10px] text-slate-400 font-semibold block mb-1">Max Entry / Hari</label>
-                <input id="new-acc-maxentry" type="number" placeholder="2"
-                  class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white" />
-              </div>
-              <div>
-                <label class="text-[10px] text-slate-400 font-semibold block mb-1">Max SL / Hari</label>
-                <input id="new-acc-maxsl" type="number" placeholder="2"
-                  class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white" />
+                <label class="text-[10px] text-slate-400 block mb-1">Max SL / Hari</label>
+                <input id="new-acc-maxsl" type="number" value="2" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-2 text-xs font-mono text-white" />
               </div>
             </div>
             <div>
-              <label class="text-[10px] text-slate-400 font-semibold block mb-1">Myfxbook / Account ID &amp; Catatan Rule</label>
-              <input id="new-acc-notes" type="text" placeholder="cth: ID #88210 • No trade 2m sebelum/sesudah news merah"
-                class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+              <label class="text-[10px] text-slate-400 block mb-1">Catatan Aturan Akun</label>
+              <input id="new-acc-notes" type="text" placeholder="Contoh: Dilarang hold saat NFP" class="w-full rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-2 text-xs text-white" />
             </div>
             <button type="button" onclick="saveNewPropAccount()"
-              class="w-full py-2.5 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-extrabold text-xs active:scale-95 transition">
+              class="w-full py-2.5 rounded-xl bg-blue-600 text-white text-xs font-extrabold active:scale-98">
               Simpan Akun Baru
             </button>
           </div>
@@ -397,246 +510,220 @@
       </div>
     </section>
 
-    <!-- ==================== TAB 2: NEWS ==================== -->
+    <!-- =====================================================================
+         TAB 2: NEWS (KALENDER EKONOMI, SCAN PELUANG TERBAIK, SINGLE VERDICT)
+         ===================================================================== -->
     <section id="tab-news" class="tab-pane space-y-4">
-      <!-- News Header & Filters -->
       <div class="glass-card rounded-2xl p-4 space-y-3">
         <div class="flex items-start justify-between gap-2">
           <div>
-            <span class="text-[10px] font-bold tracking-wider uppercase text-sky-400 block">PRE &amp; POST-NEWS QUANT ENGINE</span>
-            <h2 class="text-xl font-extrabold text-white leading-tight">Kalender &amp; Analisa Buy/Sell</h2>
-            <p id="news-sync-status" class="text-[11px] text-emerald-400 mt-0.5">● Kalender Terverifikasi + Live Wire</p>
+            <span class="text-[10px] font-extrabold tracking-wider uppercase text-amber-400">PRE &amp; POST-NEWS QUANT ENGINE</span>
+            <h2 class="text-lg font-extrabold text-white">Kalender Ekonomi &amp; Analisa</h2>
+            <p id="news-sync-status" class="text-[11px] font-mono text-emerald-400 mt-0.5">● Kalender Terverifikasi + Live Wire</p>
           </div>
           <button type="button" onclick="syncNewsEngine(true)"
-            class="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center gap-1.5 shrink-0 active:scale-95">
-            <span>↻</span><span>Sync</span>
+            class="px-3 py-1.5 rounded-xl bg-sky-500/15 border border-sky-400/40 text-sky-300 text-xs font-bold active:scale-95 shrink-0">
+            🔄 Sync News
           </button>
         </div>
 
         <!-- Period Filter -->
         <div class="grid grid-cols-4 gap-1.5">
-          <button type="button" data-news-period="today" onclick="setNewsPeriodFilter('today')"
-            class="news-period-btn py-2 rounded-xl text-xs font-bold bg-blue-600 text-white">Hari Ini</button>
-          <button type="button" data-news-period="week" onclick="setNewsPeriodFilter('week')"
-            class="news-period-btn py-2 rounded-xl text-xs font-bold bg-slate-900 border border-slate-800 text-slate-300">Minggu Ini</button>
-          <button type="button" data-news-period="month" onclick="setNewsPeriodFilter('month')"
-            class="news-period-btn py-2 rounded-xl text-xs font-bold bg-slate-900 border border-slate-800 text-slate-300">Bulan Ini</button>
-          <button type="button" data-news-period="all" onclick="setNewsPeriodFilter('all')"
-            class="news-period-btn py-2 rounded-xl text-xs font-bold bg-slate-900 border border-slate-800 text-slate-300">Semua</button>
+          <button type="button" data-news-period="today" onclick="setNewsPeriodFilter('today')" class="news-period-btn py-2 rounded-xl text-xs font-bold bg-blue-600 text-white">Hari Ini</button>
+          <button type="button" data-news-period="week" onclick="setNewsPeriodFilter('week')" class="news-period-btn py-2 rounded-xl text-xs font-bold bg-slate-900 border border-slate-800 text-slate-300">Minggu Ini</button>
+          <button type="button" data-news-period="month" onclick="setNewsPeriodFilter('month')" class="news-period-btn py-2 rounded-xl text-xs font-bold bg-slate-900 border border-slate-800 text-slate-300">Bulan Ini</button>
+          <button type="button" data-news-period="all" onclick="setNewsPeriodFilter('all')" class="news-period-btn py-2 rounded-xl text-xs font-bold bg-slate-900 border border-slate-800 text-slate-300">Semua</button>
         </div>
 
         <!-- Impact Filter -->
         <div class="grid grid-cols-3 gap-1.5">
-          <button type="button" data-news-impact="all" onclick="setNewsImpactFilter('all')"
-            class="news-impact-btn py-2 rounded-xl text-xs font-bold bg-blue-600 text-white">Semua Impact</button>
-          <button type="button" data-news-impact="high" onclick="setNewsImpactFilter('high')"
-            class="news-impact-btn py-2 rounded-xl text-xs font-bold bg-slate-900 border border-slate-800 text-slate-300">🔴 High</button>
-          <button type="button" data-news-impact="medium" onclick="setNewsImpactFilter('medium')"
-            class="news-impact-btn py-2 rounded-xl text-xs font-bold bg-slate-900 border border-slate-800 text-slate-300">🟠 Medium</button>
+          <button type="button" data-news-impact="all" onclick="setNewsImpactFilter('all')" class="news-impact-btn py-2 rounded-xl text-xs font-bold bg-blue-600 text-white">Semua Dampak</button>
+          <button type="button" data-news-impact="high" onclick="setNewsImpactFilter('high')" class="news-impact-btn py-2 rounded-xl text-xs font-bold bg-slate-900 border border-slate-800 text-rose-300">🔴 High</button>
+          <button type="button" data-news-impact="medium" onclick="setNewsImpactFilter('medium')" class="news-impact-btn py-2 rounded-xl text-xs font-bold bg-slate-900 border border-slate-800 text-amber-300">🟠 Medium</button>
         </div>
 
-        <!-- Pair Filter -->
+        <!-- Pair Focus Filter -->
         <div class="grid grid-cols-5 gap-1">
-          <button type="button" data-news-pair="ALL" onclick="setNewsPairFilter('ALL')"
-            class="news-pair-btn py-1.5 rounded-lg text-[11px] font-bold bg-sky-500/20 border border-sky-400/50 text-sky-300">Semua</button>
-          <button type="button" data-news-pair="XAUUSD" onclick="setNewsPairFilter('XAUUSD')"
-            class="news-pair-btn py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">XAUUSD</button>
-          <button type="button" data-news-pair="US100" onclick="setNewsPairFilter('US100')"
-            class="news-pair-btn py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">US100</button>
-          <button type="button" data-news-pair="EURUSD" onclick="setNewsPairFilter('EURUSD')"
-            class="news-pair-btn py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">EURUSD</button>
-          <button type="button" data-news-pair="BTCUSDT" onclick="setNewsPairFilter('BTCUSDT')"
-            class="news-pair-btn py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">BTC</button>
+          <button type="button" data-news-pair="ALL" onclick="setNewsPairFilter('ALL')" class="news-pair-btn py-1.5 rounded-lg text-[11px] font-bold bg-sky-500/20 border border-sky-400/50 text-sky-300">ALL</button>
+          <button type="button" data-news-pair="XAUUSD" onclick="setNewsPairFilter('XAUUSD')" class="news-pair-btn py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">XAUUSD</button>
+          <button type="button" data-news-pair="US100" onclick="setNewsPairFilter('US100')" class="news-pair-btn py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">US100</button>
+          <button type="button" data-news-pair="EURUSD" onclick="setNewsPairFilter('EURUSD')" class="news-pair-btn py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">EURUSD</button>
+          <button type="button" data-news-pair="BTCUSDT" onclick="setNewsPairFilter('BTCUSDT')" class="news-pair-btn py-1.5 rounded-lg text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">BTCUSDT</button>
         </div>
 
         <!-- Summary Banner -->
-        <div id="news-summary-banner" class="rounded-xl bg-slate-900/85 border border-sky-500/30 p-3 text-xs text-slate-200 leading-relaxed">
-          Memuat ringkasan jadwal berita ekonomi...
+        <div id="news-summary-banner" class="rounded-xl bg-slate-900/90 border border-slate-800 p-3 text-xs text-slate-300 leading-relaxed">
+          Memuat agenda berita makroekonomi...
+        </div>
+
+        <!-- Banner: Scan Peluang News Terbaik -->
+        <div id="best-news-opportunity-card" class="rounded-2xl bg-gradient-to-br from-amber-500/15 via-slate-900 to-cyan-500/15 border border-amber-400/40 p-3.5 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[10px] font-extrabold tracking-wider uppercase text-amber-300">⚡ SCAN PELUANG NEWS TERBAIK</span>
+            <span id="best-news-badge" class="px-2 py-0.5 rounded-full bg-amber-400/20 text-[10px] font-extrabold text-amber-200">TERDETEKSI</span>
+          </div>
+          <div id="best-news-content" class="text-xs text-slate-200 leading-relaxed">
+            Menganalisis agenda berita berdampak tertinggi...
+          </div>
         </div>
       </div>
 
-      <!-- BEST NEWS OPPORTUNITY SCANNER BANNER -->
-      <div id="best-news-scanner-card" class="glass-card rounded-2xl p-4 border border-amber-400/40 bg-gradient-to-br from-amber-500/10 via-slate-900 to-slate-950 space-y-2.5">
-        <div class="flex items-center justify-between gap-2">
-          <span class="text-[10px] font-extrabold tracking-wider uppercase text-amber-300">⚡ SCAN PELUANG NEWS TERBAIK</span>
-          <span id="best-news-badge" class="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/40 text-[10px] font-bold text-amber-200">TOP PICK</span>
-        </div>
-        <div id="best-news-content" class="text-xs text-slate-200">
-          Memindai agenda berita dengan probabilitas tertinggi...
-        </div>
-      </div>
-
-      <!-- Breaking Wire (The Fed / Trump / Geopolitik) -->
-      <div class="glass-card rounded-2xl p-4 space-y-3">
+      <!-- Breaking Wire Section -->
+      <div class="glass-card rounded-2xl p-4 space-y-2.5">
         <div class="flex items-center justify-between">
-          <span class="text-xs font-extrabold tracking-wide uppercase text-amber-400">⚡ BREAKING WIRE (THE FED • TRUMP • GEOPOLITIK)</span>
-          <span class="text-[10px] text-slate-400 font-semibold">Live Macro</span>
+          <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">🌐 LIVE NEWS WIRE &amp; GEOPOLITIK</span>
+          <span class="text-[10px] font-mono text-slate-400">MACRO DESK</span>
         </div>
         <div id="breaking-wire-list" class="space-y-2.5"></div>
       </div>
 
-      <!-- Economic Calendar Cards (With Single-Choice Verdict + Fundamental + Dual POI) -->
+      <!-- Economic Calendar Event Cards -->
       <div id="news-events-list" class="space-y-3.5"></div>
     </section>
 
-    <!-- ==================== TAB 3: SIGNALS (CENTER DIAMOND) ==================== -->
+    <!-- =====================================================================
+         TAB 3: SIGNALS (SNIPER ENGINE, INTERACTIVE POI, NEWS SNIPER, JOURNAL)
+         ===================================================================== -->
     <section id="tab-signals" class="tab-pane space-y-4">
 
-      <!-- Signal Terminal Header & Filters -->
+      <!-- Engine Control Card -->
       <div class="glass-card rounded-2xl p-4 space-y-3">
         <div class="flex items-center justify-between gap-2">
-          <div>
-            <span class="text-[10px] font-bold tracking-wider uppercase text-sky-400 block">ICT / SMC SNIPER ENGINE</span>
-            <h2 class="text-xl font-extrabold text-white">Signal Terminal</h2>
-          </div>
-
+          <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">ICT / SMC SNIPER ENGINE</span>
           <div class="flex items-center gap-1.5">
             <button type="button" onclick="openCalibrationModal()"
               class="px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-400/40 text-amber-300 text-[11px] font-bold active:scale-95">
-              🧮 Lot
+              ⚖️ Lot
             </button>
             <button type="button" onclick="toggleSignalFilterDrawer()"
               class="px-2.5 py-1.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-[11px] font-bold active:scale-95">
               🎛️ Filter
             </button>
-            <button id="btn-signal-alert-toggle" type="button" onclick="toggleSignalAlertMode()"
+            <button type="button" id="btn-signal-alert-toggle" onclick="toggleSignalAlertMode()"
               class="px-2.5 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[11px] font-extrabold active:scale-95">
               ● ALERT: ON
             </button>
           </div>
         </div>
 
-        <!-- Filter Pills Row -->
-        <div class="flex flex-wrap items-center gap-1.5">
-          <button id="btn-news-shield" type="button" onclick="toggleTerminalFlag('newsShield')"
+        <!-- Collapsible Extra Filter Drawer -->
+        <div id="signal-filter-drawer" class="hidden rounded-xl bg-slate-900/90 border border-slate-800 p-3 space-y-2 text-xs">
+          <div class="font-bold text-slate-200">Filter Perlindungan Eksekusi Prop Firm:</div>
+          <label class="flex items-center justify-between text-slate-300">
+            <span>Wajib SOP 100% sebelum Ambil Setup</span>
+            <input type="checkbox" id="chk-require-sop" onchange="saveTerminalGuardPrefs()" class="w-4 h-4 accent-sky-500" />
+          </label>
+          <label class="flex items-center justify-between text-slate-300">
+            <span>Blokir Ambil Setup saat Cooldown SL aktif</span>
+            <input type="checkbox" id="chk-require-cooldown" onchange="saveTerminalGuardPrefs()" checked class="w-4 h-4 accent-sky-500" />
+          </label>
+        </div>
+
+        <!-- Quick Shield & Time Filter Chips -->
+        <div class="flex flex-wrap gap-1.5">
+          <button type="button" id="btn-news-shield" onclick="toggleTerminalFlag('newsShield')"
             class="px-2.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[11px] font-bold">
             🛡️ News Shield: ON
           </button>
-          <button id="btn-monday-filter" type="button" onclick="toggleTerminalFlag('mondayFilter')"
+          <button type="button" id="btn-monday-filter" onclick="toggleTerminalFlag('mondayFilter')"
             class="px-2.5 py-1.5 rounded-full bg-slate-900 border border-slate-700 text-slate-400 text-[11px] font-bold">
             📅 Monday Filter: OFF
           </button>
-          <button id="btn-morning-filter" type="button" onclick="toggleTerminalFlag('morningFilter')"
+          <button type="button" id="btn-morning-filter" onclick="toggleTerminalFlag('morningFilter')"
             class="px-2.5 py-1.5 rounded-full bg-slate-900 border border-slate-700 text-slate-400 text-[11px] font-bold">
             🌅 Filter Pagi: OFF
           </button>
         </div>
 
-        <!-- Collapsible Extra Terminal Guard Settings -->
-        <div id="signal-filter-drawer" class="hidden rounded-xl bg-slate-900/90 border border-slate-800 p-3 space-y-2 text-xs">
-          <div class="flex items-center justify-between">
-            <span class="text-slate-300">Wajib Pre-Trade SOP 100% sebelum Ambil Setup</span>
-            <input id="chk-require-sop" type="checkbox" onchange="saveTerminalGuardPrefs()" class="w-4 h-4 accent-sky-500" />
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="text-slate-300">Kunci Entry Otomatis saat Cooldown Pasca-SL</span>
-            <input id="chk-require-cooldown" type="checkbox" checked onchange="saveTerminalGuardPrefs()" class="w-4 h-4 accent-sky-500" />
-          </div>
-        </div>
-
-        <!-- 4 Pair Selector Cards WITH LIVE MINI-PRICES -->
+        <!-- 4 Pair Selector Cards with Live Prices -->
         <div class="grid grid-cols-4 gap-1.5">
           <button type="button" data-pair="XAUUSD" onclick="selectSignalPair('XAUUSD')"
             class="pair-select-btn rounded-xl p-2 bg-blue-600 text-white text-center border border-blue-400/60 transition active:scale-95">
-            <div class="text-[11px] font-extrabold">🥇 XAU</div>
-            <div id="pair-btn-price-XAUUSD" class="text-[10px] font-mono opacity-90 mt-0.5">--</div>
+            <div class="text-xs font-extrabold">🥇 XAU</div>
+            <div id="pair-btn-price-XAUUSD" class="text-[10px] font-mono mt-0.5 opacity-95">--</div>
           </button>
           <button type="button" data-pair="US100" onclick="selectSignalPair('US100')"
             class="pair-select-btn rounded-xl p-2 bg-slate-900 text-slate-300 text-center border border-slate-800 transition active:scale-95">
-            <div class="text-[11px] font-extrabold">📈 US100</div>
-            <div id="pair-btn-price-US100" class="text-[10px] font-mono opacity-80 mt-0.5">--</div>
+            <div class="text-xs font-extrabold">📈 US100</div>
+            <div id="pair-btn-price-US100" class="text-[10px] font-mono mt-0.5 opacity-90">--</div>
           </button>
           <button type="button" data-pair="BTCUSDT" onclick="selectSignalPair('BTCUSDT')"
             class="pair-select-btn rounded-xl p-2 bg-slate-900 text-slate-300 text-center border border-slate-800 transition active:scale-95">
-            <div class="text-[11px] font-extrabold">₿ BTC</div>
-            <div id="pair-btn-price-BTCUSDT" class="text-[10px] font-mono opacity-80 mt-0.5">--</div>
+            <div class="text-xs font-extrabold">₿ BTC</div>
+            <div id="pair-btn-price-BTCUSDT" class="text-[10px] font-mono mt-0.5 opacity-90">--</div>
           </button>
           <button type="button" data-pair="EURUSD" onclick="selectSignalPair('EURUSD')"
             class="pair-select-btn rounded-xl p-2 bg-slate-900 text-slate-300 text-center border border-slate-800 transition active:scale-95">
-            <div class="text-[11px] font-extrabold">💱 EUR</div>
-            <div id="pair-btn-price-EURUSD" class="text-[10px] font-mono opacity-80 mt-0.5">--</div>
+            <div class="text-xs font-extrabold">💱 EUR</div>
+            <div id="pair-btn-price-EURUSD" class="text-[10px] font-mono mt-0.5 opacity-90">--</div>
           </button>
         </div>
 
-        <!-- Timeframe + 6 Method Selector + Manual Rescan -->
-        <div class="flex items-center gap-1.5">
-          <div class="grid grid-cols-4 gap-1 shrink-0">
-            <button type="button" data-tf="M5" onclick="selectSignalTimeframe('M5')"
-              class="tf-select-btn px-2.5 py-2 rounded-xl text-[11px] font-extrabold bg-slate-900 border border-slate-800 text-slate-400">M5</button>
-            <button type="button" data-tf="M15" onclick="selectSignalTimeframe('M15')"
-              class="tf-select-btn px-2.5 py-2 rounded-xl text-[11px] font-extrabold bg-cyan-500 text-slate-950">M15</button>
-            <button type="button" data-tf="H1" onclick="selectSignalTimeframe('H1')"
-              class="tf-select-btn px-2.5 py-2 rounded-xl text-[11px] font-extrabold bg-slate-900 border border-slate-800 text-slate-400">H1</button>
-            <button type="button" data-tf="H4" onclick="selectSignalTimeframe('H4')"
-              class="tf-select-btn px-2.5 py-2 rounded-xl text-[11px] font-extrabold bg-slate-900 border border-slate-800 text-slate-400">H4</button>
-          </div>
+        <!-- Timeframe Pills (Full Width 4 Columns) -->
+        <div class="grid grid-cols-4 gap-1.5">
+          <button type="button" data-tf="M5" onclick="selectSignalTimeframe('M5')" class="tf-select-btn py-2 rounded-xl text-xs font-extrabold bg-slate-900 border border-slate-800 text-slate-400">M5</button>
+          <button type="button" data-tf="M15" onclick="selectSignalTimeframe('M15')" class="tf-select-btn py-2 rounded-xl text-xs font-extrabold bg-cyan-500 text-slate-950">M15</button>
+          <button type="button" data-tf="H1" onclick="selectSignalTimeframe('H1')" class="tf-select-btn py-2 rounded-xl text-xs font-extrabold bg-slate-900 border border-slate-800 text-slate-400">H1</button>
+          <button type="button" data-tf="H4" onclick="selectSignalTimeframe('H4')" class="tf-select-btn py-2 rounded-xl text-xs font-extrabold bg-slate-900 border border-slate-800 text-slate-400">H4</button>
+        </div>
 
+        <!-- Full-Width Analysis Method Selector + Rescan Button (No Truncation!) -->
+        <div class="flex items-center gap-2">
           <select id="signal-method-select" onchange="selectSignalMethod(this.value)"
-            class="flex-1 min-w-0 bg-blue-600 text-white rounded-xl px-2.5 py-2 text-xs font-extrabold focus:outline-none">
-            <option value="auto">AUTO • Auto Sniper</option>
-            <option value="judas">ICT • Judas Swing</option>
-            <option value="smc_ob">SMC • Order Block + FVG</option>
-            <option value="sweep">LIQ • Liquidity Sweep</option>
-            <option value="silver_bullet">ICT • Silver Bullet</option>
-            <option value="ote">FIB • OTE (0.62–0.79)</option>
+            class="flex-1 min-w-0 rounded-xl bg-blue-600 text-white text-xs font-extrabold px-3 py-2.5 border border-blue-400/50 focus:outline-none">
+            <option value="auto">AUTO • Auto Sniper (Multi-Confluence)</option>
+            <option value="judas">ICT • Judas Swing (Session Manipulation)</option>
+            <option value="smc_ob">SMC • Order Block + FVG Confluence</option>
+            <option value="sweep">LIQ • Liquidity Sweep (Turtle Soup)</option>
+            <option value="silver_bullet">ICT • Silver Bullet (Time-Window FVG)</option>
+            <option value="ote">FIB • OTE (Optimal Trade Entry 0.62–0.79)</option>
           </select>
 
-          <button type="button" onclick="forceRescanSignal()" title="Scan Ulang Setup"
-            class="px-2.5 py-2 rounded-xl bg-slate-800 border border-slate-700 text-sky-400 text-xs font-bold shrink-0 active:scale-95">
-            ↻
+          <button type="button" onclick="forceRescanSignal()" title="Scan Ulang Struktur"
+            class="px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-extrabold active:scale-95 shrink-0">
+            🔄 Scan
           </button>
         </div>
       </div>
 
-      <!-- DEDICATED SEPARATE NEWS SNIPER MODULE (ON/OFF INDEPENDENTLY FROM NEWS SHIELD) -->
-      <div class="glass-card rounded-2xl p-3.5 border border-amber-400/35 space-y-2.5">
+      <!-- Modul Khusus Eksekusi News (News Sniper Mode) -->
+      <div class="glass-card rounded-2xl p-3.5 space-y-2.5 border border-amber-500/30">
         <div class="flex items-center justify-between gap-2">
-          <div class="flex items-center gap-2 min-w-0">
-            <span class="text-base">📰</span>
-            <div class="min-w-0">
-              <div class="text-xs font-extrabold text-white truncate">Modul Khusus Eksekusi News (News Sniper)</div>
-              <div class="text-[10px] text-slate-400 truncate">Sinyal Buy/Sell otomatis + notif HP/Tele saat news berlangsung</div>
-            </div>
+          <div>
+            <div class="text-xs font-extrabold text-amber-300">📰 Modul Khusus Eksekusi News</div>
+            <div class="text-[11px] text-slate-400">Sinyal Buy/Sell otomatis + notif saat rilis news</div>
           </div>
-          <button id="btn-news-sniper-toggle" type="button" onclick="toggleNewsSniperMode()"
+          <button type="button" id="btn-news-sniper-toggle" onclick="toggleNewsSniperMode()"
             class="px-3 py-1.5 rounded-full bg-slate-800 border border-slate-600 text-slate-300 text-[11px] font-extrabold shrink-0 active:scale-95">
             News Sniper: OFF
           </button>
         </div>
 
-        <!-- Active News Sniper Signal Panel (Shows when News Sniper is ON) -->
-        <div id="news-sniper-live-panel" class="hidden rounded-xl bg-amber-950/35 border border-amber-400/40 p-3 space-y-2.5">
+        <!-- Active News Sniper Signal Panel (Shown when ON) -->
+        <div id="news-sniper-live-panel" class="hidden rounded-xl bg-amber-950/35 border border-amber-400/40 p-3 space-y-2">
           <div class="flex items-center justify-between gap-2">
-            <span id="news-sniper-event-title" class="text-xs font-extrabold text-amber-200 truncate">Menunggu Rilis News...</span>
-            <span id="news-sniper-direction-badge" class="px-2.5 py-0.5 rounded-full text-[11px] font-extrabold bg-emerald-500 text-slate-950">BUY NEWS</span>
+            <span id="news-sniper-event-title" class="text-xs font-extrabold text-white">US High Impact News</span>
+            <span id="news-sniper-direction-badge" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-rose-500 text-white">SELL XAUUSD</span>
           </div>
-          <p id="news-sniper-rationale" class="text-[11px] text-slate-300 leading-relaxed"></p>
-          <div class="grid grid-cols-3 gap-1.5 text-center font-mono">
-            <div class="rounded-lg bg-slate-950/80 p-2 border border-slate-800">
-              <div class="text-[9px] text-slate-400">ENTRY NEWS</div>
-              <div id="news-sniper-entry" class="text-xs font-extrabold text-sky-400">--</div>
-              <button type="button" onclick="copyTextValue(document.getElementById('news-sniper-entry').innerText, 'Entry News')"
-                class="mt-1 text-[9px] text-slate-300 underline">Copy</button>
+          <p id="news-sniper-rationale" class="text-[11px] text-slate-200 leading-relaxed"></p>
+          <div class="grid grid-cols-3 gap-1.5 text-center font-mono text-[11px]">
+            <div class="rounded-lg bg-slate-950/80 p-1.5 border border-slate-800">
+              <span class="text-[9px] text-slate-400 block">ENTRY NEWS</span>
+              <strong id="news-sniper-entry" class="text-sky-400">--</strong>
             </div>
-            <div class="rounded-lg bg-slate-950/80 p-2 border border-rose-900/50">
-              <div class="text-[9px] text-rose-300">SL NEWS</div>
-              <div id="news-sniper-sl" class="text-xs font-extrabold text-rose-400">--</div>
-              <button type="button" onclick="copyTextValue(document.getElementById('news-sniper-sl').innerText, 'SL News')"
-                class="mt-1 text-[9px] text-slate-300 underline">Copy</button>
+            <div class="rounded-lg bg-slate-950/80 p-1.5 border border-slate-800">
+              <span class="text-[9px] text-slate-400 block">SL NEWS</span>
+              <strong id="news-sniper-sl" class="text-rose-400">--</strong>
             </div>
-            <div class="rounded-lg bg-slate-950/80 p-2 border border-emerald-900/50">
-              <div class="text-[9px] text-emerald-300">TP TARGET</div>
-              <div id="news-sniper-tp" class="text-xs font-extrabold text-emerald-400">--</div>
-              <button type="button" onclick="copyTextValue(document.getElementById('news-sniper-tp').innerText, 'TP News')"
-                class="mt-1 text-[9px] text-slate-300 underline">Copy</button>
+            <div class="rounded-lg bg-slate-950/80 p-1.5 border border-slate-800">
+              <span class="text-[9px] text-slate-400 block">TP NEWS</span>
+              <strong id="news-sniper-tp" class="text-emerald-400">--</strong>
             </div>
           </div>
-          <div class="flex items-center gap-2">
-            <button type="button" onclick="dispatchNewsSniperTelegram()"
-              class="flex-1 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-extrabold active:scale-95">
-              📤 Kirim Sinyal News ke VIP Tele
-            </button>
-          </div>
+          <button type="button" onclick="dispatchNewsSniperTelegram()"
+            class="w-full py-2 rounded-xl bg-amber-400 text-slate-950 text-xs font-extrabold active:scale-98">
+            📨 Kirim Sinyal News Sniper ke VIP Telegram
+          </button>
         </div>
       </div>
 
@@ -646,609 +733,497 @@
       </div>
 
       <!-- MAIN SNIPER SIGNAL CARD -->
-      <div id="main-sniper-card" class="glass-card rounded-2xl p-4 border border-emerald-500/35 space-y-3.5">
-        <!-- Top Row: Direction + Pair + Expiry + Copy All -->
-        <div class="flex items-center justify-between gap-2">
-          <div class="flex items-center gap-2 min-w-0">
-            <span id="sig-direction-badge" class="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-xs font-extrabold tracking-wide shrink-0">
-              ● BUY LIMIT
-            </span>
-            <span id="sig-pair-tf" class="text-sm font-extrabold text-white truncate">XAUUSD • M15</span>
+      <div id="main-sniper-card" class="glass-card rounded-2xl p-4 border border-emerald-500/40 space-y-3.5">
+        <!-- Header Row -->
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <div class="flex items-center gap-2">
+              <h2 id="sig-pair-tf" class="text-xl font-extrabold text-white">XAUUSD • M15</h2>
+              <span id="sig-expiry-timer" class="px-2 py-0.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-mono text-amber-300">
+                ⏳ 45:00
+              </span>
+            </div>
+            <p class="text-xs text-slate-400 mt-0.5">
+              <span id="sig-method-label">Auto Sniper (Multi-Confluence)</span> • <strong id="sig-score-label" class="text-emerald-400">Score 8.5/10</strong>
+            </p>
           </div>
-          <div class="flex items-center gap-1.5 shrink-0">
-            <span id="sig-expiry-timer" class="px-2.5 py-1 rounded-xl bg-slate-900 border border-slate-800 text-[11px] font-mono text-amber-300">
-              ⏳ 45:00
-            </span>
-            <button type="button" onclick="copyFullSignalSetup()"
-              class="px-2.5 py-1 rounded-xl bg-sky-500/20 border border-sky-400/40 text-sky-300 text-[11px] font-bold active:scale-95">
-              📋 Salin Semua
-            </button>
-          </div>
+          <span id="sig-direction-badge" class="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-xs font-extrabold tracking-wide shrink-0">
+            ● BUY LIMIT
+          </span>
         </div>
 
-        <!-- Method Name & Score -->
-        <div class="flex flex-wrap items-center justify-between gap-1 text-xs">
+        <!-- Zona Range Area Entry POI -->
+        <div class="rounded-xl bg-slate-900/90 border border-sky-500/35 p-3 flex items-center justify-between gap-2">
           <div>
-            <span class="text-slate-400">Metode: </span>
-            <strong id="sig-method-label" class="text-white">Auto Sniper (Multi-Confluence)</strong>
+            <span class="text-[9px] font-extrabold uppercase tracking-wider text-sky-400 block">ZONA RANGE AREA ENTRY POI</span>
+            <span id="sig-entry-zone-range" class="text-sm font-mono font-extrabold text-white">-- – --</span>
           </div>
-          <span id="sig-score-label" class="font-mono font-extrabold text-sky-400">Score 8.5/10</span>
-        </div>
-
-        <!-- RESTORED: ASSUMPTION ENTRY ZONE RANGE BANNER -->
-        <div class="rounded-xl bg-sky-500/10 border border-sky-400/35 px-3 py-2 flex items-center justify-between gap-2">
-          <div>
-            <span class="text-[10px] font-bold uppercase tracking-wider text-sky-300 block">📍 ASUMSI RANGE / ZONA AREA ENTRY POI</span>
-            <span id="sig-entry-zone-range" class="text-xs font-mono font-extrabold text-white">3574.10 – 3576.20</span>
-          </div>
-          <button type="button" onclick="copyTextValue(document.getElementById('sig-entry-zone-range').innerText, 'Zona Range POI')"
-            class="px-2.5 py-1 rounded-lg bg-slate-900/90 border border-slate-700 text-[10px] font-bold text-sky-300 shrink-0 active:scale-95">
+          <button type="button" onclick="copyTextValue(document.getElementById('sig-entry-zone-range').textContent, 'Zona POI')"
+            class="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-[11px] font-bold text-slate-200 active:scale-95">
             Copy Zona
           </button>
         </div>
 
-        <!-- ENTRY LIMIT & STOP LOSS (EACH WITH 1-TAP COPY + STRUCTURE REASON) -->
+        <!-- Entry & Stop Loss Grid -->
         <div class="grid grid-cols-2 gap-2.5">
-          <!-- Entry Box -->
-          <div class="rounded-xl bg-slate-900/85 border border-sky-500/35 p-3 space-y-1.5">
+          <!-- Entry Card -->
+          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-3 space-y-1">
             <div class="flex items-center justify-between gap-1">
-              <span id="sig-entry-type-label" class="text-[10px] font-bold uppercase text-slate-400">ENTRY LIMIT</span>
+              <span id="sig-entry-type-label" class="text-[10px] font-extrabold uppercase text-slate-400">BUY LIMIT</span>
               <button type="button" onclick="copySignalField('entry')"
-                class="px-2 py-0.5 rounded-md bg-sky-500/20 border border-sky-400/40 text-[10px] font-bold text-sky-300 active:scale-90">
+                class="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-[10px] font-bold text-slate-300 active:scale-90">
                 Copy
               </button>
             </div>
-            <div id="sig-entry-price" class="text-xl font-mono font-extrabold text-sky-400 tracking-tight">3575.07</div>
-            <div id="sig-entry-note" class="text-[10px] text-slate-400 leading-snug">Optimal FVG / OB Midpoint</div>
+            <div id="sig-entry-price" class="text-lg font-mono font-extrabold text-sky-400">--</div>
+            <div id="sig-entry-note" class="text-[10px] text-slate-400 leading-tight">Midpoint Bullish OB / FVG</div>
           </div>
 
-          <!-- Stop Loss Box -->
-          <div class="rounded-xl bg-rose-950/25 border border-rose-500/35 p-3 space-y-1.5">
+          <!-- Stop Loss Card -->
+          <div class="rounded-xl bg-rose-950/35 border border-rose-500/40 p-3 space-y-1">
             <div class="flex items-center justify-between gap-1">
-              <span id="sig-sl-pips-label" class="text-[10px] font-bold uppercase text-rose-300">STOP LOSS (-45 pips)</span>
+              <span id="sig-sl-pips-label" class="text-[10px] font-extrabold uppercase text-rose-300">STOP LOSS (-0 pips)</span>
               <button type="button" onclick="copySignalField('sl')"
-                class="px-2 py-0.5 rounded-md bg-rose-500/20 border border-rose-400/40 text-[10px] font-bold text-rose-300 active:scale-90">
+                class="px-2 py-0.5 rounded bg-rose-900/60 border border-rose-500/40 text-[10px] font-bold text-rose-200 active:scale-90">
                 Copy
               </button>
             </div>
-            <div id="sig-sl-price" class="text-xl font-mono font-extrabold text-rose-400 tracking-tight">3570.57</div>
-            <div id="sig-sl-reason" class="text-[10px] text-rose-200/80 leading-snug">Invalidasi di bawah Bullish OB</div>
+            <div id="sig-sl-price" class="text-lg font-mono font-extrabold text-rose-400">--</div>
+            <div id="sig-sl-reason" class="text-[10px] text-rose-200/80 leading-tight">Di bawah Swing Low</div>
           </div>
         </div>
 
-        <!-- TP 1, TP 2, TP 3 (EACH WITH 1-TAP COPY + STRUCTURE TARGET & R:R) -->
+        <!-- TP 1, TP 2, TP 3 Grid -->
         <div class="grid grid-cols-3 gap-2">
           <!-- TP 1 -->
-          <div class="rounded-xl bg-emerald-950/25 border border-emerald-500/35 p-2.5 space-y-1">
+          <div class="rounded-xl bg-emerald-950/35 border border-emerald-500/35 p-2.5 space-y-1">
             <div class="flex items-center justify-between gap-1">
-              <span id="sig-tp1-pips" class="text-[9px] font-bold text-emerald-300">TP 1 (+58)</span>
-              <button type="button" onclick="copySignalField('tp1')"
-                class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-[9px] font-bold text-emerald-300 active:scale-90">
-                Copy
-              </button>
+              <span id="sig-tp1-pips" class="text-[10px] font-extrabold text-emerald-300">TP 1 (+0)</span>
+              <button type="button" onclick="copySignalField('tp1')" class="px-1.5 py-0.5 rounded bg-emerald-900/60 text-[9px] font-bold text-emerald-200 active:scale-90">Copy</button>
             </div>
-            <div id="sig-tp1-price" class="text-sm font-mono font-extrabold text-emerald-400">3580.92</div>
-            <div id="sig-tp1-reason" class="text-[9px] text-slate-300 leading-tight">1:1.3 Internal High</div>
+            <div id="sig-tp1-price" class="text-sm font-mono font-extrabold text-emerald-400">--</div>
+            <div id="sig-tp1-reason" class="text-[9px] text-slate-400 leading-tight">1:1.3 Internal High</div>
           </div>
 
           <!-- TP 2 -->
-          <div class="rounded-xl bg-emerald-950/25 border border-emerald-500/35 p-2.5 space-y-1">
+          <div class="rounded-xl bg-emerald-950/35 border border-emerald-500/35 p-2.5 space-y-1">
             <div class="flex items-center justify-between gap-1">
-              <span id="sig-tp2-pips" class="text-[9px] font-bold text-emerald-300">TP 2 (+99)</span>
-              <button type="button" onclick="copySignalField('tp2')"
-                class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-[9px] font-bold text-emerald-300 active:scale-90">
-                Copy
-              </button>
+              <span id="sig-tp2-pips" class="text-[10px] font-extrabold text-emerald-300">TP 2 (+0)</span>
+              <button type="button" onclick="copySignalField('tp2')" class="px-1.5 py-0.5 rounded bg-emerald-900/60 text-[9px] font-bold text-emerald-200 active:scale-90">Copy</button>
             </div>
-            <div id="sig-tp2-price" class="text-sm font-mono font-extrabold text-emerald-400">3584.97</div>
-            <div id="sig-tp2-reason" class="text-[9px] text-slate-300 leading-tight">1:2.2 Session BSL</div>
+            <div id="sig-tp2-price" class="text-sm font-mono font-extrabold text-emerald-400">--</div>
+            <div id="sig-tp2-reason" class="text-[9px] text-slate-400 leading-tight">1:2.2 Equilibrium</div>
           </div>
 
           <!-- TP 3 -->
-          <div class="rounded-xl bg-emerald-950/25 border border-emerald-500/35 p-2.5 space-y-1">
+          <div class="rounded-xl bg-emerald-950/35 border border-emerald-500/35 p-2.5 space-y-1">
             <div class="flex items-center justify-between gap-1">
-              <span id="sig-tp3-pips" class="text-[9px] font-bold text-emerald-300">TP 3 (+144)</span>
-              <button type="button" onclick="copySignalField('tp3')"
-                class="px-1.5 py-0.5 rounded bg-emerald-500/20 text-[9px] font-bold text-emerald-300 active:scale-90">
-                Copy
-              </button>
+              <span id="sig-tp3-pips" class="text-[10px] font-extrabold text-emerald-300">TP 3 (+0)</span>
+              <button type="button" onclick="copySignalField('tp3')" class="px-1.5 py-0.5 rounded bg-emerald-900/60 text-[9px] font-bold text-emerald-200 active:scale-90">Copy</button>
             </div>
-            <div id="sig-tp3-price" class="text-sm font-mono font-extrabold text-emerald-400">3589.47</div>
-            <div id="sig-tp3-reason" class="text-[9px] text-slate-300 leading-tight">1:3.2 HTF Pool</div>
+            <div id="sig-tp3-price" class="text-sm font-mono font-extrabold text-emerald-400">--</div>
+            <div id="sig-tp3-reason" class="text-[9px] text-slate-400 leading-tight">1:3.2+ HTF Pool</div>
           </div>
         </div>
 
-        <!-- INTERACTIVE CLICKABLE STRUKTUR POI BOX (TAP TO LEARN FULL BREAKDOWN) -->
-        <div onclick="togglePoiEducationDrawer()"
-          class="rounded-xl bg-slate-900/90 border border-amber-400/35 p-3 cursor-pointer active:scale-[0.99] transition space-y-2">
-          <div class="flex items-start justify-between gap-2">
-            <p id="sig-poi-summary" class="text-xs text-slate-200 leading-relaxed">
-              📐 <strong class="text-amber-300">Struktur POI:</strong> Memuat analisa struktur...
-            </p>
-            <span id="poi-edu-toggle-badge" class="px-2 py-0.5 rounded-full bg-amber-500/20 border border-amber-400/40 text-[9px] font-extrabold text-amber-200 shrink-0">
+        <!-- Interactive Struktur POI & Educational Accordion -->
+        <div class="rounded-xl bg-slate-900/85 border border-slate-800 overflow-hidden">
+          <button type="button" onclick="togglePoiEducationDrawer()"
+            class="w-full p-3 text-left flex items-start justify-between gap-2 active:bg-slate-800/60 transition">
+            <div id="sig-poi-summary" class="text-xs text-slate-300 leading-relaxed">
+              📐 <strong class="text-amber-300">Struktur POI:</strong> Memuat analisis struktur pasar...
+            </div>
+            <span id="poi-edu-toggle-badge" class="px-2 py-0.5 rounded-md bg-sky-500/15 border border-sky-400/40 text-[10px] font-bold text-sky-300 shrink-0 mt-0.5">
               📖 Belajar ▼
             </span>
-          </div>
+          </button>
 
-          <!-- Expanded Educational Panel (Hidden until clicked) -->
-          <div id="poi-education-drawer" class="hidden pt-2.5 border-t border-slate-800 space-y-2 text-[11px] text-slate-300 leading-relaxed">
-            <div id="poi-edu-content"></div>
+          <!-- Expanded Educational Breakdown -->
+          <div id="poi-education-drawer" class="hidden px-3 pb-3 pt-2 border-t border-slate-800/90 bg-slate-950/60 space-y-2 text-xs">
+            <div id="poi-edu-content" class="space-y-2 text-slate-300 leading-relaxed"></div>
           </div>
         </div>
 
-        <!-- Account, Lot, Dollar Risk/Reward & SOP Guard Status -->
-        <div class="rounded-xl bg-slate-900/75 border border-slate-800 px-3 py-2.5 space-y-1">
-          <div class="flex items-center justify-between text-xs">
-            <span>Akun: <strong id="sig-account-name" class="text-white">BrightFunded #4</strong></span>
-            <span id="sig-lot-risk" class="font-mono font-extrabold text-amber-300">Lot: 0.01 (Risk 0.4%)</span>
+        <!-- Account Risk & Lot Summary Box -->
+        <div class="rounded-xl bg-slate-900/90 border border-slate-800 p-3 flex items-center justify-between gap-2">
+          <div>
+            <div class="text-xs font-extrabold text-white">
+              <span id="sig-account-name">BrightFunded #4</span> • <span id="sig-lot-risk" class="text-cyan-400">Lot: 0.02 (Risk 0.4%)</span>
+            </div>
+            <div id="sig-dollar-metrics" class="text-[11px] font-mono text-slate-400 mt-0.5">
+              Risk: -$3.94 | TP2: +$8.86
+            </div>
           </div>
-          <div class="flex items-center justify-between text-[11px] text-slate-400 font-mono">
-            <span id="sig-dollar-metrics">Risk: -$3.94 | TP2: +$8.66</span>
-            <span id="sig-sop-readiness" class="text-emerald-400">SOP: 33%</span>
-          </div>
-          <div id="sig-lot-warning" class="hidden text-[10px] font-bold text-rose-400">
-            ⚠️ Lot di-cap otomatis sesuai Hard Lot Max akun!
-          </div>
+          <span id="sig-sop-readiness" class="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-xs font-mono font-extrabold text-emerald-400 shrink-0">
+            SOP: 0%
+          </span>
+        </div>
+
+        <!-- Lot Capped Warning -->
+        <div id="sig-lot-warning" class="hidden rounded-xl bg-rose-950/50 border border-rose-500/40 px-3 py-2 text-[11px] text-rose-300">
+          ⚠️ Lot dibatasi otomatis sesuai Hard Lot Max akun agar aturan Prop Firm tetap aman.
         </div>
 
         <!-- Primary Action Buttons -->
-        <div class="grid grid-cols-2 gap-2.5 pt-1">
-          <button type="button" onclick="takeSetupAndSendTelegram()"
-            class="py-3 px-3 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-slate-950 font-extrabold text-xs flex items-center justify-center gap-1.5 shadow-lg shadow-cyan-500/20 active:scale-95 transition">
-            <span>⚡</span><span>Ambil Setup + Kirim Tele</span>
-          </button>
+        <button type="button" onclick="takeSetupAndSendTelegram()"
+          class="w-full py-3 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-400 text-slate-950 font-extrabold text-sm shadow-lg shadow-cyan-500/20 active:scale-98 transition">
+          ⚡ Ambil Setup &amp; Kirim Tele
+        </button>
+
+        <div class="grid grid-cols-3 gap-2">
           <button type="button" onclick="sendCurrentSignalToTelegramOnly()"
-            class="py-3 px-3 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white font-extrabold text-xs flex items-center justify-center gap-1.5 active:scale-95 transition">
-            <span>📨</span><span>Kirim VIP Tele</span>
+            class="py-2 rounded-xl bg-slate-900 border border-slate-700 text-[11px] font-bold text-sky-300 active:scale-95">
+            📨 Kirim Saja
+          </button>
+          <button type="button" onclick="copyFullSignalSetup()"
+            class="py-2 rounded-xl bg-slate-900 border border-slate-700 text-[11px] font-bold text-slate-200 active:scale-95">
+            📋 Copy Setup
+          </button>
+          <button type="button" onclick="toggleStandardFormatBox()"
+            class="py-2 rounded-xl bg-slate-900 border border-slate-700 text-[11px] font-bold text-slate-200 active:scale-95">
+            📄 Standar
           </button>
         </div>
+
+        <!-- Standard Text Format Preview -->
+        <pre id="standard-format-preview" class="hidden rounded-xl bg-slate-950 border border-slate-800 p-3 text-[11px] font-mono text-slate-300 whitespace-pre-wrap leading-relaxed"></pre>
       </div>
 
-      <!-- REKAP PERFORMA & PIPS -->
+      <!-- PERFORMANCE RECAP & JOURNAL -->
       <div class="glass-card rounded-2xl p-4 space-y-3">
         <div class="flex items-center justify-between gap-2">
-          <span class="text-xs font-extrabold tracking-wider uppercase text-slate-300">REKAP PERFORMA &amp; PIPS</span>
-          <div class="flex items-center gap-1.5">
-            <span id="journal-count-pill" class="px-2.5 py-1 rounded-full bg-blue-600/30 border border-blue-400/40 text-[10px] font-extrabold text-blue-200">
-              0 JURNAL
-            </span>
-            <button type="button" onclick="copyPerformanceRecap()"
-              class="px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-[11px] font-bold text-slate-200 active:scale-95">
-              Salin
-            </button>
+          <div>
+            <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">PERFORMANCE RECAP &amp; JOURNAL</span>
+            <h3 class="text-base font-extrabold text-white">Statistik Winrate &amp; Pips</h3>
           </div>
+          <span id="journal-count-pill" class="px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-[10px] font-mono font-bold text-slate-300">
+            0 JURNAL
+          </span>
         </div>
 
-        <!-- Recap Period Tabs -->
+        <!-- Period Filter -->
         <div class="grid grid-cols-5 gap-1">
-          <button type="button" data-recap-period="today" onclick="setRecapPeriod('today')"
-            class="recap-period-btn py-1.5 rounded-xl text-[11px] font-bold bg-blue-600 text-white">Hari Ini</button>
-          <button type="button" data-recap-period="week" onclick="setRecapPeriod('week')"
-            class="recap-period-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">Minggu</button>
-          <button type="button" data-recap-period="month" onclick="setRecapPeriod('month')"
-            class="recap-period-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">Bulan</button>
-          <button type="button" data-recap-period="year" onclick="setRecapPeriod('year')"
-            class="recap-period-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">Tahun</button>
-          <button type="button" data-recap-period="all" onclick="setRecapPeriod('all')"
-            class="recap-period-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">All Years</button>
+          <button type="button" data-recap-period="today" onclick="setRecapPeriod('today')" class="recap-period-btn py-1.5 rounded-xl text-[11px] font-bold bg-blue-600 text-white">Hari Ini</button>
+          <button type="button" data-recap-period="week" onclick="setRecapPeriod('week')" class="recap-period-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">Minggu</button>
+          <button type="button" data-recap-period="month" onclick="setRecapPeriod('month')" class="recap-period-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">Bulan</button>
+          <button type="button" data-recap-period="year" onclick="setRecapPeriod('year')" class="recap-period-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">Tahun</button>
+          <button type="button" data-recap-period="all" onclick="setRecapPeriod('all')" class="recap-period-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">Semua</button>
         </div>
 
-        <!-- 8 Performance Metrics -->
-        <div class="grid grid-cols-4 gap-2 rounded-xl bg-slate-900/80 border border-slate-800 p-3 text-center font-mono">
-          <div>
-            <span class="text-[9px] text-slate-400 block">TP HIT</span>
-            <span id="stat-tp-hit" class="text-sm font-extrabold text-emerald-400">0</span>
+        <!-- 8 Performance Metric Cards -->
+        <div class="grid grid-cols-4 gap-1.5 text-center font-mono">
+          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2">
+            <div class="text-[9px] text-slate-400">TP HIT</div>
+            <div id="stat-tp-hit" class="text-sm font-extrabold text-emerald-400 mt-0.5">0</div>
           </div>
-          <div>
-            <span class="text-[9px] text-slate-400 block">SL HIT</span>
-            <span id="stat-sl-hit" class="text-sm font-extrabold text-rose-400">0</span>
+          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2">
+            <div class="text-[9px] text-slate-400">SL HIT</div>
+            <div id="stat-sl-hit" class="text-sm font-extrabold text-rose-400 mt-0.5">0</div>
           </div>
-          <div>
-            <span class="text-[9px] text-slate-400 block">BE</span>
-            <span id="stat-be-hit" class="text-sm font-extrabold text-amber-300">0</span>
+          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2">
+            <div class="text-[9px] text-slate-400">BE</div>
+            <div id="stat-be-hit" class="text-sm font-extrabold text-amber-300 mt-0.5">0</div>
           </div>
-          <div>
-            <span class="text-[9px] text-slate-400 block">WINRATE</span>
-            <span id="stat-winrate" class="text-sm font-extrabold text-sky-400">0%</span>
+          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2">
+            <div class="text-[9px] text-slate-400">WINRATE</div>
+            <div id="stat-winrate" class="text-sm font-extrabold text-sky-400 mt-0.5">0%</div>
           </div>
-        </div>
-
-        <div class="grid grid-cols-4 gap-2 rounded-xl bg-slate-900/80 border border-slate-800 p-3 text-center font-mono">
-          <div>
-            <span class="text-[9px] text-slate-400 block">+PIPS PROFIT</span>
-            <span id="stat-plus-pips" class="text-xs font-extrabold text-emerald-400">+0</span>
+          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2">
+            <div class="text-[9px] text-slate-400">+PIPS</div>
+            <div id="stat-plus-pips" class="text-xs font-extrabold text-emerald-400 mt-0.5">+0</div>
           </div>
-          <div>
-            <span class="text-[9px] text-slate-400 block">-PIPS LOSS</span>
-            <span id="stat-minus-pips" class="text-xs font-extrabold text-rose-400">-0</span>
+          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2">
+            <div class="text-[9px] text-slate-400">-PIPS</div>
+            <div id="stat-minus-pips" class="text-xs font-extrabold text-rose-400 mt-0.5">-0</div>
           </div>
-          <div>
-            <span class="text-[9px] text-slate-400 block">NET PIPS</span>
-            <span id="stat-net-pips" class="text-xs font-extrabold text-emerald-300">+0</span>
+          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2">
+            <div class="text-[9px] text-slate-400">NET PIPS</div>
+            <div id="stat-net-pips" class="text-xs font-extrabold text-white mt-0.5">0</div>
           </div>
-          <div>
-            <span class="text-[9px] text-slate-400 block">PROFIT FACTOR</span>
-            <span id="stat-profit-factor" class="text-xs font-extrabold text-sky-400">0.00x</span>
+          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2">
+            <div class="text-[9px] text-slate-400">PROFIT FAC</div>
+            <div id="stat-profit-factor" class="text-xs font-extrabold text-cyan-400 mt-0.5">0.00x</div>
           </div>
         </div>
 
-        <div id="edge-finder-banner" class="rounded-xl bg-slate-900/85 border border-slate-800 p-3 text-xs text-slate-300 leading-relaxed">
-          💡 <strong>Edge Finder:</strong> Ketuk <em>⚡ Ambil Setup</em> lalu tandai hasil <strong>TP1/TP2/TP3/SL/BE</strong> di bawah untuk membangun statistik winrate &amp; otomatis update saldo akun.
-        </div>
-      </div>
-
-      <!-- RIWAYAT SINYAL & JURNAL SAYA -->
-      <div class="space-y-3">
-        <div class="flex items-center gap-2">
-          <div class="flex-1 grid grid-cols-2 bg-slate-900 border border-slate-800 rounded-2xl p-1">
-            <button type="button" data-log-tab="signals" onclick="switchLogSubTab('signals')"
-              class="log-subtab-btn py-2 rounded-xl text-xs font-extrabold bg-blue-600 text-white">
-              Riwayat Sinyal
-            </button>
-            <button type="button" data-log-tab="journal" onclick="switchLogSubTab('journal')"
-              class="log-subtab-btn py-2 rounded-xl text-xs font-extrabold text-slate-400">
-              Jurnal Saya <span id="journal-tab-count">0</span>
-            </button>
-          </div>
+        <!-- Copy Rekap & Export CSV -->
+        <div class="grid grid-cols-2 gap-2">
+          <button type="button" onclick="copyPerformanceRecap()"
+            class="py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-slate-200 active:scale-95">
+            📋 Copy Rekap
+          </button>
           <button type="button" onclick="exportJournalCsv()"
-            class="px-3.5 py-2.5 rounded-2xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold shrink-0 active:scale-95">
-            📥 Excel
+            class="py-2 rounded-xl bg-emerald-950/60 border border-emerald-500/40 text-xs font-bold text-emerald-300 active:scale-95">
+            📥 Export Excel (.CSV)
           </button>
         </div>
 
-        <!-- Status Filter + Reset Log -->
+        <!-- Sub-tabs: Jurnal Sinyal vs Riwayat Eksekusi -->
+        <div class="grid grid-cols-2 gap-1.5 bg-slate-950/80 p-1 rounded-2xl border border-slate-800">
+          <button type="button" data-log-tab="signals" onclick="switchLogSubTab('signals')"
+            class="log-subtab-btn py-2 rounded-xl text-xs font-extrabold bg-blue-600 text-white">
+            Jurnal Sinyal (<span id="journal-tab-count">0</span>)
+          </button>
+          <button type="button" data-log-tab="history" onclick="switchLogSubTab('history')"
+            class="log-subtab-btn py-2 rounded-xl text-xs font-extrabold text-slate-400">
+            Riwayat Eksekusi
+          </button>
+        </div>
+
+        <!-- Status & Pair Filters -->
         <div class="flex items-center justify-between gap-2">
-          <div class="flex items-center gap-1.5">
-            <button type="button" data-log-status="all" onclick="setLogStatusFilter('all')"
-              class="log-status-btn px-3 py-1.5 rounded-full text-xs font-bold bg-cyan-500 text-slate-950">Semua</button>
-            <button type="button" data-log-status="done" onclick="setLogStatusFilter('done')"
-              class="log-status-btn px-3 py-1.5 rounded-full text-xs font-bold bg-slate-900 border border-slate-800 text-slate-300">Selesai TP/SL</button>
-            <button type="button" data-log-status="cancel" onclick="setLogStatusFilter('cancel')"
-              class="log-status-btn px-3 py-1.5 rounded-full text-xs font-bold bg-slate-900 border border-slate-800 text-slate-300">Batal</button>
+          <div class="flex gap-1.5">
+            <button type="button" data-log-status="all" onclick="setLogStatusFilter('all')" class="log-status-btn px-3 py-1.5 rounded-full text-xs font-bold bg-cyan-500 text-slate-950">Semua</button>
+            <button type="button" data-log-status="done" onclick="setLogStatusFilter('done')" class="log-status-btn px-3 py-1.5 rounded-full text-xs font-bold bg-slate-900 border border-slate-800 text-slate-300">Selesai</button>
+            <button type="button" data-log-status="cancel" onclick="setLogStatusFilter('cancel')" class="log-status-btn px-3 py-1.5 rounded-full text-xs font-bold bg-slate-900 border border-slate-800 text-slate-300">Batal</button>
           </div>
           <button type="button" onclick="resetTradeLogs()" class="text-xs font-bold text-rose-400 hover:underline">
             Reset Log
           </button>
         </div>
 
-        <!-- Pair Filter -->
         <div class="grid grid-cols-5 gap-1">
-          <button type="button" data-log-pair="ALL" onclick="setLogPairFilter('ALL')"
-            class="log-pair-btn py-1.5 rounded-xl text-[11px] font-bold bg-blue-600 text-white">All Pair</button>
-          <button type="button" data-log-pair="XAUUSD" onclick="setLogPairFilter('XAUUSD')"
-            class="log-pair-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">XAUUSD</button>
-          <button type="button" data-log-pair="US100" onclick="setLogPairFilter('US100')"
-            class="log-pair-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">US100</button>
-          <button type="button" data-log-pair="BTCUSDT" onclick="setLogPairFilter('BTCUSDT')"
-            class="log-pair-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">BTC</button>
-          <button type="button" data-log-pair="EURUSD" onclick="setLogPairFilter('EURUSD')"
-            class="log-pair-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">EURUSD</button>
+          <button type="button" data-log-pair="ALL" onclick="setLogPairFilter('ALL')" class="log-pair-btn py-1.5 rounded-xl text-[11px] font-bold bg-blue-600 text-white">ALL</button>
+          <button type="button" data-log-pair="XAUUSD" onclick="setLogPairFilter('XAUUSD')" class="log-pair-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">XAUUSD</button>
+          <button type="button" data-log-pair="US100" onclick="setLogPairFilter('US100')" class="log-pair-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">US100</button>
+          <button type="button" data-log-pair="BTCUSDT" onclick="setLogPairFilter('BTCUSDT')" class="log-pair-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">BTCUSDT</button>
+          <button type="button" data-log-pair="EURUSD" onclick="setLogPairFilter('EURUSD')" class="log-pair-btn py-1.5 rounded-xl text-[11px] font-bold bg-slate-900 border border-slate-800 text-slate-400">EURUSD</button>
         </div>
 
-        <!-- Log Items List -->
+        <!-- Trade Log Entries List -->
         <div id="trade-logs-container" class="space-y-2.5"></div>
-
-        <!-- Standard ICT/SMC Text Format Card -->
-        <div class="glass-card rounded-2xl p-3.5 space-y-2">
-          <div class="flex items-center justify-between gap-2">
-            <button type="button" onclick="toggleStandardFormatBox()" class="text-xs font-bold text-slate-200 flex items-center gap-1.5">
-              <span>📋</span><span>Lihat Format Teks Standar ICT/SMC</span>
-            </button>
-            <button type="button" onclick="copyFullSignalSetup()"
-              class="px-3 py-1 rounded-xl bg-blue-600 text-white text-xs font-bold active:scale-95">
-              Salin
-            </button>
-          </div>
-          <pre id="standard-format-preview" class="hidden text-[11px] font-mono bg-slate-950 border border-slate-800 rounded-xl p-3 text-slate-300 whitespace-pre-wrap"></pre>
-        </div>
       </div>
     </section>
 
-    <!-- ==================== TAB 4: CHART ==================== -->
+    <!-- =====================================================================
+         TAB 4: CHART (TRADINGVIEW RADAR & STRUCTURE SCANNER)
+         ===================================================================== -->
     <section id="tab-chart" class="tab-pane space-y-4">
       <div class="glass-card rounded-2xl p-4 space-y-3">
         <div class="flex items-center justify-between gap-2">
           <div>
-            <span class="text-[10px] font-bold tracking-wider uppercase text-sky-400 block">LIVE CHART &amp; RADAR</span>
+            <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">LIVE CHART &amp; RADAR</span>
             <h2 class="text-lg font-extrabold text-white">TradingView Radar</h2>
           </div>
-          <select id="chart-pair-select" onchange="changeChartPair(this.value)"
-            class="bg-slate-900 border border-sky-500/40 rounded-xl px-3 py-2 text-xs font-bold text-white focus:outline-none">
-            <option value="XAUUSD">🥇 XAUUSD (OANDA:XAUUSD)</option>
-            <option value="US100">📈 US100 (NASDAQ:NDX)</option>
-            <option value="BTCUSDT">₿ BTCUSDT (BINANCE:BTCUSDT)</option>
-            <option value="EURUSD">💱 EURUSD (FX:EURUSD)</option>
-          </select>
-        </div>
-
-        <!-- TradingView Widget Container -->
-        <div id="tv-chart-wrapper" class="w-full h-[360px] rounded-xl overflow-hidden border border-slate-800 bg-slate-950"></div>
-      </div>
-
-      <!-- Mesin Pembaca Grafik -->
-      <div class="glass-card rounded-2xl p-4 space-y-3">
-        <div class="flex items-center justify-between gap-2">
-          <div>
-            <h3 class="text-base font-extrabold text-white">Mesin Pembaca Grafik</h3>
-            <p id="chart-feed-source-label" class="text-[11px] text-slate-400">● Multi-Source Live Feed + Broker Sync</p>
-          </div>
           <button type="button" onclick="scanChartStructure(true)"
-            class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold active:scale-95">
-            Scan
+            class="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-extrabold active:scale-95 shrink-0">
+            🔍 Scan Struktur
           </button>
         </div>
 
-        <div class="grid grid-cols-3 gap-2 rounded-xl bg-slate-900/85 border border-slate-800 p-3 text-center font-mono">
-          <div>
+        <!-- Full-Width Pair Selector (Unlocked Symbols for TradingView Embed) -->
+        <select id="chart-pair-select" onchange="changeChartPair(this.value)"
+          class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2.5 text-xs font-extrabold text-white focus:outline-none focus:border-sky-500">
+          <option value="XAUUSD">🥇 XAUUSD (OANDA:XAUUSD)</option>
+          <option value="US100">📈 US100 / NASDAQ (CAPITALCOM:US100)</option>
+          <option value="BTCUSDT">₿ BTCUSDT (BINANCE:BTCUSDT)</option>
+          <option value="EURUSD">💱 EURUSD (FX:EURUSD)</option>
+        </select>
+
+        <!-- TradingView Interactive Widget Container -->
+        <div id="tv-chart-wrapper" class="w-full h-[380px] rounded-2xl overflow-hidden border border-slate-800 bg-slate-950"></div>
+
+        <!-- Structural Dealing Range Readout -->
+        <div class="grid grid-cols-3 gap-2 text-center font-mono">
+          <div class="rounded-xl bg-slate-900/85 border border-slate-800 p-2.5">
             <span class="text-[9px] text-slate-400 block">SWING HIGH</span>
-            <span id="chart-swing-high" class="text-sm font-extrabold text-rose-400">--</span>
+            <strong id="chart-swing-high" class="text-xs text-rose-400">--</strong>
           </div>
-          <div>
+          <div class="rounded-xl bg-slate-900/85 border border-slate-800 p-2.5">
             <span class="text-[9px] text-slate-400 block">SWING LOW</span>
-            <span id="chart-swing-low" class="text-sm font-extrabold text-emerald-400">--</span>
+            <strong id="chart-swing-low" class="text-xs text-emerald-400">--</strong>
           </div>
-          <div>
-            <span class="text-[9px] text-slate-400 block">RANGE AKTIF</span>
-            <span id="chart-active-range" class="text-sm font-extrabold text-sky-400">--</span>
+          <div class="rounded-xl bg-slate-900/85 border border-slate-800 p-2.5">
+            <span class="text-[9px] text-slate-400 block">ACTIVE RANGE</span>
+            <strong id="chart-active-range" class="text-xs text-sky-400">--</strong>
           </div>
         </div>
 
-        <!-- Detailed Chart Scan Verdict Box -->
-        <div id="chart-scan-verdict-box" class="rounded-xl bg-slate-900/85 border border-sky-500/30 p-3 text-xs text-slate-200 leading-relaxed">
-          Ketuk tombol <strong>Scan</strong> untuk memindai bias struktur HTF, posisi Premium/Discount, dan zona likuiditas terdekat.
+        <div id="chart-scan-verdict-box" class="rounded-xl bg-slate-900/90 border border-slate-800 p-3 text-xs text-slate-300 leading-relaxed">
+          Ketuk <strong>Scan Struktur</strong> untuk memetakan area Discount/Premium dan Liquidity Pool pada pair aktif.
         </div>
       </div>
     </section>
 
-    <!-- ==================== TAB 5: PROFIL ==================== -->
+    <!-- =====================================================================
+         TAB 5: PROFIL (SUPER ADMIN, SUPABASE 2-WAY SYNC, TELEGRAM VIP, PUSH)
+         ===================================================================== -->
     <section id="tab-profil" class="tab-pane space-y-4">
 
-      <!-- Owner Identity Card -->
-      <div class="glass-card rounded-2xl p-4 flex items-center justify-between gap-3">
-        <div>
-          <span class="text-[10px] font-bold tracking-wider uppercase text-sky-400 block">AKUN &amp; HAK AKSES</span>
-          <h2 class="text-base font-extrabold text-white mt-0.5">Ilham Maulana Nur Al Rasyid</h2>
-          <p class="text-xs text-slate-400 mt-0.5">Handle: @xliamvr • Role: OWNER / SUPER ADMIN</p>
-        </div>
-        <span class="px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-400/40 text-amber-300 text-[10px] font-extrabold text-center shrink-0">
-          FULL<br>ACCESS
-        </span>
-      </div>
-
-      <!-- Super Admin Console -->
-      <div class="glass-card rounded-2xl p-4 space-y-3">
-        <div class="flex items-center justify-between">
+      <!-- Card 1: Super Admin Console -->
+      <div class="glass-card rounded-2xl p-4 space-y-3 border border-amber-500/35">
+        <div class="flex items-center justify-between gap-2">
           <div>
-            <span class="text-[10px] font-bold tracking-wider uppercase text-amber-400 block">SUPER ADMIN CONSOLE</span>
-            <h3 class="text-base font-extrabold text-white">Panel Kontrol Owner</h3>
+            <span class="text-[10px] font-extrabold tracking-wider uppercase text-amber-400">SUPER ADMIN CONSOLE</span>
+            <h2 class="text-lg font-extrabold text-white">Kendali Penuh Owner (@xliamvr)</h2>
           </div>
-          <span id="cloud-status-pill" class="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[10px] font-extrabold">
-            CLOUD READY
-          </span>
+          <span class="px-2.5 py-1 rounded-full bg-amber-400 text-slate-950 text-[10px] font-extrabold">OWNER</span>
         </div>
+
+        <p class="text-xs text-slate-300 leading-relaxed">
+          Kelola siaran global, status mesin sinyal, sinkronisasi cloud Supabase 2-arah, dan distribusi kode akses member komersial.
+        </p>
 
         <!-- Global Broadcast -->
         <div class="space-y-1.5">
-          <label class="text-[10px] font-bold uppercase text-slate-400">GLOBAL BROADCAST BANNER (TAMPIL KE SEMUA USER)</label>
-          <div class="flex items-center gap-2">
-            <input id="owner-broadcast-input" type="text" placeholder="Ketik pengumuman market / update..."
-              class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+          <label class="text-[11px] font-bold text-slate-300 block">Pesan Global Broadcast (Tampil di Header):</label>
+          <div class="flex gap-2">
+            <input id="owner-broadcast-input" type="text" placeholder="Contoh: Fokus sesi New York 19:30 WIB..."
+              class="flex-1 rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs text-white" />
             <button type="button" onclick="saveOwnerBroadcast()"
-              class="px-3.5 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-extrabold shrink-0 active:scale-95">
-              Simpan
+              class="px-3.5 py-2 rounded-xl bg-amber-400 text-slate-950 text-xs font-extrabold active:scale-95">
+              Siarkan
             </button>
           </div>
         </div>
 
-        <!-- Engine Active Toggle -->
-        <button id="btn-engine-master-toggle" type="button" onclick="toggleSignalEngineMaster()"
+        <!-- Master Signal Engine Toggle -->
+        <button type="button" id="btn-engine-master-toggle" onclick="toggleSignalEngineMaster()"
           class="w-full py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-extrabold active:scale-95 transition">
           🟢 Mesin Sinyal: AKTIF (Ketuk untuk Jeda)
         </button>
 
-        <!-- 2-Way Supabase Cloud Sync (Push & Pull) -->
+        <!-- Supabase 2-Way Sync -->
         <div class="grid grid-cols-2 gap-2">
           <button type="button" onclick="pushDataToSupabase()"
-            class="py-2.5 px-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold active:scale-95">
+            class="py-2.5 rounded-xl bg-blue-600 text-white text-xs font-extrabold active:scale-95">
             ☁️ Sync ke Cloud (Push)
           </button>
           <button type="button" onclick="pullDataFromSupabase()"
-            class="py-2.5 px-2 rounded-xl bg-sky-900/60 hover:bg-sky-800/70 border border-sky-500/40 text-sky-200 text-xs font-extrabold active:scale-95">
+            class="py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-sky-300 text-xs font-extrabold active:scale-95">
             📥 Muat dari Cloud (Pull)
           </button>
         </div>
 
-        <!-- JSON Backup & Restore -->
+        <!-- Backup & Restore JSON -->
         <div class="grid grid-cols-2 gap-2">
           <button type="button" onclick="exportBackupJson()"
-            class="py-2.5 px-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold active:scale-95">
-            💾 Export Backup (.JSON)
+            class="py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-slate-200 active:scale-95">
+            💾 Backup (.JSON)
           </button>
-          <label class="py-2.5 px-2 rounded-xl bg-slate-900 border border-sky-500/40 text-sky-300 text-xs font-bold text-center cursor-pointer active:scale-95">
+          <label class="py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-slate-200 text-center cursor-pointer active:scale-95">
             📂 Restore (.JSON)
             <input type="file" accept=".json" onchange="importBackupJson(event)" class="hidden" />
           </label>
         </div>
 
-        <!-- Commercial Member Access Code Generator -->
-        <div class="pt-1 border-t border-slate-800">
-          <button type="button" onclick="toggleMemberCodeDrawer()" class="text-xs font-bold text-amber-400">
-            ▶ Generator Kode Akses Member (Komersial)
-          </button>
-          <div id="member-code-drawer" class="hidden mt-2.5 space-y-2 bg-slate-900/80 border border-slate-800 rounded-xl p-3">
+        <!-- Commercial Member Code Generator -->
+        <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-3 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-bold text-slate-200">🔑 Manajemen Kode Member VIP</span>
+            <button type="button" onclick="toggleMemberCodeDrawer()" class="text-[11px] font-bold text-sky-400">Buka</button>
+          </div>
+          <div id="member-code-drawer" class="hidden space-y-2 pt-1">
             <div class="flex gap-2">
-              <input id="member-label-input" type="text" placeholder="Nama Member VIP..."
-                class="flex-1 bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
-              <button type="button" onclick="generateCommercialMemberCode()"
-                class="px-3 py-2 rounded-xl bg-amber-500 text-slate-950 text-xs font-extrabold">
-                Generate
-              </button>
+              <input id="member-label-input" type="text" placeholder="Nama / Label VIP" class="flex-1 rounded-lg bg-slate-950 border border-slate-700 px-2.5 py-1.5 text-xs text-white" />
+              <button type="button" onclick="generateCommercialMemberCode()" class="px-3 py-1.5 rounded-lg bg-indigo-600 text-white text-xs font-bold">Buat Kode</button>
             </div>
-            <div id="generated-member-code-box" class="text-xs font-mono text-emerald-300"></div>
+            <div id="generated-member-code-box" class="text-[11px] font-mono text-emerald-400"></div>
           </div>
         </div>
       </div>
 
-      <!-- Native Push Alert -->
+      <!-- Card 2: Native Push Notification HP -->
       <div class="glass-card rounded-2xl p-4 space-y-2.5">
-        <span class="text-[10px] font-bold tracking-wider uppercase text-sky-400 block">NATIVE PUSH ALERT</span>
-        <h3 class="text-base font-extrabold text-white">Notifikasi Layar HP</h3>
-        <p id="push-permission-status" class="text-xs text-slate-400">Status izin browser: CHECKING...</p>
+        <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">REAL-TIME PUSH ALERT HP</span>
+        <h3 class="text-base font-extrabold text-white">Notifikasi Layar Kunci &amp; Pop-Up</h3>
+        <p id="push-permission-status" class="text-xs font-mono text-amber-300">Status izin browser: DEFAULT</p>
         <div class="grid grid-cols-2 gap-2">
           <button type="button" onclick="requestNativePushPermission()"
-            class="py-2.5 rounded-xl bg-cyan-500 text-slate-950 text-xs font-extrabold active:scale-95">
-            Aktifkan Notifikasi HP
+            class="py-2.5 rounded-xl bg-blue-600 text-white text-xs font-extrabold active:scale-95">
+            🔔 Aktifkan Alert HP
           </button>
           <button type="button" onclick="sendTestPushNotification()"
-            class="py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-bold active:scale-95">
-            🔔 Tes Notif HP
+            class="py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-bold text-slate-200 active:scale-95">
+            📲 Tes Notif HP
           </button>
         </div>
       </div>
 
-      <!-- Server, API, Broker Calibration & Telegram Integration -->
+      <!-- Card 3: Twelve Data & Supabase API Configuration -->
       <div class="glass-card rounded-2xl p-4 space-y-3">
         <div class="flex items-center justify-between">
           <div>
-            <span class="text-[10px] font-bold tracking-wider uppercase text-sky-400 block">INTEGRASI SERVER &amp; API</span>
-            <h3 class="text-base font-extrabold text-white">Konfigurasi Data Live &amp; Bot</h3>
+            <span class="text-[10px] font-extrabold tracking-wider uppercase text-cyan-400">LIVE DATA &amp; CLOUD CONFIG</span>
+            <h3 class="text-base font-extrabold text-white">Twelve Data &amp; Supabase</h3>
           </div>
-          <span id="td-quota-badge" class="px-2.5 py-1 rounded-lg bg-slate-800 border border-slate-700 text-[10px] font-mono text-slate-300">
-            Kuota TD: 0 / 800
-          </span>
+          <span id="td-quota-badge" class="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-mono text-slate-300">Kuota TD: 0 / 800</span>
         </div>
 
+        <div class="space-y-2">
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Twelve Data API Key (Opsional — Presisi Gold/Forex/US100):</label>
+            <input id="cfg-td-apikey" type="text" placeholder="Tempel Twelve Data API Key..."
+              class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono text-white" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Supabase Project URL:</label>
+            <input id="cfg-sb-url" type="text" placeholder="https://xxxx.supabase.co"
+              class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono text-white" />
+          </div>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Supabase Publishable / Anon Key:</label>
+            <input id="cfg-sb-key" type="password" placeholder="sb_publishable_..."
+              class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono text-white" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Card 4: VIP Telegram Bot Integration -->
+      <div class="glass-card rounded-2xl p-4 space-y-3">
         <div>
-          <label class="text-[10px] font-bold uppercase text-slate-400 block mb-1">TWELVE DATA API KEY (OPSIONAL — SUDAH ADA LIVE FEED GRATIS)</label>
-          <input id="cfg-td-apikey" type="text" placeholder="Tempel API Key Twelve Data..."
-            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+          <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">TELEGRAM VIP DISPATCHER</span>
+          <h3 class="text-base font-extrabold text-white">Integrasi Bot Channel &amp; Grup VIP</h3>
         </div>
 
-        <!-- Supabase Cloud Config -->
-        <div class="pt-1 border-t border-slate-800 space-y-2">
-          <div class="text-xs font-bold text-sky-400">☁️ Pondasi Cloud Sync (Supabase URL &amp; Publishable Key)</div>
-          <input id="cfg-sb-url" type="text" placeholder="https://xxxx.supabase.co"
-            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
-          <input id="cfg-sb-key" type="text" placeholder="Supabase Anon / Publishable Key..."
-            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
-        </div>
-
-        <!-- Telegram VIP Bot Config & Auto-Broadcast Controls -->
-        <div class="pt-2 border-t border-slate-800 space-y-2.5">
-          <div class="text-xs font-bold text-sky-400">📨 Integrasi Bot VIP Telegram (HTML Engine Anti-Error)</div>
-          <input id="cfg-tg-token" type="text" placeholder="Bot Token Telegram (dari @BotFather)"
-            class="w-full bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
-          <div class="flex gap-2">
-            <input id="cfg-tg-chatid" type="text" placeholder="Chat ID / Channel ID (-100...)"
-              class="flex-1 bg-slate-900 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
-            <button type="button" onclick="testTelegramVipBot()"
-              class="px-3.5 py-2 rounded-xl bg-cyan-500 text-slate-950 text-xs font-extrabold shrink-0 active:scale-95">
-              Tes VIP Bot
-            </button>
+        <div class="space-y-2">
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Telegram Bot Token (dari @BotFather):</label>
+            <input id="cfg-tg-token" type="password" placeholder="123456789:AAH..."
+              class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono text-white" />
           </div>
-
-          <!-- Auto-Send Telegram Toggles -->
-          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-3 space-y-2 text-xs">
-            <label class="flex items-center justify-between gap-2 cursor-pointer">
-              <span class="text-slate-300">Auto-Kirim Sinyal Baru saat Scan/Ganti Setup</span>
-              <input id="cfg-tg-auto-signal" type="checkbox" class="w-4 h-4 accent-cyan-400" />
-            </label>
-            <label class="flex items-center justify-between gap-2 cursor-pointer">
-              <span class="text-slate-300">Auto-Kirim Sinyal News saat News Sniper ON</span>
-              <input id="cfg-tg-auto-news" type="checkbox" checked class="w-4 h-4 accent-cyan-400" />
-            </label>
-            <label class="flex items-center justify-between gap-2 cursor-pointer">
-              <span class="text-slate-300">Auto-Kirim Laporan Rekap saat Jurnal TP/SL</span>
-              <input id="cfg-tg-auto-result" type="checkbox" checked class="w-4 h-4 accent-cyan-400" />
-            </label>
+          <div>
+            <label class="text-[11px] text-slate-400 block mb-1">Chat ID / Channel ID VIP (Contoh: -100123456789):</label>
+            <input id="cfg-tg-chatid" type="text" placeholder="-100..."
+              class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono text-white" />
           </div>
         </div>
 
-        <button type="button" onclick="saveApiAndCloudSettings()"
-          class="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-extrabold active:scale-95">
-          Simpan Pengaturan API &amp; Cloud
-        </button>
-
-        <button type="button" onclick="resetAllAccountsDailyTrackers()"
-          class="w-full py-2.5 rounded-xl bg-rose-950/60 border border-rose-500/40 text-rose-300 text-xs font-extrabold active:scale-95">
-          Reset Tracker Entry, SL &amp; Cooldown Seluruh Akun
-        </button>
-      </div>
-
-      <!-- COMPLETE 6-PHASE MASTER ROADMAP (INCLUDING US STOCKS, IDX INDO STOCKS & CRYPTO ALTCOINS) -->
-      <div class="glass-card rounded-2xl p-4 space-y-2.5">
-        <div class="flex items-center justify-between">
-          <h3 class="text-sm font-extrabold text-white">🗺️ Master Roadmap Ekspansi Aset &amp; Sistem (6 Fase)</h3>
-          <span class="text-[10px] font-bold text-sky-400">v2.9</span>
+        <!-- Auto Broadcast Switches -->
+        <div class="space-y-2 pt-1 text-xs">
+          <label class="flex items-center justify-between text-slate-300">
+            <span>Auto-Kirim Sinyal Baru saat Pair/TF berubah</span>
+            <input type="checkbox" id="cfg-tg-auto-signal" class="w-4 h-4 accent-sky-500" />
+          </label>
+          <label class="flex items-center justify-between text-slate-300">
+            <span>Auto-Kirim Sinyal News Sniper saat rilis news</span>
+            <input type="checkbox" id="cfg-tg-auto-news" checked class="w-4 h-4 accent-sky-500" />
+          </label>
+          <label class="flex items-center justify-between text-slate-300">
+            <span>Auto-Kirim Laporan Hasil TP/SL dari Jurnal</span>
+            <input type="checkbox" id="cfg-tg-auto-result" checked class="w-4 h-4 accent-sky-500" />
+          </label>
         </div>
 
-        <div class="space-y-2 text-xs">
-          <!-- Fase 1 -->
-          <div class="rounded-xl bg-emerald-950/30 border border-emerald-500/40 p-3">
-            <div class="font-extrabold text-emerald-300">✅ Fase 1 (Aktif): Core Prop Firm &amp; Crypto Utama</div>
-            <p class="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
-              XAUUSD, US100, BTCUSDT, EURUSD + 6 Metode ICT/SMC Engine, Kalender News Verdict Buy/Sell, News Sniper, &amp; VIP Telegram Dispatcher.
-            </p>
-          </div>
-
-          <!-- Fase 2 -->
-          <div class="rounded-xl bg-sky-950/30 border border-sky-500/35 p-3">
-            <div class="font-extrabold text-sky-300">🔜 Fase 2 (Berikutnya): Major Forex &amp; Korelasi DXY</div>
-            <p class="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
-              Ekspansi GBPUSD, USDJPY, AUDUSD, USDCAD serta pembacaan otomatis Indeks Dolar (DXY) &amp; SMT Divergence Detector.
-            </p>
-          </div>
-
-          <!-- Fase 3 -->
-          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-3">
-            <div class="font-extrabold text-amber-300">🇺🇸 Fase 3 (Dalam Rencana): Ekspansi Saham US (Wall Street)</div>
-            <p class="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
-              Saham likuiditas tinggi AS (NVDA, AAPL, TSLA, MSFT, META, AMZN) &amp; indeks US500/US30 lengkap dengan jam sesi NYSE/NASDAQ (21:30–04:00 WIB) dan radar Earnings.
-            </p>
-          </div>
-
-          <!-- Fase 4 -->
-          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-3">
-            <div class="font-extrabold text-rose-300">🇮🇩 Fase 4 (Dalam Rencana): Ekspansi Saham Indonesia (IDX / BEI)</div>
-            <p class="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
-              Saham Bluechip &amp; penggerak IHSG (BBCA, BBRI, BMRI, TLKM, ASII, BREN, GOTO) sesuai jam bursa BEI (Sesi 1 &amp; 2), fraksi tick size BEI, &amp; radar batas ARA/ARB.
-            </p>
-          </div>
-
-          <!-- Fase 5 -->
-          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-3">
-            <div class="font-extrabold text-purple-300">🪙 Fase 5 (Dalam Rencana): Ekspansi Crypto Altcoins &amp; Dominance</div>
-            <p class="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
-              Pair kripto utama (ETHUSDT, SOLUSDT, XRPUSDT, BNBUSDT, SUIUSDT, DOGEUSDT) dilengkapi indikator BTC.D (Bitcoin Dominance) &amp; Funding Rate 24/7.
-            </p>
-          </div>
-
-          <!-- Fase 6 -->
-          <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-3">
-            <div class="font-extrabold text-cyan-300">🚀 Fase 6 (Dalam Rencana): Auto-Sync Broker, Backtest &amp; Native APK</div>
-            <p class="text-[11px] text-slate-300 mt-0.5 leading-relaxed">
-              Auto-Sync ekuitas dari Myfxbook &amp; cTrader Open API, Backtest &amp; Equity Curve Analytics, serta sistem Multi-Member SaaS &amp; Native Android APK (com.xliamvr.trade).
-            </p>
-          </div>
+        <div class="grid grid-cols-2 gap-2 pt-1">
+          <button type="button" onclick="saveApiAndCloudSettings()"
+            class="py-2.5 rounded-xl bg-blue-600 text-white text-xs font-extrabold active:scale-95">
+            💾 Simpan Semua Pengaturan
+          </button>
+          <button type="button" onclick="testTelegramVipBot()"
+            class="py-2.5 rounded-xl bg-emerald-600 text-white text-xs font-extrabold active:scale-95">
+            📨 Tes Bot VIP
+          </button>
         </div>
-      </div>
-
-      <!-- Copyright & Credits -->
-      <div class="glass-card rounded-2xl p-4 space-y-2">
-        <span class="text-[10px] font-bold tracking-wider uppercase text-sky-400 block">COPYRIGHT &amp; CREDITS</span>
-        <h3 class="text-base font-extrabold text-white">Liamvtrade Quant Terminal v2.9</h3>
-        <p class="text-xs text-slate-300 leading-relaxed">
-          Dirancang dan dikembangkan secara eksklusif oleh <strong>Ilham Maulana Nur Al Rasyid (@xliamvr)</strong> untuk sistem analisis teknikal Inner Circle Trader (ICT), Smart Money Concepts (SMC), Liquidity, dan manajemen risiko Multi-Account Prop Firm.
-        </p>
-        <p class="text-[11px] text-slate-500 pt-1">© 2026 Ilham Maulana Nur Al Rasyid (@xliamvr) • Package ID: com.xliamvr.trade</p>
       </div>
     </section>
-
   </main>
 
-  <!-- BOTTOM NAVIGATION BAR -->
-  <nav class="fixed bottom-0 inset-x-0 z-40 bg-[#070d19]/95 backdrop-blur-lg border-t border-slate-800/90 px-2 py-2">
-    <div class="max-w-lg mx-auto grid grid-cols-5 items-center text-center">
+  <!-- =========================================================================
+       BOTTOM NAVIGATION BAR (5 TABS WITH FLOATING CENTER SIGNALS BUTTON)
+       ========================================================================= -->
+  <nav class="fixed bottom-0 inset-x-0 z-40 bg-[#070d19]/95 backdrop-blur-lg border-t border-slate-800/90 px-2 py-1.5">
+    <div class="max-w-lg mx-auto grid grid-cols-5 items-center">
       <button type="button" data-nav="beranda" onclick="switchMainTab('beranda')"
         class="nav-item-btn flex flex-col items-center gap-1 py-1 text-sky-400">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -1260,17 +1235,17 @@
       <button type="button" data-nav="news" onclick="switchMainTab('news')"
         class="nav-item-btn flex flex-col items-center gap-1 py-1 text-slate-400">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <rect x="4" y="4" width="16" height="16" rx="2"></rect>
-          <path stroke-linecap="round" d="M8 9h8M8 13h6M8 17h4"></path>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10l6 6v8a2 2 0 01-2 2zM14 4v6h6M7 10h4M7 14h10M7 18h6" />
         </svg>
         <span class="text-[10px] font-bold">News</span>
       </button>
 
-      <!-- Center Diamond Signals Button -->
-      <div class="flex justify-center -mt-6">
+      <!-- Floating Diamond Center Button: Signals -->
+      <div class="flex flex-col items-center -mt-6">
         <button type="button" data-nav="signals" onclick="switchMainTab('signals')"
-          class="nav-diamond w-14 h-14 rounded-2xl flex items-center justify-center text-white active:scale-95 transition">
-          <svg class="w-6 h-6" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+          aria-label="Signals Terminal"
+          class="w-13 h-13 p-3.5 rounded-2xl rotate-45 bg-gradient-to-br from-sky-400 to-blue-600 text-white shadow-lg shadow-sky-500/35 border-2 border-slate-950 active:scale-95 transition">
+          <svg class="w-6 h-6 -rotate-45 text-white" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 12h4l3-7 4 14 3-7h4" />
           </svg>
         </button>
@@ -1279,7 +1254,7 @@
       <button type="button" data-nav="chart" onclick="switchMainTab('chart')"
         class="nav-item-btn flex flex-col items-center gap-1 py-1 text-slate-400">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <path stroke-linecap="round" d="M6 20V10M12 20V4M18 20v-7"></path>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M7 16V10M12 16V6M17 16v-4M4 20h16" />
         </svg>
         <span class="text-[10px] font-bold">Chart</span>
       </button>
@@ -1287,174 +1262,180 @@
       <button type="button" data-nav="profil" onclick="switchMainTab('profil')"
         class="nav-item-btn flex flex-col items-center gap-1 py-1 text-slate-400">
         <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-          <circle cx="12" cy="8" r="4"></circle>
-          <path stroke-linecap="round" d="M5 20a7 7 0 0114 0"></path>
+          <path stroke-linecap="round" stroke-linejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM4 20a8 8 0 0116 0" />
         </svg>
         <span class="text-[10px] font-bold">Profil</span>
       </button>
     </div>
   </nav>
 
-  <!-- ==================== MODAL 1: FULL EDIT SALDO AKUN PROP FIRM ==================== -->
-  <div id="modal-edit-account" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-3">
-    <div class="glass-card w-full max-w-lg rounded-2xl p-4 max-h-[88vh] overflow-y-auto space-y-3">
-      <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+  <!-- =========================================================================
+       MODAL 1: KALIBRASI HARGA BROKER & KALKULATOR LOT
+       ========================================================================= -->
+  <div id="modal-calibration" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-3">
+    <div class="glass-card w-full max-w-md rounded-2xl p-4 space-y-3 border border-slate-700">
+      <div class="flex items-center justify-between">
         <div>
-          <span class="text-[10px] font-bold uppercase text-sky-400 block">MANAJEMEN AKUN LENGKAP</span>
-          <h3 class="text-base font-extrabold text-white">Edit Parameter &amp; Saldo Akun</h3>
+          <span class="text-[10px] font-extrabold uppercase text-amber-400">KALIBRASI HARGA BROKER &amp; LOT</span>
+          <h3 class="text-base font-extrabold text-white">Selaraskan Harga Live <span id="cal-pair-name">XAUUSD</span></h3>
+        </div>
+        <button type="button" onclick="closeModal('modal-calibration')" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 font-bold">✕</button>
+      </div>
+      <p class="text-xs text-slate-300 leading-relaxed">
+        Jika harga MT5/cTrader atau TradingView kamu berbeda beberapa poin dari feed spot global, masukkan harga broker saat ini untuk mengunci selisih (offset) otomatis.
+      </p>
+      <div class="grid grid-cols-2 gap-2 text-xs font-mono">
+        <div class="rounded-xl bg-slate-900 p-2.5 border border-slate-800">
+          <span class="text-[10px] text-slate-400 block">HARGA FEED GLOBAL</span>
+          <strong id="cal-raw-price" class="text-sky-400">--</strong>
+        </div>
+        <div class="rounded-xl bg-slate-900 p-2.5 border border-slate-800">
+          <span class="text-[10px] text-slate-400 block">OFFSET AKTIF</span>
+          <strong id="cal-current-offset" class="text-amber-300">0.00</strong>
+        </div>
+      </div>
+      <div>
+        <label class="text-xs font-bold text-slate-300 block mb-1">Harga Broker / TradingView Kamu Sekarang:</label>
+        <input id="cal-broker-price-input" type="number" step="any" placeholder="Masukkan harga..."
+          class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2.5 text-sm font-mono font-bold text-white" />
+      </div>
+      <div id="cal-lot-breakdown" class="rounded-xl bg-slate-900/90 border border-slate-800 p-3 text-xs text-slate-300 space-y-1"></div>
+      <div class="grid grid-cols-2 gap-2">
+        <button type="button" onclick="resetBrokerPriceCalibration()"
+          class="py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold">
+          Reset Offset (0)
+        </button>
+        <button type="button" onclick="applyBrokerPriceCalibration()"
+          class="py-2.5 rounded-xl bg-blue-600 text-white text-xs font-extrabold">
+          Terapkan Kalibrasi
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- =========================================================================
+       MODAL 2: EDIT SALDO & PARAMETER AKUN PROP FIRM LENGKAP
+       ========================================================================= -->
+  <div id="modal-edit-account" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-3 overflow-y-auto">
+    <div class="glass-card w-full max-w-md rounded-2xl p-4 space-y-3 border border-slate-700 my-auto">
+      <div class="flex items-center justify-between">
+        <div>
+          <span class="text-[10px] font-extrabold uppercase text-cyan-400">MANAJEMEN AKUN PROP FIRM</span>
+          <h3 class="text-base font-extrabold text-white">Edit Saldo &amp; Aturan Risiko</h3>
         </div>
         <button type="button" onclick="closeModal('modal-edit-account')" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 font-bold">✕</button>
       </div>
 
-      <input id="edit-acc-id" type="hidden" />
+      <input type="hidden" id="edit-acc-id" />
 
-      <div class="grid grid-cols-2 gap-2.5">
+      <div class="grid grid-cols-2 gap-2">
         <div>
-          <label class="text-[10px] font-bold text-slate-400 block mb-1">Nama Akun</label>
-          <input id="edit-acc-name" type="text" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+          <label class="text-[10px] text-slate-400 block mb-1">Nama Akun</label>
+          <input id="edit-acc-name" type="text" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-xs font-bold text-white" />
         </div>
         <div>
-          <label class="text-[10px] font-bold text-slate-400 block mb-1">Prop Firm</label>
-          <input id="edit-acc-firm" type="text" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white" />
+          <label class="text-[10px] text-slate-400 block mb-1">Prop Firm</label>
+          <input id="edit-acc-firm" type="text" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-xs font-bold text-white" />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="text-[10px] text-slate-400 block mb-1">Modal Awal / Balance ($)</label>
+          <input id="edit-acc-balance" type="number" step="any" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-xs font-mono font-bold text-white" />
         </div>
         <div>
-          <label class="text-[10px] font-bold text-slate-400 block mb-1">Modal Awal ($)</label>
-          <input id="edit-acc-balance" type="number" step="any" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white" />
+          <label class="text-[10px] text-slate-400 block mb-1">Ekuitas Sekarang ($)</label>
+          <input id="edit-acc-equity" type="number" step="any" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-xs font-mono font-bold text-emerald-400" />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2">
+        <div>
+          <label class="text-[10px] text-slate-400 block mb-1">Risk / Trade (%)</label>
+          <input id="edit-acc-risk" type="number" step="0.05" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-2.5 py-2 text-xs font-mono text-white" />
         </div>
         <div>
-          <label class="text-[10px] font-bold text-slate-400 block mb-1">Ekuitas Saat Ini ($)</label>
-          <input id="edit-acc-equity" type="number" step="any" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-emerald-300" />
+          <label class="text-[10px] text-slate-400 block mb-1">Hard Lot Max</label>
+          <input id="edit-acc-maxlot" type="number" step="0.01" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-2.5 py-2 text-xs font-mono text-white" />
         </div>
         <div>
-          <label class="text-[10px] font-bold text-slate-400 block mb-1">Risk per Trade (%)</label>
-          <input id="edit-acc-risk" type="number" step="0.1" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white" />
+          <label class="text-[10px] text-slate-400 block mb-1">Daily DD (%)</label>
+          <input id="edit-acc-dailydd" type="number" step="0.5" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-2.5 py-2 text-xs font-mono text-white" />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-3 gap-2">
+        <div>
+          <label class="text-[10px] text-slate-400 block mb-1">Max DD (%)</label>
+          <input id="edit-acc-maxdd" type="number" step="0.5" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-2.5 py-2 text-xs font-mono text-white" />
         </div>
         <div>
-          <label class="text-[10px] font-bold text-slate-400 block mb-1">Hard Lot Max</label>
-          <input id="edit-acc-maxlot" type="number" step="0.01" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-amber-300" />
+          <label class="text-[10px] text-slate-400 block mb-1">Profit Target (%)</label>
+          <input id="edit-acc-target" type="number" step="0.5" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-2.5 py-2 text-xs font-mono text-white" />
         </div>
         <div>
-          <label class="text-[10px] font-bold text-slate-400 block mb-1">Batas Daily Drawdown (%)</label>
-          <input id="edit-acc-dailydd" type="number" step="0.5" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-rose-300" />
+          <label class="text-[10px] text-slate-400 block mb-1">Min Buffer ($)</label>
+          <input id="edit-acc-buffer" type="number" step="1" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-2.5 py-2 text-xs font-mono text-white" />
+        </div>
+      </div>
+
+      <div class="grid grid-cols-2 gap-2">
+        <div>
+          <label class="text-[10px] text-slate-400 block mb-1">Max Entry / Hari</label>
+          <input id="edit-acc-maxentry" type="number" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-xs font-mono text-white" />
         </div>
         <div>
-          <label class="text-[10px] font-bold text-slate-400 block mb-1">Max Overall Drawdown (%)</label>
-          <input id="edit-acc-maxdd" type="number" step="0.5" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-rose-300" />
-        </div>
-        <div>
-          <label class="text-[10px] font-bold text-slate-400 block mb-1">Target Profit Phase (%)</label>
-          <input id="edit-acc-target" type="number" step="0.5" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-sky-300" />
-        </div>
-        <div>
-          <label class="text-[10px] font-bold text-slate-400 block mb-1">Min Profit Buffer ($)</label>
-          <input id="edit-acc-buffer" type="number" step="any" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white" />
-        </div>
-        <div>
-          <label class="text-[10px] font-bold text-slate-400 block mb-1">Max Entry / Hari</label>
-          <input id="edit-acc-maxentry" type="number" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white" />
-        </div>
-        <div>
-          <label class="text-[10px] font-bold text-slate-400 block mb-1">Max SL / Hari</label>
-          <input id="edit-acc-maxsl" type="number" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white" />
+          <label class="text-[10px] text-slate-400 block mb-1">Max SL / Hari</label>
+          <input id="edit-acc-maxsl" type="number" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-xs font-mono text-white" />
         </div>
       </div>
 
       <div>
-        <label class="text-[10px] font-bold text-slate-400 block mb-1">Myfxbook / Account ID</label>
-        <input id="edit-acc-myfxbook" type="text" placeholder="cth: 10948211"
-          class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs font-mono text-white" />
+        <label class="text-[10px] text-slate-400 block mb-1">Myfxbook / Account ID (Opsional)</label>
+        <input id="edit-acc-myfxbook" type="text" placeholder="Contoh: 11049281" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-xs font-mono text-white" />
       </div>
 
       <div>
-        <label class="text-[10px] font-bold text-slate-400 block mb-1">Catatan Rule Khusus Akun</label>
-        <textarea id="edit-acc-notes" rows="2" placeholder="cth: Consistency rule 30%, dilarang hold weekend..."
-          class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-xs text-white"></textarea>
+        <label class="text-[10px] text-slate-400 block mb-1">Catatan Aturan Khusus Akun</label>
+        <textarea id="edit-acc-notes" rows="2" class="w-full rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-white"></textarea>
       </div>
 
       <div class="grid grid-cols-3 gap-2 pt-1">
         <button type="button" onclick="deleteEditedAccount()"
-          class="py-2.5 rounded-xl bg-rose-950/70 border border-rose-500/40 text-rose-300 text-xs font-extrabold active:scale-95">
+          class="py-2.5 rounded-xl bg-rose-950/70 border border-rose-500/40 text-rose-300 text-xs font-bold">
           Hapus Akun
         </button>
-        <button type="button" onclick="closeModal('modal-edit-account')"
-          class="py-2.5 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold active:scale-95">
-          Batal
-        </button>
         <button type="button" onclick="saveEditedAccount()"
-          class="py-2.5 rounded-xl bg-cyan-400 text-slate-950 text-xs font-extrabold active:scale-95">
-          Simpan
+          class="col-span-2 py-2.5 rounded-xl bg-blue-600 text-white text-xs font-extrabold">
+          Simpan Perubahan
         </button>
       </div>
     </div>
   </div>
 
-  <!-- ==================== MODAL 2: KALIBRASI HARGA BROKER & LOT CALCULATOR ==================== -->
-  <div id="modal-calibration" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-3">
-    <div class="glass-card w-full max-w-lg rounded-2xl p-4 space-y-3">
-      <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
-        <div>
-          <span class="text-[10px] font-bold uppercase text-amber-400 block">BROKER SYNC &amp; POSITION SIZER</span>
-          <h3 class="text-base font-extrabold text-white">Kalibrasi Harga MT5/cTrader &amp; Lot</h3>
-        </div>
-        <button type="button" onclick="closeModal('modal-calibration')" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 font-bold">✕</button>
-      </div>
-
-      <div class="rounded-xl bg-slate-900/90 border border-slate-800 p-3 space-y-2 text-xs">
-        <div class="flex justify-between">
-          <span class="text-slate-400">Pair Aktif:</span>
-          <strong id="cal-pair-name" class="text-white font-mono">XAUUSD</strong>
-        </div>
-        <div class="flex justify-between">
-          <span class="text-slate-400">Harga Feed Mentah:</span>
-          <span id="cal-raw-price" class="font-mono text-slate-200">--</span>
-        </div>
-        <div class="flex justify-between">
-          <span class="text-slate-400">Offset Broker Tersimpan:</span>
-          <span id="cal-current-offset" class="font-mono text-amber-300">0.00</span>
-        </div>
-      </div>
-
-      <div class="space-y-1.5">
-        <label class="text-[11px] font-bold text-slate-300 block">Masukkan Harga Live di MT5 / cTrader Kamu Sekarang:</label>
-        <div class="flex gap-2">
-          <input id="cal-broker-price-input" type="number" step="any" placeholder="cth: 3578.50"
-            class="flex-1 bg-slate-950 border border-sky-500/40 rounded-xl px-3 py-2.5 text-sm font-mono text-white" />
-          <button type="button" onclick="applyBrokerPriceCalibration()"
-            class="px-4 py-2.5 rounded-xl bg-cyan-400 text-slate-950 text-xs font-extrabold shrink-0 active:scale-95">
-            Samakan
-          </button>
-        </div>
-        <button type="button" onclick="resetBrokerPriceCalibration()" class="text-[11px] text-rose-400 underline">
-          Reset Offset Pair Ini ke 0
-        </button>
-      </div>
-
-      <!-- Quick Lot Breakdown -->
-      <div id="cal-lot-breakdown" class="rounded-xl bg-slate-900/80 border border-slate-800 p-3 text-xs text-slate-300 space-y-1 font-mono">
-      </div>
-    </div>
-  </div>
-
-  <!-- ==================== MODAL 3: GUIDE & KAMUS ICT/SMC ==================== -->
-  <div id="modal-guide" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-end sm:items-center justify-center p-3">
-    <div class="glass-card w-full max-w-lg rounded-2xl p-4 max-h-[85vh] overflow-y-auto space-y-3">
-      <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
-        <h3 class="text-base font-extrabold text-white">📘 Panduan Cepat Liamvtrade Quant</h3>
+  <!-- =========================================================================
+       MODAL 3: PANDUAN CEPAT TERMINAL
+       ========================================================================= -->
+  <div id="modal-guide" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="glass-card w-full max-w-md rounded-2xl p-4 space-y-3 border border-slate-700">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-extrabold text-white">📘 Panduan Cepat Liamvtrade v2.9</h3>
         <button type="button" onclick="closeModal('modal-guide')" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 font-bold">✕</button>
       </div>
-      <div class="space-y-2.5 text-xs text-slate-300 leading-relaxed">
-        <p><strong class="text-sky-400">1. Kalibrasi Harga Broker:</strong> Ketuk pill harga live di pojok kanan atas untuk menyamakan selisih poin broker MT5/cTrader kamu dalam 1 ketukan.</p>
-        <p><strong class="text-emerald-400">2. Belajar Struktur POI:</strong> Di tab Signals, ketuk kotak <em>Struktur POI</em> untuk membuka penjelasan detail konsep ICT/SMC yang sedang aktif.</p>
-        <p><strong class="text-amber-400">3. News Shield vs News Sniper:</strong> <em>News Shield</em> mengunci entry saat news merah; <em>News Sniper</em> memberi sinyal terarah khusus saat news berlangsung.</p>
-        <p><strong class="text-rose-400">4. Pre-Trade SOP &amp; Cooldown:</strong> Lengkapi SOP di Beranda untuk menaikkan skor sinyal. Jika terkena SL, timer Cooldown otomatis menjaga disiplinmu.</p>
-      </div>
+      <ul class="space-y-2 text-xs text-slate-300 leading-relaxed">
+        <li><strong class="text-sky-400">1. Kalibrasi Harga:</strong> Ketuk pill harga live di header atas kapan saja untuk menyamakan harga terminal dengan broker MT5/cTrader/TradingView kamu.</li>
+        <li><strong class="text-emerald-400">2. Checklist SOP:</strong> Centang SOP di Beranda untuk menaikkan skor kesiapan sinyal hingga +0.6 sebelum mengeksekusi setup.</li>
+        <li><strong class="text-amber-300">3. Belajar Struktur POI:</strong> Pada kartu sinyal, ketuk bagian <em>Struktur POI (📖 Belajar)</em> untuk membedah alasan bias &amp; kamus ICT/SMC metode yang dipilih.</li>
+        <li><strong class="text-rose-400">4. Anti-Revenge Cooldown:</strong> Jika SL harian bertambah, timer jeda 20 menit aktif otomatis untuk menjaga disiplin prop firm.</li>
+      </ul>
+      <button type="button" onclick="closeModal('modal-guide')" class="w-full py-2.5 rounded-xl bg-blue-600 text-white text-xs font-extrabold">
+        Mengerti
+      </button>
     </div>
   </div>
 
-  <!-- TOAST NOTIFICATION -->
-  <div id="toast-container" class="fixed top-16 inset-x-0 z-50 flex justify-center px-4 pointer-events-none"></div>
-
-  <!-- SCRIPTS IN STRICT ORDER -->
+  <!-- SCRIPTS -->
   <script src="methods.js"></script>
   <script src="news.js"></script>
   <script src="app.js"></script>
