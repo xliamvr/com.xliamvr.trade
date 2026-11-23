@@ -1,16 +1,19 @@
 /**
- * Liamvtrade Quant Terminal v2.9.3 — app.js (FULL COMPLETE EDITION)
+ * Liamvtrade Quant Terminal v2.9.4 — app.js (FULL COMPLETE + LIVE RUNNING & ANTI-MISS NOTIF UPGRADE)
  * Mengatur State, Live Market Feed Akurat + Kalibrasi Broker, WIB Killzones & Weekend BTC,
  * Circuit Breaker + Anti-Revenge Cooldown, Pre-Trade SOP + Score Boost, Prop Firm Portfolio,
- * News Engine + Eksekusi BUY/SELL News, Sniper Signal Engine + Interactive POI Education,
- * News Sniper Mode, Performance Recap + CSV Export, TradingView Radar (CAPITALCOM:US100),
- * Super Admin Console, Supabase 2-Way Sync, Native Push Alert & Telegram VIP Dispatcher.
+ * News Engine + Eksekusi BUY/SELL News + News Lock Warning ON/OFF,
+ * Live Running Status + Manual TP Input/Hit + SL->BE + Cut Now,
+ * Sniper Signal Engine + Interactive POI Education, News Sniper Mode,
+ * Performance Recap + CSV Export, TradingView Radar (CAPITALCOM:US100),
+ * Super Admin Console, Supabase 2-Way Sync, Anti-Miss Native Push Alert & Telegram VIP Dispatcher.
  */
 
 (function (global) {
   'use strict';
 
   const STORAGE_KEY = 'liamvtrade_quant_v29_state';
+  const NOTIF_QUEUE_KEY = 'liamvtrade_notif_queue_v1';
   const DEFAULT_SB_URL = 'https://zslntgghkdvhtfofnzxq.supabase.co';
   const DEFAULT_SB_KEY = 'sb_publishable_q5L3wJ7V78z0jN52V2uL9A_V2s5r0_p';
 
@@ -137,6 +140,7 @@
 
       flags: {
         newsShield: true,
+        newsLockWarning: true,
         mondayFilter: false,
         morningFilter: false,
         signalAlert: true,
@@ -156,7 +160,7 @@
         sbKey: DEFAULT_SB_KEY,
         tgToken: '',
         tgChatId: '',
-        tgAutoSignal: false,
+        tgAutoSignal: true,
         tgAutoNews: true,
         tgAutoResult: true
       },
@@ -184,7 +188,8 @@
         scanSeed: 1,
         expiryEndMs: nowTs + 45 * 60000,
         showStandardFormat: false,
-        showPoiEducation: false
+        showPoiEducation: false,
+        manualRunningTpInput: ''
       },
 
       chart: {
@@ -206,7 +211,8 @@
       logSubTab: 'signals',
       logStatusFilter: 'all',
       logPairFilter: 'ALL',
-      tradeLogs: []
+      tradeLogs: [],
+      notifiedEventKeys: {}
     };
   }
 
@@ -215,6 +221,7 @@
   let lastAutoSentSignalKey = '';
   let lastAutoSentSignalTimeMs = 0;
   let lastAutoSentNewsKey = '';
+  let isFlushingNotifQueue = false;
   const AUTO_TELEGRAM_COOLDOWN_MS = 10 * 60000;
 
   function loadState() {
@@ -248,7 +255,8 @@
         news: { ...base.news, ...(parsed.news || {}) },
         sopItems: Array.isArray(parsed.sopItems) && parsed.sopItems.length > 0 ? parsed.sopItems : base.sopItems,
         accounts: Array.isArray(parsed.accounts) && parsed.accounts.length > 0 ? parsed.accounts : base.accounts,
-        tradeLogs: Array.isArray(parsed.tradeLogs) ? parsed.tradeLogs : []
+        tradeLogs: Array.isArray(parsed.tradeLogs) ? parsed.tradeLogs : [],
+        notifiedEventKeys: parsed.notifiedEventKeys && typeof parsed.notifiedEventKeys === 'object' ? parsed.notifiedEventKeys : {}
       };
     } catch (_) {
       return createInitialState();
@@ -259,6 +267,125 @@
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (_) {}
+  }
+
+  // =========================================================================
+  // NOTIFIKASI ANTI-KETINGGALAN (QUEUE + RETRY + COOLDOWN + HP + TELEGRAM)
+  // =========================================================================
+  function loadNotifQueue() {
+    try {
+      const raw = localStorage.getItem(NOTIF_QUEUE_KEY);
+      const arr = raw ? JSON.parse(raw) : [];
+      return Array.isArray(arr) ? arr : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  function saveNotifQueue(queue) {
+    try {
+      localStorage.setItem(NOTIF_QUEUE_KEY, JSON.stringify(queue.slice(-40)));
+    } catch (_) {}
+  }
+
+  function stripHtmlToPlain(htmlText) {
+    return String(htmlText || '')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\n{3,}/g, '\n\n')
+      .trim();
+  }
+
+  function triggerNativePushAlert(title, body, dedupeKey = '') {
+    if (!state.flags.signalAlert) return;
+    if (!('Notification' in window)) return;
+    if (Notification.permission !== 'granted') return;
+
+    if (dedupeKey) {
+      const prevTs = Number(state.notifiedEventKeys[dedupeKey]) || 0;
+      if (Date.now() - prevTs < 3 * 60 * 1000) return;
+      state.notifiedEventKeys[dedupeKey] = Date.now();
+      saveState();
+    }
+
+    try {
+      new Notification(title, {
+        body: String(body || '').slice(0, 180),
+        icon: 'https://xliamvr.github.io/com.xliamvr.scan/icon-192.png',
+        tag: dedupeKey || undefined
+      });
+    } catch (_) {}
+  }
+
+  function enqueueNotificationJob({ dedupeKey = '', cooldownMs = 5 * 60 * 1000, tgHtml = '', pushTitle = '', pushBody = '' }) {
+    const now = Date.now();
+    if (dedupeKey) {
+      const lastSent = Number(state.notifiedEventKeys[dedupeKey]) || 0;
+      if (now - lastSent < cooldownMs) return;
+    }
+
+    if (pushTitle && pushBody) {
+      triggerNativePushAlert(pushTitle, pushBody, dedupeKey);
+    }
+
+    if (tgHtml) {
+      const q = loadNotifQueue();
+      const exists = q.some((item) => item.dedupeKey && dedupeKey && item.dedupeKey === dedupeKey);
+      if (!exists) {
+        q.push({
+          id: 'nq-' + now + '-' + Math.random().toString(36).slice(2, 6),
+          dedupeKey,
+          tgHtml,
+          createdAt: now,
+          attempts: 0
+        });
+        saveNotifQueue(q);
+      }
+      flushNotificationQueue(false);
+    }
+  }
+
+  async function flushNotificationQueue(showFeedback = false) {
+    if (isFlushingNotifQueue) return;
+    isFlushingNotifQueue = true;
+
+    try {
+      const queue = loadNotifQueue();
+      if (queue.length === 0) return;
+
+      const remaining = [];
+      let sentCount = 0;
+
+      for (const job of queue) {
+        if (Date.now() - Number(job.createdAt || 0) > 24 * 3600 * 1000) {
+          continue;
+        }
+        const ok = await dispatchTelegramMessage(job.tgHtml, false, true);
+        if (ok) {
+          sentCount += 1;
+          if (job.dedupeKey) {
+            state.notifiedEventKeys[job.dedupeKey] = Date.now();
+          }
+        } else {
+          job.attempts = (Number(job.attempts) || 0) + 1;
+          remaining.push(job);
+        }
+      }
+
+      saveNotifQueue(remaining);
+      if (sentCount > 0) {
+        saveState();
+        if (showFeedback) {
+          showToast(`📨 ${sentCount} notifikasi antrean terkirim ke Telegram!`, 'success');
+        }
+      }
+    } finally {
+      isFlushingNotifQueue = false;
+    }
   }
 
   // =========================================================================
@@ -492,6 +619,7 @@
 
     updateCooldownTicker();
     updateSignalExpiryTicker();
+    renderNewsLockWarning();
   }
 
   function formatCountdownToHour(wibNow, targetHour) {
@@ -623,6 +751,8 @@
     saveState();
     renderPriceDisplays();
     recalculateAndRenderSignal(false);
+    evaluateActiveTradesAgainstLivePrices();
+    flushNotificationQueue(false);
 
     if (state.activeTab === 'news') {
       renderNewsSection();
@@ -640,74 +770,347 @@
   }
 
   // =========================================================================
-  // KALIBRASI HARGA BROKER & KALKULATOR LOT
+  // LIVE RUNNING TRACKER + MANUAL TP INPUT/HIT + SL->BE + CUT NOW
   // =========================================================================
-  function openCalibrationModal() {
-    const pair = state.signal.pair || 'XAUUSD';
-    const rawPrice = Number(state.prices[pair]) || 0;
-    const curOffset = Number(state.priceOffsets[pair]) || 0;
-    const calPrice = getCalibratedPrice(pair);
-    const acc = getActiveAccount();
+  function evaluateTradeLiveMetrics(item) {
+    const pair = item.pair || 'XAUUSD';
     const spec = getPairSpecSafe(pair);
+    const livePx = getCalibratedPrice(pair);
+    const entryPx = Number(item.entry);
+    const slPx = Number(item.sl);
+    const tp1Px = Number(item.tp1);
+    const tp2Px = Number(item.tp2);
+    const tp3Px = Number(item.tp3);
+    const isBuy = item.direction === 'BUY';
+    const isLimit = String(item.orderType || '').toUpperCase().includes('LIMIT');
+    const lot = Number(item.lot) || 0.02;
 
-    const nameEl = document.getElementById('cal-pair-name');
-    const rawEl = document.getElementById('cal-raw-price');
-    const offEl = document.getElementById('cal-current-offset');
-    const inputEl = document.getElementById('cal-broker-price-input');
-    const lotBox = document.getElementById('cal-lot-breakdown');
+    let liveStatus = 'PENDING LIMIT';
+    let autoOutcome = null;
 
-    if (nameEl) nameEl.textContent = pair;
-    if (rawEl) rawEl.textContent = formatPriceSafe(pair, rawPrice);
-    if (offEl) offEl.textContent = (curOffset >= 0 ? '+' : '') + formatPriceSafe(pair, curOffset);
-    if (inputEl) inputEl.value = formatPriceSafe(pair, calPrice);
+    if (item.status === 'done' && item.outcome) {
+      liveStatus = `${item.outcome} HIT`;
+    } else if (item.status === 'cancel') {
+      liveStatus = 'DIBATALKAN';
+    } else if (Number.isFinite(entryPx) && Number.isFinite(livePx)) {
+      const limitTriggered = isLimit
+        ? isBuy
+          ? livePx <= entryPx * 1.0002
+          : livePx >= entryPx * 0.9998
+        : isBuy
+        ? livePx >= entryPx * 0.9998
+        : livePx <= entryPx * 1.0002;
 
-    if (lotBox && acc) {
-      const riskDollar = ((Number(acc.equity) || Number(acc.balance) || 1000) * (Number(acc.riskPct) || 0.4)) / 100;
-      const sampleSlPips = pair === 'XAUUSD' ? 35 : pair === 'US100' ? 45 : pair === 'BTCUSDT' ? 110 : 18;
-      const calcLot = Math.min(
-        Number(acc.maxLot) || 0.5,
-        Math.max(0.01, Math.floor((riskDollar / (sampleSlPips * spec.pipValuePerLot)) * 100) / 100)
-      );
-      lotBox.innerHTML = `
-        <div><strong>Akun Aktif:</strong> ${acc.name} (Equity $${Number(acc.equity).toFixed(2)}, Risk ${acc.riskPct}%)</div>
-        <div><strong>Target Risiko / Trade:</strong> $${riskDollar.toFixed(2)} • <strong>Hard Lot Max:</strong> ${acc.maxLot}</div>
-        <div><strong>Estimasi Lot (SL ${sampleSlPips} pips):</strong> <span class="font-mono font-bold text-cyan-400">${calcLot.toFixed(2)} Lot</span></div>
-      `;
+      if (!item.triggeredAt && limitTriggered) {
+        item.triggeredAt = Date.now();
+        liveStatus = 'RUNNING';
+      } else if (item.triggeredAt || !isLimit) {
+        liveStatus = 'RUNNING';
+        if (Number.isFinite(slPx) && ((isBuy && livePx <= slPx) || (!isBuy && livePx >= slPx))) {
+          autoOutcome = 'SL';
+          liveStatus = 'SL HIT';
+        } else if (Number.isFinite(tp3Px) && tp3Px > 0 && ((isBuy && livePx >= tp3Px) || (!isBuy && livePx <= tp3Px))) {
+          autoOutcome = 'TP3';
+          liveStatus = 'TP3 HIT';
+        } else if (Number.isFinite(tp2Px) && tp2Px > 0 && ((isBuy && livePx >= tp2Px) || (!isBuy && livePx <= tp2Px))) {
+          autoOutcome = 'TP2';
+          liveStatus = 'TP2 HIT';
+        } else if (Number.isFinite(tp1Px) && tp1Px > 0 && ((isBuy && livePx >= tp1Px) || (!isBuy && livePx <= tp1Px))) {
+          autoOutcome = 'TP1';
+          liveStatus = 'TP1 HIT';
+        }
+      } else {
+        liveStatus = 'MENUNGGU LIMIT';
+      }
     }
 
-    openModal('modal-calibration');
+    const refPrice = liveStatus === 'MENUNGGU LIMIT' || liveStatus === 'PENDING LIMIT' ? livePx : entryPx;
+    const diffFromEntryPrice = Number.isFinite(livePx) && Number.isFinite(entryPx)
+      ? isBuy
+        ? livePx - entryPx
+        : entryPx - livePx
+      : 0;
+    const floatingPips = Number((diffFromEntryPrice / (spec.pipSize || 0.1)).toFixed(1));
+    const floatingDollar = Number((floatingPips * (spec.pipValuePerLot || 10) * lot).toFixed(2));
+    const distToEntryPips = Number.isFinite(livePx) && Number.isFinite(entryPx)
+      ? Number((Math.abs(livePx - entryPx) / (spec.pipSize || 0.1)).toFixed(1))
+      : 0;
+
+    return {
+      livePx,
+      liveStatus,
+      autoOutcome,
+      floatingPips,
+      floatingDollar,
+      distToEntryPips,
+      isRunning: liveStatus === 'RUNNING' || liveStatus.includes('HIT')
+    };
   }
 
-  function applyBrokerPriceCalibration() {
-    const pair = state.signal.pair || 'XAUUSD';
-    const inputEl = document.getElementById('cal-broker-price-input');
-    if (!inputEl) return;
+  function evaluateActiveTradesAgainstLivePrices() {
+    let changed = false;
 
-    const targetBrokerPrice = Number(inputEl.value);
-    const rawPrice = Number(state.prices[pair]);
-    if (!Number.isFinite(targetBrokerPrice) || targetBrokerPrice <= 0) {
-      showToast('Masukkan harga broker yang valid!', 'error');
+    for (const item of state.tradeLogs) {
+      if (item.status !== 'active') continue;
+      const prevTriggered = Boolean(item.triggeredAt);
+      const metrics = evaluateTradeLiveMetrics(item);
+
+      if (!prevTriggered && item.triggeredAt) {
+        changed = true;
+        enqueueNotificationJob({
+          dedupeKey: `trig-${item.id}`,
+          cooldownMs: 30 * 60000,
+          pushTitle: `⚡ Limit Terjemput — ${item.pair} (${item.timeframe})`,
+          pushBody: `${item.orderType} @ ${item.entry} kini RUNNING (Live ${metrics.livePx}).`,
+          tgHtml: [
+            `⚡ <b>LIMIT TERJEMPUT / POSISI RUNNING</b>`,
+            `Pair: <b>${escapeHtml(item.pair)}</b> (${escapeHtml(item.timeframe)}) • <b>${escapeHtml(item.orderType)}</b>`,
+            `Entry: <code>${escapeHtml(item.entry)}</code> | Live: <code>${escapeHtml(formatPriceSafe(item.pair, metrics.livePx))}</code>`,
+            `SL: <code>${escapeHtml(item.sl)}</code> | TP1: <code>${escapeHtml(item.tp1)}</code> | TP2: <code>${escapeHtml(item.tp2)}</code>`
+          ].join('\n')
+        });
+      }
+
+      if (metrics.autoOutcome) {
+        changed = true;
+        markTradeOutcome(item.id, metrics.autoOutcome, { exitPrice: metrics.livePx, silentToast: true });
+      }
+    }
+
+    if (changed) {
+      saveState();
+      renderPerformanceAndLogs();
+    }
+    renderActiveSignalRunningWidget();
+  }
+
+  function getLatestActiveLogForCurrentPair() {
+    const pair = currentSignalObj?.pair || state.signal.pair;
+    return (
+      state.tradeLogs.find((t) => t.status === 'active' && t.pair === pair) ||
+      state.tradeLogs.find((t) => t.status === 'active') ||
+      null
+    );
+  }
+
+  function renderActiveSignalRunningWidget() {
+    const s = currentSignalObj;
+    if (!s) return;
+
+    const activeLog = getLatestActiveLogForCurrentPair();
+    const spec = getPairSpecSafe(s.pair);
+    const livePx = getCalibratedPrice(s.pair);
+    const entryNum = Number(s.entryFmt);
+    const slNum = Number(s.slFmt);
+    const tp1Num = Number(s.tp1Fmt);
+    const isBuy = s.direction === 'BUY';
+
+    let statusText = 'MENUNGGU LIMIT';
+    let statusTone = 'bg-slate-800 border-slate-700 text-slate-300';
+    let pipsInfo = '';
+    let dollarInfo = '';
+
+    if (activeLog) {
+      const m = evaluateTradeLiveMetrics(activeLog);
+      statusText = m.liveStatus;
+      if (m.liveStatus.includes('TP')) {
+        statusTone = 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300';
+      } else if (m.liveStatus.includes('SL')) {
+        statusTone = 'bg-rose-500/20 border-rose-400/50 text-rose-300';
+      } else if (m.liveStatus === 'RUNNING') {
+        statusTone = 'bg-cyan-500/20 border-cyan-400/50 text-cyan-300';
+      } else {
+        statusTone = 'bg-amber-500/20 border-amber-400/50 text-amber-300';
+      }
+      const pSign = m.floatingPips > 0 ? '+' : '';
+      const dSign = m.floatingDollar > 0 ? '+' : m.floatingDollar < 0 ? '-' : '';
+      pipsInfo = `${pSign}${m.floatingPips} pips`;
+      dollarInfo = `${dSign}$${Math.abs(m.floatingDollar).toFixed(2)}`;
+    } else if (Number.isFinite(entryNum) && Number.isFinite(livePx)) {
+      const touched = isBuy ? livePx <= entryNum : livePx >= entryNum;
+      statusText = touched ? 'AREA LIMIT TERSENTUH (SIAP RUNNING)' : 'MENUNGGU LIMIT';
+      statusTone = touched
+        ? 'bg-cyan-500/20 border-cyan-400/50 text-cyan-300'
+        : 'bg-slate-800 border-slate-700 text-slate-300';
+      const distPips = (Math.abs(livePx - entryNum) / (spec.pipSize || 0.1)).toFixed(1);
+      pipsInfo = `Jarak Limit: ${distPips} pips`;
+      dollarInfo = `Live: ${formatPriceSafe(s.pair, livePx)}`;
+    }
+
+    const badgeEl = document.getElementById('sig-live-status-badge');
+    if (badgeEl) {
+      badgeEl.textContent = `● ${statusText}`;
+      badgeEl.className = `px-2.5 py-1 rounded-full border text-[10px] font-mono font-extrabold ${statusTone}`;
+    }
+
+    setText('sig-live-delta-pips', pipsInfo);
+    setText('sig-live-floating-usd', dollarInfo);
+
+    const runPanel = document.getElementById('sig-running-action-panel');
+    if (runPanel) {
+      const showControls = Boolean(activeLog && activeLog.status === 'active');
+      runPanel.classList.toggle('hidden', !showControls);
+      const tpInput = document.getElementById('sig-manual-tp-input');
+      if (tpInput && showControls && !tpInput.value && Number.isFinite(tp1Num)) {
+        tpInput.placeholder = `TP manual (cth: ${formatPriceSafe(s.pair, livePx)})`;
+      }
+    }
+  }
+
+  function applyManualTpHitForLog(logId, customTpValue = null) {
+    const item = state.tradeLogs.find((t) => t.id === logId) || getLatestActiveLogForCurrentPair();
+    if (!item) {
+      showToast('Belum ada posisi aktif yang sedang berjalan.', 'warn');
       return;
     }
 
-    state.priceOffsets[pair] = Number((targetBrokerPrice - rawPrice).toFixed(6));
-    state.lastPriceSyncMs = Date.now();
+    const spec = getPairSpecSafe(item.pair);
+    const livePx = getCalibratedPrice(item.pair);
+    const rawInput =
+      customTpValue !== null && customTpValue !== undefined
+        ? customTpValue
+        : document.getElementById(`manual-tp-input-${item.id}`)?.value ||
+          document.getElementById('sig-manual-tp-input')?.value ||
+          '';
+
+    const parsedTp = Number(String(rawInput).replace(',', '.').trim());
+    const exitPrice = Number.isFinite(parsedTp) && parsedTp > 0 ? parsedTp : livePx;
+    const entryNum = Number(item.entry);
+    const isBuy = item.direction === 'BUY';
+
+    let calcPips = Number(item.tp1Pips) || 25;
+    if (Number.isFinite(entryNum) && Number.isFinite(exitPrice) && spec.pipSize > 0) {
+      const signedDiff = isBuy ? exitPrice - entryNum : entryNum - exitPrice;
+      calcPips = Number((signedDiff / spec.pipSize).toFixed(1));
+    }
+
+    item.outcome = 'MANUAL_TP';
+    item.status = 'done';
+    item.exitPrice = formatPriceSafe(item.pair, exitPrice);
+    item.pipsResult = calcPips;
+    item.closedAt = Date.now();
+
+    const inpEl = document.getElementById('sig-manual-tp-input');
+    if (inpEl) inpEl.value = '';
+
     saveState();
-    renderPriceDisplays();
-    recalculateAndRenderSignal(false);
-    closeModal('modal-calibration');
-    showToast(`Kalibrasi ${pair} diterapkan ke ${formatPriceSafe(pair, targetBrokerPrice)}`, 'success');
+    renderHomeSection();
+    renderPerformanceAndLogs();
+    renderActiveSignalRunningWidget();
+
+    const pSign = calcPips >= 0 ? '+' : '';
+    showToast(`✅ TP Manual HIT (${item.pair} @ ${item.exitPrice}) • ${pSign}${calcPips} pips!`, 'success');
+
+    if (state.config.tgAutoResult) {
+      enqueueNotificationJob({
+        dedupeKey: `manual-tp-${item.id}`,
+        cooldownMs: 60000,
+        pushTitle: `✅ TP Manual HIT — ${item.pair}`,
+        pushBody: `Keluar @ ${item.exitPrice} (${pSign}${calcPips} pips).`,
+        tgHtml: [
+          `✅ <b>MANUAL TP HIT — ${escapeHtml(item.pair)}</b>`,
+          `Arah: <b>${escapeHtml(item.orderType)}</b> • Entry: <code>${escapeHtml(item.entry)}</code>`,
+          `TP Keluar: <code>${escapeHtml(item.exitPrice)}</code> (${pSign}${calcPips} pips)`,
+          `Akun: ${escapeHtml(item.accountName)}`
+        ].join('\n')
+      });
+    }
   }
 
-  function resetBrokerPriceCalibration() {
-    const pair = state.signal.pair || 'XAUUSD';
-    state.priceOffsets[pair] = 0;
-    state.lastPriceSyncMs = Date.now();
+  function moveActiveTradeToBreakeven(logId) {
+    const item = state.tradeLogs.find((t) => t.id === logId) || getLatestActiveLogForCurrentPair();
+    if (!item) {
+      showToast('Tidak ada posisi aktif untuk digeser ke BE.', 'warn');
+      return;
+    }
+    item.sl = item.entry;
+    item.slPips = 0;
+    item.movedToBe = true;
     saveState();
-    renderPriceDisplays();
-    recalculateAndRenderSignal(false);
-    closeModal('modal-calibration');
-    showToast(`Offset kalibrasi ${pair} direset ke 0`, 'info');
+    renderPerformanceAndLogs();
+    renderActiveSignalRunningWidget();
+    showToast(`🛡️ SL ${item.pair} digeser ke Breakeven (${item.entry})!`, 'success');
+  }
+
+  function cutActiveTradeNow(logId) {
+    const item = state.tradeLogs.find((t) => t.id === logId) || getLatestActiveLogForCurrentPair();
+    if (!item) {
+      showToast('Tidak ada posisi aktif untuk ditutup.', 'warn');
+      return;
+    }
+    const spec = getPairSpecSafe(item.pair);
+    const livePx = getCalibratedPrice(item.pair);
+    const entryNum = Number(item.entry);
+    const isBuy = item.direction === 'BUY';
+
+    let diffPips = 0;
+    if (Number.isFinite(entryNum) && Number.isFinite(livePx) && spec.pipSize > 0) {
+      const signed = isBuy ? livePx - entryNum : entryNum - livePx;
+      diffPips = Number((signed / spec.pipSize).toFixed(1));
+    }
+
+    const isProfit = diffPips >= 0;
+    item.outcome = isProfit ? 'CUT_TP' : 'CUT_SL';
+    item.status = 'done';
+    item.exitPrice = formatPriceSafe(item.pair, livePx);
+    item.pipsResult = diffPips;
+    item.closedAt = Date.now();
+
+    if (!isProfit) {
+      const acc = state.accounts.find((a) => a.id === item.accountId) || getActiveAccount();
+      if (acc) acc.curSl = (Number(acc.curSl) || 0) + 1;
+      triggerAntiRevengeCooldown(20);
+    }
+
+    saveState();
+    renderHomeSection();
+    renderPerformanceAndLogs();
+    renderActiveSignalRunningWidget();
+
+    const pSign = diffPips >= 0 ? '+' : '';
+    showToast(`✂️ Posisi ${item.pair} ditutup @ ${item.exitPrice} (${pSign}${diffPips} pips)`, isProfit ? 'success' : 'warn');
+  }
+
+  // =========================================================================
+  // NEWS LOCK WARNING (ON/OFF — PERINGATAN SAJA, TIDAK MEMBLOKIR SETUP)
+  // =========================================================================
+  function toggleNewsLockWarning() {
+    state.flags.newsLockWarning = !state.flags.newsLockWarning;
+    saveState();
+    syncFilterButtonsUI();
+    renderNewsLockWarning();
+    showToast(
+      `Peringatan News Lock: ${state.flags.newsLockWarning ? 'ON (Peringatan Saja)' : 'OFF'}`,
+      'info'
+    );
+  }
+
+  function renderNewsLockWarning() {
+    const btn = document.getElementById('btn-news-lock-warning');
+    if (btn) {
+      btn.textContent = state.flags.newsLockWarning ? '🔔 News Lock Warn: ON' : '🔕 News Lock Warn: OFF';
+      btn.className = state.flags.newsLockWarning
+        ? 'px-2.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 text-[11px] font-bold'
+        : 'px-2.5 py-1.5 rounded-full bg-slate-900 border border-slate-700 text-slate-400 text-[11px] font-bold';
+    }
+
+    const banner = document.getElementById('news-lock-warning-banner');
+    if (!banner) return;
+
+    const pair = currentSignalObj?.pair || state.signal?.pair || 'XAUUSD';
+    const lockInfo =
+      state.flags.newsLockWarning &&
+      global.LiamNews &&
+      typeof global.LiamNews.getActiveNewsLock === 'function'
+        ? global.LiamNews.getActiveNewsLock(Date.now(), pair, 15)
+        : { locked: false };
+
+    if (lockInfo.locked && lockInfo.event) {
+      banner.classList.remove('hidden');
+      banner.innerHTML = `⚠️ <strong>Peringatan News Lock:</strong> Mendekati/berlangsung <strong>${escapeHtml(lockInfo.event.title)}</strong> (${escapeHtml(lockInfo.event.timeWib)}). Setup tetap tersedia &amp; bisa dipakai — waspadai lonjakan spread/whipsaw.`;
+    } else {
+      banner.classList.add('hidden');
+    }
   }
 
   // =========================================================================
@@ -738,8 +1141,7 @@
   function adjustAccountCounter(field, delta) {
     const acc = getActiveAccount();
     if (!acc) return;
-    const prevVal = Number(acc[field]) || 0;
-    const nextVal = Math.max(0, prevVal + delta);
+    const nextVal = Math.max(0, (Number(acc[field]) || 0) + delta);
     acc[field] = nextVal;
 
     if (field === 'curSl' && delta > 0) {
@@ -1123,6 +1525,7 @@
     }
 
     renderNewsSection();
+    renderNewsLockWarning();
     if (forceToast) showToast('Kalender Ekonomi & Macro Wire diperbarui!', 'success');
   }
 
@@ -1434,6 +1837,7 @@
     saveState();
     renderHomeSection();
     renderPerformanceAndLogs();
+    renderActiveSignalRunningWidget();
     showToast(`Setup News ${pair} ${evt.verdictDirection} dicatat ke Jurnal!`, 'success');
   }
 
@@ -1538,6 +1942,7 @@
     state.flags[flagName] = !state.flags[flagName];
     saveState();
     syncFilterButtonsUI();
+    renderNewsLockWarning();
     recalculateAndRenderSignal(false);
     showToast(`${flagName}: ${state.flags[flagName] ? 'ON' : 'OFF'}`, 'info');
   }
@@ -1578,6 +1983,14 @@
       nsBtn.textContent = state.flags.newsShield ? '🛡️ News Shield: ON' : '🛡️ News Shield: OFF';
       nsBtn.className = state.flags.newsShield
         ? 'px-2.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[11px] font-bold'
+        : 'px-2.5 py-1.5 rounded-full bg-slate-900 border border-slate-700 text-slate-400 text-[11px] font-bold';
+    }
+
+    const warnBtn = document.getElementById('btn-news-lock-warning');
+    if (warnBtn) {
+      warnBtn.textContent = state.flags.newsLockWarning ? '🔔 News Lock Warn: ON' : '🔕 News Lock Warn: OFF';
+      warnBtn.className = state.flags.newsLockWarning
+        ? 'px-2.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 text-[11px] font-bold'
         : 'px-2.5 py-1.5 rounded-full bg-slate-900 border border-slate-700 text-slate-400 text-[11px] font-bold';
     }
 
@@ -1691,7 +2104,16 @@
       `📌 <i>${escapeHtml(ns.rationale)}</i>`
     ].join('\n');
 
-    await dispatchTelegramMessage(msg, showFeedback);
+    enqueueNotificationJob({
+      dedupeKey: `news-sniper-${ns.pair}-${ns.direction}-${ns.entryFmt}`,
+      cooldownMs: 10 * 60000,
+      pushTitle: `⚡ News Sniper: ${ns.direction} ${ns.pair}`,
+      pushBody: `${ns.event.title} • Entry ${ns.entryFmt} | SL ${ns.slFmt} | TP ${ns.tpFmt}`,
+      tgHtml: msg
+    });
+    if (showFeedback) {
+      await flushNotificationQueue(true);
+    }
   }
 
   function computeFallbackSignalSetup(pair, timeframe, methodKey, livePrice, seed, sopBonus) {
@@ -1699,7 +2121,6 @@
     const dec = spec.decimals;
     const isBuy = (Number(seed) || 1) % 2 === 1;
 
-    // Skala jarak SL per timeframe terukur (M5 jauh lebih ringkas dari M15/H1/H4)
     const tfSlPipsMap = {
       XAUUSD: { M5: 32, M15: 48, H1: 75, H4: 110 },
       US100:  { M5: 35, M15: 55, H1: 85, H4: 130 },
@@ -1951,16 +2372,26 @@
     }
 
     renderNewsSniperPanel();
+    renderActiveSignalRunningWidget();
+    renderNewsLockWarning();
     updateSignalExpiryTicker();
 
-    if (allowAutoTelegram && state.config.engineMasterActive && state.config.tgAutoSignal) {
+    if (allowAutoTelegram && state.config.engineMasterActive) {
       const sigKey = `${sig.pair}|${sig.timeframe}|${sig.methodKey}|${sig.direction}|${sig.entryFmt}|${sig.slFmt}|${sig.tp2Fmt}`;
       const tsNow = Date.now();
       const cooldownPassed = tsNow - lastAutoSentSignalTimeMs >= AUTO_TELEGRAM_COOLDOWN_MS;
       if (sigKey !== lastAutoSentSignalKey || cooldownPassed) {
         lastAutoSentSignalKey = sigKey;
         lastAutoSentSignalTimeMs = tsNow;
-        sendCurrentSignalToTelegramOnly(false);
+
+        const htmlMsg = buildSignalTelegramHtml(sig);
+        enqueueNotificationJob({
+          dedupeKey: `auto-sig-${sigKey}`,
+          cooldownMs: AUTO_TELEGRAM_COOLDOWN_MS,
+          pushTitle: `🎯 Setup ${sig.orderType} — ${sig.pair} (${sig.timeframe})`,
+          pushBody: `Entry ${sig.entryFmt} | SL ${sig.slFmt} | TP2 ${sig.tp2Fmt} • Lot ${sig.pos.lot.toFixed(2)}`,
+          tgHtml: state.config.tgAutoSignal ? htmlMsg : ''
+        });
       }
     }
   }
@@ -2049,6 +2480,21 @@
     }
   }
 
+  function buildSignalTelegramHtml(s) {
+    return [
+      `🎯 <b>XLIAMVR SNIPER SIGNAL</b>`,
+      `📈 Pair: <b>${escapeHtml(s.pair)}</b> • Timeframe: <b>${escapeHtml(s.timeframe)}</b>`,
+      `🧭 Arah: <b>${escapeHtml(s.orderType)}</b> (${escapeHtml(s.methodShortTag)}) • Score: <code>${escapeHtml(Number(s.score || 8.2).toFixed(1))}/10</code>`,
+      `📐 Zona POI: <code>${escapeHtml(s.zoneRangeFormatted)}</code>`,
+      `📍 Entry: <code>${escapeHtml(s.entryFmt)}</code>`,
+      `🛑 SL: <code>${escapeHtml(s.slFmt)}</code> (-${escapeHtml(s.slPips)} pips)`,
+      `✅ TP1: <code>${escapeHtml(s.tp1Fmt)}</code> (+${escapeHtml(s.tp1Pips)})`,
+      `✅ TP2: <code>${escapeHtml(s.tp2Fmt)}</code> (+${escapeHtml(s.tp2Pips)})`,
+      `✅ TP3: <code>${escapeHtml(s.tp3Fmt)}</code> (+${escapeHtml(s.tp3Pips)})`,
+      `⚖️ Rekomendasi Lot: <code>${escapeHtml(s.pos ? s.pos.lot.toFixed(2) : '0.02')}</code>`
+    ].join('\n');
+  }
+
   async function takeSetupAndSendTelegram() {
     if (!currentSignalObj) {
       recalculateAndRenderSignal(false);
@@ -2092,9 +2538,18 @@
     saveState();
     renderHomeSection();
     renderPerformanceAndLogs();
+    renderActiveSignalRunningWidget();
+
+    enqueueNotificationJob({
+      dedupeKey: `take-${logItem.id}`,
+      cooldownMs: 30000,
+      pushTitle: `⚡ Setup Diambil — ${s.pair} (${s.timeframe})`,
+      pushBody: `${s.orderType} @ ${s.entryFmt} | SL ${s.slFmt} | TP2 ${s.tp2Fmt}`,
+      tgHtml: buildSignalTelegramHtml(s)
+    });
 
     showToast(`Setup ${s.pair} ${s.orderType} diambil & masuk Jurnal!`, 'success');
-    await sendCurrentSignalToTelegramOnly(true);
+    await flushNotificationQueue(true);
   }
 
   async function sendCurrentSignalToTelegramOnly(showFeedback = true) {
@@ -2103,20 +2558,16 @@
     }
     if (!currentSignalObj) return;
     const s = currentSignalObj;
-    const msg = [
-      `🎯 <b>XLIAMVR SNIPER SIGNAL</b>`,
-      `📈 Pair: <b>${escapeHtml(s.pair)}</b> • Timeframe: <b>${escapeHtml(s.timeframe)}</b>`,
-      `🧭 Arah: <b>${escapeHtml(s.orderType)}</b> (${escapeHtml(s.methodShortTag)}) • Score: <code>${escapeHtml(Number(s.score || 8.2).toFixed(1))}/10</code>`,
-      `📐 Zona POI: <code>${escapeHtml(s.zoneRangeFormatted)}</code>`,
-      `📍 Entry: <code>${escapeHtml(s.entryFmt)}</code>`,
-      `🛑 SL: <code>${escapeHtml(s.slFmt)}</code> (-${escapeHtml(s.slPips)} pips)`,
-      `✅ TP1: <code>${escapeHtml(s.tp1Fmt)}</code> (+${escapeHtml(s.tp1Pips)})`,
-      `✅ TP2: <code>${escapeHtml(s.tp2Fmt)}</code> (+${escapeHtml(s.tp2Pips)})`,
-      `✅ TP3: <code>${escapeHtml(s.tp3Fmt)}</code> (+${escapeHtml(s.tp3Pips)})`,
-      `⚖️ Rekomendasi Lot: <code>${escapeHtml(s.pos ? s.pos.lot.toFixed(2) : '0.02')}</code>`
-    ].join('\n');
-
-    await dispatchTelegramMessage(msg, showFeedback);
+    enqueueNotificationJob({
+      dedupeKey: showFeedback ? '' : `manual-sig-${s.pair}-${s.entryFmt}`,
+      cooldownMs: 60000,
+      pushTitle: `🎯 Sinyal ${s.pair} (${s.timeframe})`,
+      pushBody: `${s.orderType} @ ${s.entryFmt} | SL ${s.slFmt} | TP2 ${s.tp2Fmt}`,
+      tgHtml: buildSignalTelegramHtml(s)
+    });
+    if (showFeedback) {
+      await flushNotificationQueue(true);
+    }
   }
 
   // =========================================================================
@@ -2167,11 +2618,15 @@
     return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
   }
 
-  async function markTradeOutcome(logId, outcome) {
+  async function markTradeOutcome(logId, outcome, opts = {}) {
     const item = state.tradeLogs.find((t) => t.id === logId);
     if (!item) return;
 
     item.outcome = outcome;
+    if (opts.exitPrice) {
+      item.exitPrice = String(opts.exitPrice);
+    }
+
     if (outcome === 'TP1') {
       item.status = 'done';
       item.pipsResult = Number(item.tp1Pips) || 25;
@@ -2198,17 +2653,31 @@
     saveState();
     renderHomeSection();
     renderPerformanceAndLogs();
-    showToast(`Status ${item.pair} diperbarui menjadi ${outcome}`, 'info');
+    renderActiveSignalRunningWidget();
+
+    if (!opts.silentToast) {
+      showToast(`Status ${item.pair} diperbarui menjadi ${outcome}`, 'info');
+    }
 
     if (state.config.tgAutoResult && outcome !== 'CANCEL') {
       const pipSign = item.pipsResult > 0 ? `+${item.pipsResult}` : `${item.pipsResult}`;
       const msg = [
         `📣 <b>UPDATE HASIL TRADE — ${escapeHtml(item.pair)}</b>`,
         `Hasil: <b>${escapeHtml(outcome)}</b> (${escapeHtml(pipSign)} pips)`,
+        item.exitPrice ? `Harga Keluar: <code>${escapeHtml(item.exitPrice)}</code>` : '',
         `Arah: ${escapeHtml(item.orderType)} • Entry: <code>${escapeHtml(item.entry)}</code>`,
         `Akun: ${escapeHtml(item.accountName)}`
-      ].join('\n');
-      await dispatchTelegramMessage(msg, false);
+      ]
+        .filter(Boolean)
+        .join('\n');
+
+      enqueueNotificationJob({
+        dedupeKey: `outcome-${item.id}-${outcome}`,
+        cooldownMs: 5 * 60000,
+        pushTitle: `📣 ${outcome} — ${item.pair} (${pipSign} pips)`,
+        pushBody: `${item.orderType} @ ${item.entry} • Akun ${item.accountName}`,
+        tgHtml: msg
+      });
     }
   }
 
@@ -2216,6 +2685,7 @@
     state.tradeLogs = [];
     saveState();
     renderPerformanceAndLogs();
+    renderActiveSignalRunningWidget();
     showToast('Semua riwayat jurnal sinyal direset.', 'info');
   }
 
@@ -2256,12 +2726,13 @@
     let minusPips = 0;
 
     periodLogs.forEach((item) => {
-      if (['TP1', 'TP2', 'TP3'].includes(item.outcome)) {
+      const pips = Number(item.pipsResult) || 0;
+      if (['TP1', 'TP2', 'TP3', 'MANUAL_TP'].includes(item.outcome) || (item.outcome === 'CUT_TP' && pips > 0)) {
         tpHit += 1;
-        plusPips += Math.abs(Number(item.pipsResult) || 0);
-      } else if (item.outcome === 'SL') {
+        plusPips += Math.abs(pips);
+      } else if (item.outcome === 'SL' || (item.outcome === 'CUT_SL' && pips < 0)) {
         slHit += 1;
-        minusPips += Math.abs(Number(item.pipsResult) || 0);
+        minusPips += Math.abs(pips);
       } else if (item.outcome === 'BE') {
         beHit += 1;
       }
@@ -2305,15 +2776,57 @@
 
     listEl.innerHTML = filteredList
       .map((item) => {
+        const metrics = evaluateTradeLiveMetrics(item);
+        const isClosed = item.status === 'done' || item.status === 'cancel';
         const outcomeBadge = item.outcome
           ? `<span class="px-2 py-0.5 rounded text-[10px] font-mono font-extrabold ${
-              ['TP1', 'TP2', 'TP3'].includes(item.outcome)
+              ['TP1', 'TP2', 'TP3', 'MANUAL_TP', 'CUT_TP'].includes(item.outcome)
                 ? 'bg-emerald-500/20 text-emerald-300'
-                : item.outcome === 'SL'
+                : ['SL', 'CUT_SL'].includes(item.outcome)
                 ? 'bg-rose-500/20 text-rose-300'
                 : 'bg-slate-700 text-slate-200'
             }">${item.outcome} (${item.pipsResult > 0 ? '+' : ''}${item.pipsResult} pips)</span>`
-          : `<span class="px-2 py-0.5 rounded bg-sky-500/20 text-sky-300 text-[10px] font-mono font-bold">OPEN / PENDING</span>`;
+          : `<span class="px-2 py-0.5 rounded text-[10px] font-mono font-bold ${
+              metrics.liveStatus === 'RUNNING'
+                ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-400/40'
+                : 'bg-amber-500/20 text-amber-300'
+            }">${metrics.liveStatus}</span>`;
+
+        const livePnlLine = !isClosed
+          ? `<div class="text-[10px] font-mono text-slate-400 flex items-center justify-between flex-wrap gap-1 bg-slate-950/70 rounded-lg px-2 py-1">
+              <span>Live: <strong class="text-white">${formatPriceSafe(item.pair, metrics.livePx)}</strong></span>
+              <span>Floating: <strong class="${metrics.floatingPips >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${metrics.floatingPips >= 0 ? '+' : ''}${metrics.floatingPips} pips (${metrics.floatingDollar >= 0 ? '+' : '-'}$${Math.abs(metrics.floatingDollar).toFixed(2)})</strong></span>
+            </div>`
+          : '';
+
+        const runningManualBar = item.status === 'active'
+          ? `<div class="pt-1.5 space-y-1.5 border-t border-slate-800/80">
+              <div class="flex items-center gap-1.5">
+                <input id="manual-tp-input-${item.id}" type="number" step="any"
+                  placeholder="Input harga TP keluar..."
+                  class="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-700 text-[11px] font-mono text-white" />
+                <button type="button" onclick="applyManualTpHitForLog('${item.id}')"
+                  class="px-2.5 py-1.5 rounded-lg bg-emerald-600 text-white text-[10px] font-extrabold active:scale-95 shrink-0">
+                  ✅ Hit TP
+                </button>
+                <button type="button" onclick="moveActiveTradeToBreakeven('${item.id}')"
+                  class="px-2 py-1.5 rounded-lg bg-slate-800 border border-amber-500/40 text-amber-300 text-[10px] font-extrabold active:scale-95 shrink-0">
+                  SL→BE
+                </button>
+                <button type="button" onclick="cutActiveTradeNow('${item.id}')"
+                  class="px-2 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-sky-300 text-[10px] font-extrabold active:scale-95 shrink-0">
+                  Cut
+                </button>
+              </div>
+              <div class="grid grid-cols-5 gap-1">
+                <button type="button" onclick="markTradeOutcome('${item.id}', 'TP1')" class="py-1 rounded-lg bg-emerald-950/70 border border-emerald-500/40 text-[10px] font-extrabold text-emerald-300 active:scale-95">TP1</button>
+                <button type="button" onclick="markTradeOutcome('${item.id}', 'TP2')" class="py-1 rounded-lg bg-emerald-950/70 border border-emerald-500/40 text-[10px] font-extrabold text-emerald-300 active:scale-95">TP2</button>
+                <button type="button" onclick="markTradeOutcome('${item.id}', 'BE')" class="py-1 rounded-lg bg-slate-800 border border-slate-700 text-[10px] font-extrabold text-amber-300 active:scale-95">BE</button>
+                <button type="button" onclick="markTradeOutcome('${item.id}', 'SL')" class="py-1 rounded-lg bg-rose-950/70 border border-rose-500/40 text-[10px] font-extrabold text-rose-300 active:scale-95">SL</button>
+                <button type="button" onclick="markTradeOutcome('${item.id}', 'CANCEL')" class="py-1 rounded-lg bg-slate-800 border border-slate-700 text-[10px] font-bold text-slate-400 active:scale-95">Batal</button>
+              </div>
+            </div>`
+          : '';
 
         return `
           <div class="rounded-xl bg-slate-900/90 border border-slate-800 p-3 space-y-2">
@@ -2329,13 +2842,8 @@
               <span>SL: <strong class="text-rose-400">${item.sl}</strong> | TP2: <strong class="text-emerald-400">${item.tp2}</strong></span>
               <span>Lot: <strong>${Number(item.lot).toFixed(2)}</strong></span>
             </div>
-            <div class="grid grid-cols-5 gap-1 pt-1">
-              <button type="button" onclick="markTradeOutcome('${item.id}', 'TP1')" class="py-1 rounded-lg bg-emerald-950/70 border border-emerald-500/40 text-[10px] font-extrabold text-emerald-300 active:scale-95">TP1</button>
-              <button type="button" onclick="markTradeOutcome('${item.id}', 'TP2')" class="py-1 rounded-lg bg-emerald-950/70 border border-emerald-500/40 text-[10px] font-extrabold text-emerald-300 active:scale-95">TP2</button>
-              <button type="button" onclick="markTradeOutcome('${item.id}', 'BE')" class="py-1 rounded-lg bg-slate-800 border border-slate-700 text-[10px] font-extrabold text-amber-300 active:scale-95">BE</button>
-              <button type="button" onclick="markTradeOutcome('${item.id}', 'SL')" class="py-1 rounded-lg bg-rose-950/70 border border-rose-500/40 text-[10px] font-extrabold text-rose-300 active:scale-95">SL</button>
-              <button type="button" onclick="markTradeOutcome('${item.id}', 'CANCEL')" class="py-1 rounded-lg bg-slate-800 border border-slate-700 text-[10px] font-bold text-slate-400 active:scale-95">Batal</button>
-            </div>
+            ${livePnlLine}
+            ${runningManualBar}
           </div>`;
       })
       .join('');
@@ -2586,7 +3094,7 @@
     copyTextValue(code, 'Kode Member VIP');
   }
 
-  function saveApiAndCloudSettings() {
+  async function saveApiAndCloudSettings() {
     state.config.tdApiKey = (document.getElementById('cfg-td-apikey')?.value || '').trim();
     state.config.sbUrl = (document.getElementById('cfg-sb-url')?.value || DEFAULT_SB_URL).trim();
     state.config.sbKey = (document.getElementById('cfg-sb-key')?.value || DEFAULT_SB_KEY).trim();
@@ -2598,7 +3106,8 @@
 
     saveState();
     showToast('Semua pengaturan API, Supabase & Telegram disimpan!', 'success');
-    syncLiveMarketPrices(false);
+    await syncLiveMarketPrices(false);
+    await flushNotificationQueue(false);
   }
 
   async function pushDataToSupabase() {
@@ -2740,7 +3249,7 @@
     showToast('Notifikasi tes dikirim ke perangkat!', 'success');
   }
 
-  async function dispatchTelegramMessage(htmlText, showFeedback = true) {
+  async function dispatchTelegramMessage(htmlText, showFeedback = true, fromQueue = false) {
     const token = (state.config.tgToken || '').trim();
     const chatId = (state.config.tgChatId || '').trim();
 
@@ -2770,7 +3279,16 @@
       if (showFeedback) showToast(`Telegram error: ${data.description || 'Gagal kirim'}`, 'error');
       return false;
     } catch (err) {
-      if (showFeedback) showToast(`Koneksi Telegram gagal: ${err.message}`, 'error');
+      if (!fromQueue) {
+        enqueueNotificationJob({
+          dedupeKey: '',
+          cooldownMs: 0,
+          tgHtml: htmlText,
+          pushTitle: '⚠️ Antrean Notif Telegram',
+          pushBody: stripHtmlToPlain(htmlText)
+        });
+      }
+      if (showFeedback) showToast(`Koneksi Telegram gagal (${err.message}), masuk antrean kirim ulang.`, 'warn');
       return false;
     }
   }
@@ -2858,9 +3376,14 @@
     saveTerminalGuardPrefs,
     toggleTerminalFlag,
     toggleSignalAlertMode,
+    toggleNewsLockWarning,
     toggleNewsSniperMode,
     dispatchNewsSniperTelegram,
     togglePoiEducationDrawer,
+    applyManualTpHitForLog,
+    moveActiveTradeToBreakeven,
+    cutActiveTradeNow,
+    flushNotificationQueue,
     setRecapPeriod,
     switchLogSubTab,
     setLogStatusFilter,
@@ -2897,11 +3420,18 @@
     renderNewsSection();
     populateProfileInputs();
     updateClockAndSessions();
+    flushNotificationQueue(false);
 
     syncLiveMarketPrices(false);
     syncNewsEngine(false);
 
     setInterval(updateClockAndSessions, 1000);
     setInterval(() => syncLiveMarketPrices(false), 25000);
+    setInterval(() => flushNotificationQueue(false), 30000);
+  });
+
+  window.addEventListener('online', () => {
+    flushNotificationQueue(true);
+    syncLiveMarketPrices(false);
   });
 })(window);
