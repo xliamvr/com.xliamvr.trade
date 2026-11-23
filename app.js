@@ -537,132 +537,34 @@
     if (quotaEl) quotaEl.textContent = `Kuota TD: ${state.tdQuotaUsed} / 800`;
   }
 
-  async function syncLiveMarketPrices(forceShowToast = false) {
-    let updatedAny = false;
-    let sourceTag = 'Spot Feed';
+  
+async function syncLiveMarketPrices(forceShowToast = false) {
+  let updatedAny = false;
+  let sourceTag = 'Live Feed';
 
-    // 1. Jika user punya Twelve Data API Key, pakai Twelve Data
-    if (state.config.tdApiKey && state.config.tdApiKey.trim().length > 8) {
-      try {
-        const key = encodeURIComponent(state.config.tdApiKey.trim());
-        const res = await fetch(`https://api.twelvedata.com/price?symbol=XAU/USD,NDX,BTC/USD,EUR/USD&apikey=${key}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (data['XAU/USD'] && Number(data['XAU/USD'].price) > 0) {
-            state.prices.XAUUSD = Number(data['XAU/USD'].price);
-            updatedAny = true;
-          }
-          if (data['NDX'] && Number(data['NDX'].price) > 0) {
-            state.prices.US100 = Number(data['NDX'].price);
-            updatedAny = true;
-          }
-          if (data['BTC/USD'] && Number(data['BTC/USD'].price) > 0) {
-            state.prices.BTCUSDT = Number(data['BTC/USD'].price);
-            updatedAny = true;
-          }
-          if (data['EUR/USD'] && Number(data['EUR/USD'].price) > 0) {
-            state.prices.EURUSD = Number(data['EUR/USD'].price);
-            updatedAny = true;
-          }
-          state.tdQuotaUsed = Math.min(800, (state.tdQuotaUsed || 0) + 1);
-          sourceTag = 'TwelveData Live';
-        }
-      } catch (_) {
-        // Lanjut ke feed publik gratis
-      }
-    }
-
-    // 2. Swissquote BBO (XAU/USD & EUR/USD interbank real-time)
-    if (!updatedAny || sourceTag !== 'TwelveData Live') {
-      try {
-        const resSq = await fetch('https://forex-data-feed.swissquote.com/public-quotes/bboquotes/instrument/XAU/USD', {
-          cache: 'no-store'
-        });
-        if (resSq.ok) {
-          const arr = await resSq.json();
-          if (Array.isArray(arr) && arr.length > 0) {
-            const top = arr[0].spreadProfilePrices?.[0] || arr[0];
-            const bid = Number(top.bid);
-            const ask = Number(top.ask);
-            const mid = bid && ask ? (bid + ask) / 2 : bid || ask;
-            if (mid > 500) {
-              state.prices.XAUUSD = Number(mid.toFixed(2));
-              updatedAny = true;
-              sourceTag = 'Swissquote + Binance';
-            }
-          }
-        }
-      } catch (_) {}
-
-      try {
-        const resEur = await fetch('https://forex-data-feed.swissquote.com/public-quotes/bboquotes/instrument/EUR/USD', {
-          cache: 'no-store'
-        });
-        if (resEur.ok) {
-          const arr = await resEur.json();
-          if (Array.isArray(arr) && arr.length > 0) {
-            const top = arr[0].spreadProfilePrices?.[0] || arr[0];
-            const bid = Number(top.bid);
-            const ask = Number(top.ask);
-            const mid = bid && ask ? (bid + ask) / 2 : bid || ask;
-            if (mid > 0.5 && mid < 2.5) {
-              state.prices.EURUSD = Number(mid.toFixed(5));
-              updatedAny = true;
-            }
-          }
-        }
-      } catch (_) {}
-    }
-
-    // 3. Binance Spot (BTCUSDT real-time)
-    try {
-      const resBtc = await fetch('https://api.binance.com/api/v3/ticker/price?symbol=BTCUSDT', {
-        cache: 'no-store'
-      });
-      if (resBtc.ok) {
-        const dBtc = await resBtc.json();
-        if (Number(dBtc.price) > 1000) {
-          state.prices.BTCUSDT = Number(Number(dBtc.price).toFixed(2));
-          updatedAny = true;
-        }
-      }
-    } catch (_) {}
-
-    // 4. US100 (Nasdaq-100 / Futures NQ=F via Yahoo Chart JSON endpoint)
-    try {
-      const resUs = await fetch('https://query1.finance.yahoo.com/v8/finance/chart/NQ%3DF?interval=1m&range=1d', {
-        cache: 'no-store'
-      });
-      if (resUs.ok) {
-        const dUs = await resUs.json();
-        const metaPrice = Number(dUs?.chart?.result?.[0]?.meta?.regularMarketPrice);
-        if (metaPrice > 5000) {
-          state.prices.US100 = Number(metaPrice.toFixed(2));
-          updatedAny = true;
-        }
-      }
-    } catch (_) {}
-
-    state.priceSourceLabel = sourceTag;
-    state.lastPriceSyncMs = Date.now();
-    saveState();
-    renderPriceDisplays();
-
-    if (state.activeTab === 'signals') {
-      recalculateAndRenderSignal(false);
-    } else if (state.activeTab === 'news') {
-      renderNewsSection();
-    }
-
-    if (forceShowToast) {
-      showToast(
-        updatedAny
-          ? `Harga live disinkronkan (${sourceTag})`
-          : 'Menggunakan harga tersimpan / kalibrasi aktif',
-        updatedAny ? 'success' : 'info'
-      );
-    }
+  if (global.LiamPriceFeed) {
+    const live = await global.LiamPriceFeed.fetchAccuratePrices(state.config.tdApiKey);
+    if (live.XAUUSD) { state.prices.XAUUSD = live.XAUUSD; updatedAny = true; }
+    if (live.US100)  { state.prices.US100 = live.US100;   updatedAny = true; }
+    if (live.BTCUSDT){ state.prices.BTCUSDT = live.BTCUSDT; updatedAny = true; }
+    if (live.EURUSD) { state.prices.EURUSD = live.EURUSD; updatedAny = true; }
+    if (live.source) sourceTag = live.source;
   }
+
+  state.priceSourceLabel = sourceTag;
+  state.lastPriceSyncMs = Date.now();
+  saveState();
+  renderPriceDisplays();
+
+  if (state.activeTab === 'signals') recalculateAndRenderSignal(false);
+  else if (state.activeTab === 'news') renderNewsSection();
+
+  if (forceShowToast) {
+    showToast(updatedAny ? `Harga live diperbarui (${sourceTag})` : 'Menggunakan harga kalibrasi aktif', updatedAny ? 'success' : 'info');
+  }
+}
+
+
 
   // =========================================================================
   // KALIBRASI HARGA BROKER & KALKULATOR LOT
