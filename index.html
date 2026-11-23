@@ -629,10 +629,6 @@
             class="px-2.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[11px] font-bold">
             🛡️ News Shield: ON
           </button>
-          <button type="button" id="btn-news-lock-warning" onclick="toggleNewsLockWarning()"
-            class="px-2.5 py-1.5 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 text-[11px] font-bold">
-            🔔 News Lock Warn: ON
-          </button>
           <button type="button" id="btn-monday-filter" onclick="toggleTerminalFlag('mondayFilter')"
             class="px-2.5 py-1.5 rounded-full bg-slate-900 border border-slate-700 text-slate-400 text-[11px] font-bold">
             📅 Monday Filter: OFF
@@ -735,11 +731,10 @@
         </div>
       </div>
 
-      <!-- News Shield Status Banner & Non-Blocking News Lock Warning -->
+      <!-- News Shield Status Banner -->
       <div id="news-shield-status-bar" class="rounded-2xl bg-amber-500/10 border border-amber-400/35 px-3.5 py-2.5 text-xs text-amber-200 leading-relaxed">
         🛡️ <strong>News Shield Aktif:</strong> Terminal memantau jadwal High Impact USD/EUR di tab News. Hindari entry ±15 menit saat rilis data merah.
       </div>
-      <div id="news-lock-warning-banner" class="hidden rounded-2xl bg-amber-950/50 border border-amber-400/40 px-3.5 py-2.5 text-xs text-amber-200 leading-relaxed"></div>
 
       <!-- MAIN SNIPER SIGNAL CARD -->
       <div id="main-sniper-card" class="glass-card rounded-2xl p-4 border border-emerald-500/40 space-y-3.5">
@@ -759,38 +754,6 @@
           <span id="sig-direction-badge" class="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-xs font-extrabold tracking-wide shrink-0">
             ● BUY LIMIT
           </span>
-        </div>
-
-        <!-- Live Limit / Running / TP / SL Status & Delta Bar -->
-        <div class="flex items-center justify-between gap-2 flex-wrap pt-0.5">
-          <span id="sig-live-status-badge" class="px-2.5 py-1 rounded-full border text-[10px] font-mono font-extrabold bg-slate-800 border-slate-700 text-slate-300">
-            ● MENUNGGU LIMIT
-          </span>
-          <div class="flex items-center gap-2 font-mono text-[11px]">
-            <span id="sig-live-delta-pips" class="text-slate-300"></span>
-            <span id="sig-live-floating-usd" class="font-bold text-emerald-400"></span>
-          </div>
-        </div>
-
-        <!-- Running Position Manual TP Input & Quick Actions -->
-        <div id="sig-running-action-panel" class="hidden rounded-xl bg-slate-950/85 border border-cyan-500/35 p-2.5 space-y-2">
-          <div class="text-[10px] font-extrabold uppercase text-cyan-300">⚡ Aksi Cepat Posisi Running</div>
-          <div class="flex items-center gap-1.5">
-            <input id="sig-manual-tp-input" type="number" step="any" placeholder="Input harga TP manual..."
-              class="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-xs font-mono text-white" />
-            <button type="button" onclick="applyManualTpHitForLog()"
-              class="px-3 py-1.5 rounded-lg bg-emerald-600 text-white text-[11px] font-extrabold active:scale-95 shrink-0">
-              ✅ Hit TP
-            </button>
-            <button type="button" onclick="moveActiveTradeToBreakeven()"
-              class="px-2.5 py-1.5 rounded-lg bg-slate-800 border border-amber-500/40 text-amber-300 text-[11px] font-extrabold active:scale-95 shrink-0">
-              SL→BE
-            </button>
-            <button type="button" onclick="cutActiveTradeNow()"
-              class="px-2.5 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-sky-300 text-[11px] font-extrabold active:scale-95 shrink-0">
-              Cut
-            </button>
-          </div>
         </div>
 
         <!-- Zona Range Area Entry POI -->
@@ -1481,32 +1444,6 @@
       </button>
     </div>
   </div>
-
-  <!-- SAFE FALLBACK GUARD FOR NEW OPTIONAL HANDLERS -->
-  <script>
-    (function () {
-      const safeDefaults = {
-        toggleNewsLockWarning: function () {
-          const btn = document.getElementById('btn-news-lock-warning');
-          const banner = document.getElementById('news-lock-warning-banner');
-          if (!btn) return;
-          const isOn = btn.dataset.warnOn !== 'false';
-          const nextOn = !isOn;
-          btn.dataset.warnOn = String(nextOn);
-          btn.textContent = nextOn ? '🔔 News Lock Warn: ON' : '🔕 News Lock Warn: OFF';
-          if (banner && !nextOn) banner.classList.add('hidden');
-        },
-        applyManualTpHitForLog: function () {},
-        moveActiveTradeToBreakeven: function () {},
-        cutActiveTradeNow: function () {}
-      };
-      Object.keys(safeDefaults).forEach(function (fnName) {
-        if (typeof window[fnName] !== 'function') {
-          window[fnName] = safeDefaults[fnName];
-        }
-      });
-    })();
-  </script>
 
   <!-- SCRIPTS -->
   <script src="methods.js"></script>
