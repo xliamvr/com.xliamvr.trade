@@ -1,5 +1,5 @@
 /*!
- * Liamvtrade — Multi-Strategy ICT / SMC / Fibo / Liquidity Engine v2.6
+ * Liamvtrade — Multi-Strategy ICT / SMC / Fibo / Liquidity Engine v2.7
  * Copyright (c) 2026 Ilham Maulana Nur Al Rasyid (@xliamvr)
  * Package ID: com.xliamvr.trade — All Rights Reserved.
  */
@@ -56,6 +56,9 @@ const LIAMV_PAIRS = {
   XAUUSD: {
     id: 'XAUUSD',
     label: 'XAUUSD',
+    fullName: 'XAUUSD (Spot Gold)',
+    icon: '🥇',
+    tvSymbol: 'OANDA:XAUUSD',
     decimals: 2,
     pipSize: 0.1,
     spreadBuffer: 0.30,
@@ -72,6 +75,9 @@ const LIAMV_PAIRS = {
   US100: {
     id: 'US100',
     label: 'US100',
+    fullName: 'US100 (Nasdaq 100)',
+    icon: '📈',
+    tvSymbol: 'PEPPERSTONE:NAS100',
     decimals: 2,
     pipSize: 1.0,
     spreadBuffer: 2.0,
@@ -88,6 +94,9 @@ const LIAMV_PAIRS = {
   BTCUSDT: {
     id: 'BTCUSDT',
     label: 'BTCUSDT',
+    fullName: 'BTCUSDT (Bitcoin 24/7)',
+    icon: '₿',
+    tvSymbol: 'COINBASE:BTCUSD',
     decimals: 2,
     pipSize: 1.0,
     spreadBuffer: 25.0,
@@ -104,6 +113,9 @@ const LIAMV_PAIRS = {
   EURUSD: {
     id: 'EURUSD',
     label: 'EURUSD',
+    fullName: 'EURUSD (Euro / US Dollar)',
+    icon: '💱',
+    tvSymbol: 'OANDA:EURUSD',
     decimals: 5,
     pipSize: 0.0001,
     spreadBuffer: 0.00015,
@@ -142,13 +154,13 @@ const LIAMV_ASSET_ROADMAP = [
   }
 ];
 
-function getWibContext() {
+function getWibContext(filterOpts = { mondayFilter: true, sessionFilter: true }) {
   const now = new Date();
   const wib = new Date(now.getTime() + now.getTimezoneOffset() * 60000 + 7 * 3600000);
   const day = wib.getDay(); // 0=Min, 1=Sen, ..., 6=Sab
   const decHour = wib.getHours() + wib.getMinutes() / 60;
   const isWeekend = day === 0 || day === 6;
-  const isMonday = day === 1;
+  const isMonday = day === 1 && filterOpts.mondayFilter !== false;
 
   if (isWeekend) {
     return {
@@ -181,27 +193,29 @@ function getWibContext() {
     };
   }
   if (decHour >= 7.0 && decHour < 14.0) {
+    const strictSession = filterOpts.sessionFilter !== false;
     return {
       isWeekend: false,
       isMonday,
-      isPrime: false,
-      name: 'Sesi Asia Range (Wait Liquidity Sweep)',
+      isPrime: !strictSession,
+      name: strictSession ? 'Sesi Asia Range (Filter Pagi Aktif)' : 'Sesi Asia / Pagi (Mode Bebas Trade)',
       recommendedMethod: 'SMC',
-      confidenceBoost: -4
+      confidenceBoost: strictSession ? -4 : 3
     };
   }
+  const strictOffHours = filterOpts.sessionFilter !== false;
   return {
     isWeekend: false,
     isMonday,
-    isPrime: false,
-    name: 'Transisi Sesi / Observasi Struktur',
+    isPrime: !strictOffHours,
+    name: strictOffHours ? 'Transisi Sesi / Observasi Struktur' : 'Transisi Sesi (Mode Bebas Trade)',
     recommendedMethod: 'FIBO',
-    confidenceBoost: 0
+    confidenceBoost: strictOffHours ? 0 : 2
   };
 }
 
-function getIctKillzoneContext() {
-  return getWibContext();
+function getIctKillzoneContext(filterOpts) {
+  return getWibContext(filterOpts);
 }
 
 function getConfidenceMeta(score) {
@@ -226,9 +240,6 @@ function getConfidenceMeta(score) {
   };
 }
 
-/**
- * Menghitung ukuran lot aman beserta estimasi dolar risiko SL & profit TP1/TP2/TP3
- */
 function calculateSafeLotDetails(pairId, slUnits, account, customSlUnits = null) {
   const cfg = LIAMV_PAIRS[pairId] || LIAMV_PAIRS.XAUUSD;
   const activeSlUnits = Math.max(1, Number(customSlUnits || slUnits) || 20);
@@ -237,7 +248,6 @@ function calculateSafeLotDetails(pairId, slUnits, account, customSlUnits = null)
   const baseRiskPct = Math.max(0.1, Number(account?.riskPct) || 0.4);
   const maxLotCap = Math.max(0.01, Number(account?.maxLotCap) || +(balance / 10000).toFixed(2));
 
-  // Drawdown Guard: jika ekuitas turun di bawah 97% modal awal, otomatis potong risiko setengah
   const isRecoveryMode = equity < balance * 0.97;
   const effectiveRiskPct = isRecoveryMode ? +(baseRiskPct * 0.5).toFixed(2) : baseRiskPct;
   const targetRiskUsd = balance * (effectiveRiskPct / 100);
@@ -260,38 +270,40 @@ function calculateSafeLotDetails(pairId, slUnits, account, customSlUnits = null)
   };
 }
 
-/**
- * Membangun 1 setup Sniper terkunci dengan Sweet-Spot Limit + Spread Buffer + Real Swing Range
- */
-function buildLockedSniperSetup(pairId, tf, selectedMethod, livePrice, marketRanges, forceSide = null, flipCount = 0) {
+function buildLockedSniperSetup(
+  pairId,
+  tf,
+  selectedMethod,
+  livePrice,
+  marketRanges,
+  forceSide = null,
+  flipCount = 0,
+  filterOpts = { mondayFilter: true, sessionFilter: true }
+) {
   const cfg = LIAMV_PAIRS[pairId] || LIAMV_PAIRS.XAUUSD;
   const tfCfg = cfg.tfConfig[tf] || cfg.tfConfig.M15;
   const d = cfg.decimals;
   const pip = cfg.pipSize;
   const buf = cfg.spreadBuffer;
-  const kz = getWibContext();
+  const kz = getWibContext(filterOpts);
 
-  const current = Number(livePrice) || 2712.50;
+  const current = Number(livePrice) || 3576.00;
   const rng = marketRanges?.[pairId] || {
     high: current + tfCfg.slUnits * pip * 1.4,
     low: current - tfCfg.slUnits * pip * 1.4
   };
 
   const span = Math.max(tfCfg.slUnits * pip * 1.5, rng.high - rng.low);
-  const midRange = rng.low + span * 0.5;
   const posRatio = Math.max(0, Math.min(1, (current - rng.low) / span));
 
-  // Tentukan arah berdasarkan Premium/Discount nyata (di bawah 50% = Discount/BUY, di atas 50% = Premium/SELL)
   let side = forceSide;
   if (!side) {
     side = posRatio <= 0.50 ? 'BUY' : 'SELL';
   }
 
-  // Tentukan metode aktif
   const methodId = selectedMethod === 'AUTO' ? kz.recommendedMethod : selectedMethod;
   const methodObj = LIAMV_METHODS.find((m) => m.id === methodId) || LIAMV_METHODS[1];
 
-  // Jarak pullback ke zona POI (FVG / OB / OTE)
   const pullbackDist = tfCfg.slUnits * pip * 0.55;
   const zoneHalfWidth = tfCfg.slUnits * pip * 0.22;
 
@@ -299,7 +311,7 @@ function buildLockedSniperSetup(pairId, tf, selectedMethod, livePrice, marketRan
 
   if (side === 'BUY') {
     const rawLimit = current - pullbackDist;
-    limitPrice = +(rawLimit + buf).toFixed(d); // Tambah spread buffer Ask agar limit mudah tersentuh
+    limitPrice = +(rawLimit + buf).toFixed(d);
     entryMin = +(rawLimit - zoneHalfWidth).toFixed(d);
     entryMax = +(rawLimit + zoneHalfWidth).toFixed(d);
     sl = +(limitPrice - tfCfg.slUnits * pip).toFixed(d);
@@ -319,7 +331,7 @@ function buildLockedSniperSetup(pairId, tf, selectedMethod, livePrice, marketRan
     limitPrice = +(rawLimit - buf).toFixed(d);
     entryMin = +(rawLimit - zoneHalfWidth).toFixed(d);
     entryMax = +(rawLimit + zoneHalfWidth).toFixed(d);
-    sl = +(limitPrice + tfCfg.slUnits * pip + buf).toFixed(d); // Tambah buffer Ask pada SL Sell
+    sl = +(limitPrice + tfCfg.slUnits * pip + buf).toFixed(d);
     tp1 = +(limitPrice - tfCfg.tp1Units * pip).toFixed(d);
     tp2 = +(limitPrice - tfCfg.tp2Units * pip).toFixed(d);
     tp3 = +(limitPrice - tfCfg.tp3Units * pip).toFixed(d);
@@ -333,7 +345,6 @@ function buildLockedSniperSetup(pairId, tf, selectedMethod, livePrice, marketRan
         : `Bearish Break of Structure + mitigasi Supply Order Block di area ${entryMin.toFixed(d)}–${entryMax.toFixed(d)}.`;
   }
 
-  // Hitung skor probabilitas (PD Score)
   const extremeBonus = Math.round(Math.abs(posRatio - 0.5) * 24);
   const tfBonus = tf === 'M15' || tf === 'H1' ? 5 : tf === 'H4' ? 3 : -4;
   const mondayPenalty = kz.isMonday ? -3 : 0;
@@ -380,21 +391,16 @@ function buildLockedSniperSetup(pairId, tf, selectedMethod, livePrice, marketRan
   };
 }
 
-/**
- * Mengevaluasi siklus hidup sinyal: WAITING -> RUNNING -> TP1 (BE) -> TP2 (Trail) -> TP3 / SL / EXPIRED / FLIP
- */
 function evaluateSetupLifecycle(sig, currentPrice, marketRanges, isWeekend) {
   const cfg = LIAMV_PAIRS[sig.pair] || LIAMV_PAIRS.XAUUSD;
   const isBuy = sig.side === 'BUY';
   const nowMs = Date.now();
 
   if (sig.status === 'WAITING') {
-    // Bekukan timer saat weekend untuk market Forex/Index/Gold
     if (isWeekend && !cfg.weekendActive) {
       return { action: 'HOLD' };
     }
 
-    // 1. Cek apakah harga menyentuh Sweet-Spot Limit
     const touchedLimit = isBuy ? currentPrice <= sig.limitPrice : currentPrice >= sig.limitPrice;
     if (touchedLimit) {
       return {
@@ -403,7 +409,6 @@ function evaluateSetupLifecycle(sig, currentPrice, marketRanges, isWeekend) {
       };
     }
 
-    // 2. Cek apakah harga lari menjauh melewati TP1 sebelum jemput limit (Auto-Flip maksimal 1x per sesi)
     const ranAwayPastTp1 = isBuy ? currentPrice >= sig.tp1 : currentPrice <= sig.tp1;
     if (ranAwayPastTp1) {
       const canFlip = (sig.flipCount || 0) < 1;
@@ -418,7 +423,6 @@ function evaluateSetupLifecycle(sig, currentPrice, marketRanges, isWeekend) {
       };
     }
 
-    // 3. Cek kadaluwarsa waktu
     if (sig.expiresAt && nowMs >= new Date(sig.expiresAt).getTime()) {
       return {
         action: 'REPLACE',
@@ -433,22 +437,18 @@ function evaluateSetupLifecycle(sig, currentPrice, marketRanges, isWeekend) {
   }
 
   if (sig.status === 'RUNNING') {
-    // Cek TP3 (Full Runner)
     if ((isBuy && currentPrice >= sig.tp3) || (!isBuy && currentPrice <= sig.tp3)) {
       return { action: 'FINALIZE', finalStatus: 'TP3 HIT', signedUnits: sig.tp3Units };
     }
 
-    // Cek TP2 -> Geser Trailing SL ke TP1
     if (!sig.tp2Reached && ((isBuy && currentPrice >= sig.tp2) || (!isBuy && currentPrice <= sig.tp2))) {
       return { action: 'TRAIL_TP2', newSl: sig.tp1 };
     }
 
-    // Cek TP1 -> Geser SL ke Break Even (Limit Price)
     if (!sig.tp1Reached && ((isBuy && currentPrice >= sig.tp1) || (!isBuy && currentPrice <= sig.tp1))) {
       return { action: 'TRAIL_TP1', newSl: sig.limitPrice };
     }
 
-    // Cek SL / Trailing SL / Break Even
     const hitSl = isBuy ? currentPrice <= sig.sl : currentPrice >= sig.sl;
     if (hitSl) {
       if (sig.tp2Reached) {
