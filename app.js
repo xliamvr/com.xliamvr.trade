@@ -264,17 +264,38 @@
     if (m) m.classList.add('hidden');
   }
 
-  function copyTextValue(text, label = 'Nilai') {
-    if (!text || text === '--') return;
+    function copyTextValue(text, label = 'Nilai') {
+    const safeText = text === undefined || text === null ? '' : String(text).trim();
+    if (!safeText || safeText === '--') {
+      showToast(`${label} belum tersedia untuk disalin`, 'warn');
+      return;
+    }
     if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text).then(
-        () => showToast(`${label} disalin: ${text}`, 'success'),
-        () => fallbackCopy(text, label)
+      navigator.clipboard.writeText(safeText).then(
+        () => showToast(`${label} disalin: ${safeText}`, 'success'),
+        () => fallbackCopy(safeText, label)
       );
     } else {
-      fallbackCopy(text, label);
+      fallbackCopy(safeText, label);
     }
   }
+
+  function copySignalField(field) {
+    if (!currentSignalObj) {
+      showToast('Data sinyal belum siap', 'warn');
+      return;
+    }
+    const map = {
+      entry: { val: currentSignalObj.entryFmt, label: 'Entry' },
+      sl: { val: currentSignalObj.slFmt, label: 'Stop Loss' },
+      tp1: { val: currentSignalObj.tp1Fmt, label: 'TP 1' },
+      tp2: { val: currentSignalObj.tp2Fmt, label: 'TP 2' },
+      tp3: { val: currentSignalObj.tp3Fmt, label: 'TP 3' }
+    };
+    const item = map[field];
+    if (item) copyTextValue(item.val, item.label);
+  }
+
 
   function fallbackCopy(text, label) {
     const ta = document.createElement('textarea');
@@ -556,8 +577,8 @@ async function syncLiveMarketPrices(forceShowToast = false) {
   saveState();
   renderPriceDisplays();
 
-  if (state.activeTab === 'signals') recalculateAndRenderSignal(false);
-  else if (state.activeTab === 'news') renderNewsSection();
+      if (state.activeTab === 'news') renderNewsSection();
+
 
   if (forceShowToast) {
     showToast(updatedAny ? `Harga live diperbarui (${sourceTag})` : 'Menggunakan harga kalibrasi aktif', updatedAny ? 'success' : 'info');
@@ -2582,6 +2603,9 @@ async function syncLiveMarketPrices(forceShowToast = false) {
     resetBrokerPriceCalibration,
     openGuideModal,
     closeModal,
+    copySignalField,
+    copyTextValue,
+    copyFullSignalSetup,
     switchActiveAccount,
     adjustAccountLimit,
     adjustAccountCounter,
