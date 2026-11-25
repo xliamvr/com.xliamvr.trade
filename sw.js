@@ -1,15 +1,19 @@
 /*!
- * Liamvtrade — Service Worker & Offline Cache Controller v2.7
+ * Liamvtrade — Service Worker & Offline Cache Controller v2.8
  * Copyright (c) 2026 Ilham Maulana Nur Al Rasyid (@xliamvr)
  * Package ID: com.xliamvr.trade — All Rights Reserved.
  */
 
-const CACHE_NAME = 'liamvtrade-cache-v2.7';
+const CACHE_NAME = 'liamvtrade-cache-v2.8';
 const CORE_ASSETS = [
   './',
   './index.html',
+  './style.css',
   './methods.js',
   './news.js',
+  './price-feed.js',
+  './intelligence-upgrade.js',
+  './calibration-fix.js',
   './app.js',
   './manifest.json'
 ];
@@ -48,6 +52,9 @@ self.addEventListener('fetch', (event) => {
     url.hostname.includes('twelvedata.com') ||
     url.hostname.includes('cryptocompare.com') ||
     url.hostname.includes('coingecko.com') ||
+    url.hostname.includes('binance.com') ||
+    url.hostname.includes('coinbase.com') ||
+    url.hostname.includes('yahoo.com') ||
     url.hostname.includes('frankfurter.app') ||
     url.hostname.includes('goldprice.org') ||
     url.hostname.includes('supabase.co') ||
