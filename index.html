@@ -1385,7 +1385,7 @@
 
     <footer class="max-w-lg mx-auto pt-2 pb-4 text-center text-[11px] text-slate-400 space-y-0.5">
       <div class="font-mono font-semibold text-slate-300">Liamvtrade Quant Terminal v3.0</div>
-      <div>Crafted by <span class="font-semibold text-sky-400">@xliamvr</span> • &copy; 2026 Liamvtrade. All rights reserved.</div>
+      <div>Crafted by <span class="font-semibold text-sky-400">@xliamvr</span> &bull; &copy; 2026 Liamvtrade. All rights reserved.</div>
     </footer>
   </main>
 
@@ -1596,14 +1596,48 @@
     </div>
   </div>
 
-  <!-- SCRIPTS -->
+  <!-- CORE SCRIPTS (URUTAN WAJIB) -->
   <script src="methods.js"></script>
   <script src="news.js"></script>
   <script src="price-feed.js"></script>
   <script src="app.js"></script>
-  <script src="ui-picker.js"></script>
-  <script src="calibration-fix.js"></script>
   <script src="intelligence-upgrade.js"></script>
+
+  <!-- PROGRESSIVE SCROLL & MOTION ENHANCEMENT -->
+  <script>
+    (function () {
+      window.addEventListener('load', function () {
+        try {
+          if (typeof Lenis === 'function') {
+            const lenis = new Lenis({ duration: 1.05, smoothWheel: true });
+            if (typeof gsap !== 'undefined' && typeof ScrollTrigger !== 'undefined') {
+              gsap.registerPlugin(ScrollTrigger);
+              lenis.on('scroll', ScrollTrigger.update);
+              gsap.ticker.add(function (time) {
+                lenis.raf(time * 1000);
+              });
+              gsap.ticker.lagSmoothing(0);
+            } else {
+              function raf(time) {
+                lenis.raf(time);
+                requestAnimationFrame(raf);
+              }
+              requestAnimationFrame(raf);
+            }
+          }
+          if (typeof gsap !== 'undefined') {
+            gsap.from('.glass-card', {
+              opacity: 0,
+              y: 10,
+              duration: 0.45,
+              stagger: 0.04,
+              clearProps: 'transform,opacity'
+            });
+          }
+        } catch (_) {}
+      });
+    })();
+  </script>
 
 </body>
 </html>
