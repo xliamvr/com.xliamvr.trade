@@ -448,6 +448,173 @@
   } else {
     wireIntelligenceModule();
   }
+  function renderChartMtfGrid(scanData) {
+    if (!scanData || !Array.isArray(scanData.results)) return;
+    scanData.results.forEach((item) => {
+      const tf = item.timeframe;
+      const dot = document.getElementById(`mtf-dot-${tf}`);
+      const biasEl = document.getElementById(`mtf-bias-${tf}`);
+      const noteEl = document.getElementById(`mtf-note-${tf}`);
+
+      const isSig = item.status === 'SIGNAL';
+      const isWait = item.status === 'WAIT';
+
+      if (dot) {
+        dot.className = 'w-1.5 h-1.5 rounded-full ' + (
+          isSig ? 'bg-emerald-400' : isWait ? 'bg-amber-400' : 'bg-rose-400'
+        );
+      }
+      if (biasEl) {
+        biasEl.textContent = isSig ? `${item.direction} (${item.score})` : item.status;
+      }
+      if (noteEl) {
+        noteEl.textContent = isSig
+          ? `${item.orderType} • SL ${item.slPips}p`
+          : (item.poiSummary || item.reasonCode || 'No Setup');
+      }
+    });
+  }
+
+  function runChartScreeningAndMapping(shouldShowCard = true) {
+    const bridge = global.__LIAM_TERMINAL_BRIDGE__;
+    const st = bridge && typeof bridge.getState === 'function' ? bridge.getState() : {};
+    const chartSelect = document.getElementById('chart-pair-select');
+    const pair = (chartSelect && chartSelect.value) || st.pair || 'XAUUSD';
+    const tf = st.timeframe || 'M15';
+    const method = st.method || 'auto';
+
+    const scanData = runFourTimeframeScan(st, {
+      pair,
+      timeframe: tf,
+      method,
+      livePrice: st.prices?.[pair],
+      lastUpdateTs: st.lastPriceUpdateMs || Date.now(),
+      forceReanalyze: true
+    });
+
+    renderChartMtfGrid(scanData);
+
+    const activeSetup =
+      scanData.results.find((r) => r.timeframe === tf) ||
+      scanData.best ||
+      null;
+    const regimeInfo = detectMarketRegime(st, activeSetup);
+
+    const highEl = document.getElementById('chart-swing-high');
+    const lowEl = document.getElementById('chart-swing-low');
+    const rangeEl = document.getElementById('chart-active-range');
+    const verdictBox = document.getElementById('chart-scan-verdict-box');
+
+    if (activeSetup && activeSetup.status === 'SIGNAL') {
+      if (highEl) highEl.textContent = activeSetup.tp3Fmt || activeSetup.tp2Fmt || '--';
+      if (lowEl) lowEl.textContent = activeSetup.slFmt || '--';
+      if (rangeEl) rangeEl.textContent = activeSetup.zoneRangeFormatted || '--';
+      if (verdictBox) {
+        verdictBox.innerHTML = `<strong class="text-emerald-300">${pair} (${activeSetup.timeframe}) — ${activeSetup.direction} ${activeSetup.orderType}</strong> • Score ${activeSetup.score}/10. Zona POI: <span class="font-mono text-sky-300">${activeSetup.zoneRangeFormatted}</span>, Entry <span class="font-mono text-amber-300">${activeSetup.entryFmt}</span>, SL <span class="font-mono text-rose-300">${activeSetup.slFmt}</span>.`;
+      }
+    } else {
+      if (highEl) highEl.textContent = '--';
+      if (lowEl) lowEl.textContent = '--';
+      if (rangeEl) rangeEl.textContent = '--';
+      if (verdictBox) {
+        verdictBox.innerHTML = `<strong class="text-amber-300">${pair} (${tf}) — ${activeSetup?.status || 'NO SETUP'}</strong>: ${activeSetup?.poiSummary || 'Belum ada konfluensi struktur valid saat ini.'}`;
+      }
+    }
+
+    const card = document.getElementById('auto-mapping-result-card');
+    const targetCanvas = document.getElementById('mapping-canvas');
+    const titleEl = document.getElementById('mapping-board-title');
+    const badgeEl = document.getElementById('mapping-verdict-badge');
+    const breakdownEl = document.getElementById('mapping-areas-breakdown');
+
+    if (shouldShowCard && card) {
+      card.classList.remove('hidden');
+    }
+    if (titleEl) {
+      titleEl.textContent = `Peta Struktur ${pair} (${activeSetup?.timeframe || tf})`;
+    }
+    if (badgeEl) {
+      badgeEl.textContent = activeSetup?.status || 'NO SETUP';
+    }
+
+    const dataUrl = generateTechnicalChartPng(activeSetup, { ...st, pair }, regimeInfo);
+    if (dataUrl && targetCanvas) {
+      const ctx = targetCanvas.getContext('2d');
+      const img = new Image();
+      img.onload = () => {
+        if (!ctx) return;
+        ctx.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
+        ctx.drawImage(img, 0, 0, targetCanvas.width, targetCanvas.height);
+      };
+      img.src = dataUrl;
+      targetCanvas.dataset.pngDataUrl = dataUrl;
+    }
+
+    if (breakdownEl) {
+      const mtfSummary = scanData.results
+        .map((r) => `${r.timeframe}: <strong>${r.status === 'SIGNAL' ? r.direction : r.status}</strong>`)
+        .join(' • ');
+      breakdownEl.innerHTML = `
+        <div><strong>Screening 4-TF:</strong> ${mtfSummary}</div>
+        <div><strong>Regime:</strong> ${regimeInfo.regime} — ${regimeInfo.suggestedAction}</div>
+        <div><strong>Catatan POI:</strong> ${activeSetup?.poiSummary || 'Menunggu struktur valid.'}</div>
+      `;
+    }
+
+    global.__LATEST_MAPPING_STATE__ = { setup: activeSetup, state: { ...st, pair }, regime: regimeInfo, dataUrl };
+  }
+
+  global.scanChartStructure = function () {
+    runChartScreeningAndMapping(false);
+    if (bridge && typeof bridge.toast === 'function') {
+      bridge.toast('Scan struktur 4-TF selesai.', 'info');
+    }
+  };
+
+  global.generateTechnicalMappingBoard = function () {
+    runChartScreeningAndMapping(true);
+    if (bridge && typeof bridge.toast === 'function') {
+      bridge.toast('Screening & Mapping diperbarui.', 'success');
+    }
+  };
+
+  global.openMappingFromSignals = function () {
+    if (typeof global.switchMainTab === 'function') {
+      global.switchMainTab('chart');
+    }
+    setTimeout(() => runChartScreeningAndMapping(true), 80);
+  };
+
+  global.downloadMappingPng = function () {
+    const latest = global.__LATEST_MAPPING_STATE__;
+    const canvas = document.getElementById('mapping-canvas');
+    const url = canvas?.dataset?.pngDataUrl || latest?.dataUrl;
+    if (!url) return;
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `mapping-${latest?.state?.pair || 'XAUUSD'}-${latest?.setup?.timeframe || 'M15'}.png`;
+    a.click();
+  };
+
+  global.copyMappingSummary = async function () {
+    const latest = global.__LATEST_MAPPING_STATE__;
+    const text = formatSetupSummaryText(latest?.setup, latest?.state, latest?.regime).replace(/\*/g, '');
+    try {
+      await navigator.clipboard.writeText(text);
+      if (bridge && typeof bridge.toast === 'function') bridge.toast('Analisa mapping disalin.', 'success');
+    } catch (_) {}
+  };
+
+  global.sendMappingToTelegram = async function () {
+    const latest = global.__LATEST_MAPPING_STATE__;
+    const text = formatSetupSummaryText(latest?.setup, latest?.state, latest?.regime);
+    if (bridge && typeof bridge.sendTelegram === 'function') {
+      const ok = await bridge.sendTelegram(text);
+      if (bridge && typeof bridge.toast === 'function') {
+        bridge.toast(ok ? 'Mapping terkirim ke Telegram.' : 'Gagal kirim ke Telegram.', ok ? 'success' : 'warn');
+      }
+    }
+  };
 
   global.LiamIntelligence = {
     detectMarketRegime,
