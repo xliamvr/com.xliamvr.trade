@@ -104,6 +104,7 @@
   };
 
   const lockedSignalCache = new Map();
+  const lockedPairCandleBias = new Map();
 
   function getPairSpec(pair) {
     return PAIR_SPECS[pair] || PAIR_SPECS.XAUUSD;
@@ -209,9 +210,8 @@
     return candleOpenTs + tfCfg.candleMs;
   }
 
-  function buildDeterministicSignalId(pair, timeframe, methodKey, candleCloseTs, scanSeed) {
-    const seedTag = Number(scanSeed) > 1 ? `_S${Number(scanSeed)}` : '';
-    return `${pair}_${timeframe}_${methodKey.toUpperCase()}_${candleCloseTs}${seedTag}`;
+  function buildDeterministicSignalId(pair, timeframe, methodKey, candleCloseTs) {
+    return `${pair}_${timeframe}_${methodKey.toUpperCase()}_${candleCloseTs}`;
   }
 
   function clearLockedSignal(signalId) {
@@ -219,45 +219,57 @@
       lockedSignalCache.delete(signalId);
     } else {
       lockedSignalCache.clear();
+      lockedPairCandleBias.clear();
     }
   }
 
-  function resolveStructureDirection(opts, livePrice, swingHigh, swingLow, equilibrium) {
+  // Kunci 1 arah per pair + H1/M15 candle block agar tidak gonta-ganti BUY/SELL tiap scan
+  function getLockedOneWayBias(pair, timeframe, candleCloseTs, opts, livePrice, equilibrium) {
     const explicitBias = (opts.htfBias || opts.trendBias || opts.structureBias || '').toUpperCase();
     if (explicitBias === 'BUY' || explicitBias === 'BULLISH') {
-      return { direction: 'BUY', source: 'bias struktur/tren BULLISH' };
+      return { direction: 'BUY', source: 'bias struktur/tren BULLISH (1-Arah)' };
     }
     if (explicitBias === 'SELL' || explicitBias === 'BEARISH') {
-      return { direction: 'SELL', source: 'bias struktur/tren BEARISH' };
+      return { direction: 'SELL', source: 'bias struktur/tren BEARISH (1-Arah)' };
     }
+
+    const biasKey = `${pair}_${timeframe}_${candleCloseTs}`;
+    if (lockedPairCandleBias.has(biasKey)) {
+      const cachedDir = lockedPairCandleBias.get(biasKey);
+      return { direction: cachedDir, source: `arah terkunci 1-arah (${cachedDir})` };
+    }
+
+    let initialDir = 'BUY';
+    let sourceDesc = 'struktur utama (1-Arah)';
 
     if (opts.sweptSide === 'LOW' || opts.sweepType === 'SELL_SIDE_SWEEP') {
-      return { direction: 'BUY', source: 'sweep likuiditas bawah (SSL)' };
-    }
-    if (opts.sweptSide === 'HIGH' || opts.sweepType === 'BUY_SIDE_SWEEP') {
-      return { direction: 'SELL', source: 'sweep likuiditas atas (BSL)' };
+      initialDir = 'BUY';
+      sourceDesc = 'sweep likuiditas bawah (SSL)';
+    } else if (opts.sweptSide === 'HIGH' || opts.sweepType === 'BUY_SIDE_SWEEP') {
+      initialDir = 'SELL';
+      sourceDesc = 'sweep likuiditas atas (BSL)';
+    } else {
+      const prevClose = Number(opts.prevClose);
+      const candleOpen = Number(opts.candleOpen);
+      if (Number.isFinite(prevClose) && Number.isFinite(candleOpen) && prevClose !== candleOpen) {
+        initialDir = prevClose > candleOpen ? 'BUY' : 'SELL';
+        sourceDesc = `arah candle sebelumnya (${initialDir})`;
+      } else if (Number.isFinite(Number(equilibrium))) {
+        initialDir = livePrice <= equilibrium ? 'BUY' : 'SELL';
+        sourceDesc = livePrice <= equilibrium ? 'zona Discount (< 50% EQ)' : 'zona Premium (> 50% EQ)';
+      }
     }
 
-    const prevClose = Number(opts.prevClose);
-    const candleOpen = Number(opts.candleOpen);
-    if (Number.isFinite(prevClose) && Number.isFinite(candleOpen) && prevClose !== candleOpen) {
-      const dir = prevClose > candleOpen ? 'BUY' : 'SELL';
-      return { direction: dir, source: `arah candle sebelumnya (${dir})` };
-    }
-
-    const dir = livePrice <= equilibrium ? 'BUY' : 'SELL';
-    return {
-      direction: dir,
-      source: livePrice <= equilibrium ? 'zona Discount (< 50% Equilibrium)' : 'zona Premium (> 50% Equilibrium)'
-    };
+    lockedPairCandleBias.set(biasKey, initialDir);
+    return { direction: initialDir, source: sourceDesc };
   }
 
-  function analyzeDealingRange(pair, livePrice, timeframe, scanSeed, marketContext) {
+  function analyzeDealingRange(pair, livePrice, timeframe, deterministicSeed, marketContext) {
     const spec = getPairSpec(pair);
     const tfCfg = TF_CONFIG[timeframe] || TF_CONFIG.M15;
     const ctx = marketContext || {};
     const nyCtx = getNySessionContext(ctx.nowMs);
-    const seed = Number.isFinite(Number(scanSeed)) ? Number(scanSeed) : 0;
+    const seed = Number.isFinite(Number(deterministicSeed)) ? Number(deterministicSeed) : 1;
 
     const hasRealAtr = Number.isFinite(Number(ctx.realAtr)) && Number(ctx.realAtr) > 0;
     const unitAtr = hasRealAtr
@@ -278,11 +290,11 @@
       swingHigh = Number(ctx.recentHigh);
       totalRange = Math.max(unitAtr * 1.1, swingHigh - swingLow);
     } else {
-      const priceWave = Math.sin(livePrice / Math.max(spec.pipSize * 20, unitAtr * 1.4) + seed * 1.15);
-      const pdSeedRatio = Math.min(0.82, Math.max(0.18, 0.5 + priceWave * 0.22));
-      const rangeSpreadFactor = 1.6 + (Math.abs(Math.cos(seed + 0.7)) * 0.35);
+      // Rentang stabil berbasis seed candle (bukan scanCounter) agar tidak bergeser saat scan ulang
+      const fixedRatio = 0.5;
+      const rangeSpreadFactor = 1.6 + (Math.abs(Math.cos(seed + 0.7)) * 0.25);
       totalRange = unitAtr * rangeSpreadFactor;
-      swingLow = livePrice - totalRange * pdSeedRatio;
+      swingLow = livePrice - totalRange * fixedRatio;
       swingHigh = swingLow + totalRange;
     }
 
@@ -291,7 +303,7 @@
       Math.min(95, Math.max(5, ((livePrice - swingLow) / Math.max(spec.pipSize, totalRange)) * 100))
     );
 
-    const dirInfo = resolveStructureDirection(ctx, livePrice, swingHigh, swingLow, equilibrium);
+    const dirInfo = getLockedOneWayBias(pair, timeframe, ctx.candleCloseTs || 0, ctx, livePrice, equilibrium);
 
     return {
       pair,
@@ -329,11 +341,10 @@
     const timeframe = opts.timeframe || 'M15';
     const methodKey = METHOD_CATALOG[opts.method] ? opts.method : 'auto';
     const forceReanalyze = Boolean(opts.forceReanalyze);
-    const scanSeed = Number(opts.scanSeed) || 1;
 
     const nowMs = Number.isFinite(Number(opts.nowMs)) ? Number(opts.nowMs) : Date.now();
     const candleCloseTs = getCandleCloseTimestamp(timeframe, nowMs, opts.candleCloseTs);
-    const signalId = buildDeterministicSignalId(pair, timeframe, methodKey, candleCloseTs, scanSeed);
+    const signalId = buildDeterministicSignalId(pair, timeframe, methodKey, candleCloseTs);
 
     if (!forceReanalyze && lockedSignalCache.has(signalId)) {
       return Object.assign({}, lockedSignalCache.get(signalId), {
@@ -419,9 +430,10 @@
       return res;
     }
 
-    const deterministicSeed = (candleCloseTs % 1000000) / 10000 + scanSeed;
+    const deterministicSeed = (candleCloseTs % 1000000) / 10000;
     const dr = analyzeDealingRange(pair, livePrice, timeframe, deterministicSeed, {
       nowMs,
+      candleCloseTs,
       realAtr: opts.realAtr,
       recentHigh: opts.recentHigh,
       recentLow: opts.recentLow,
