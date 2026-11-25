@@ -12,6 +12,40 @@
   const CALENDAR_CACHE_TTL_MS = 15 * 60 * 1000;
   const FF_THIS_WEEK_URL = 'https://nfs.faireconomy.media/ff_calendar_thisweek.json';
 
+  const FALLBACK_DEFAULT_PRICES = Object.freeze({
+    XAUUSD: 3555.00,
+    US100: 21500.00,
+    BTCUSDT: 95000.00,
+    EURUSD: 1.08500
+  });
+
+  function resolveEffectivePrices(prices) {
+    let cached = null;
+    try {
+      if (global.LiamPriceFeed && typeof global.LiamPriceFeed.loadCache === 'function') {
+        cached = global.LiamPriceFeed.loadCache();
+      }
+    } catch (_) {}
+
+    const base =
+      (global.LiamPriceFeed && global.LiamPriceFeed.BASELINE_PRICES) || FALLBACK_DEFAULT_PRICES;
+
+    const numOr = (val, alt, def) => {
+      const n1 = Number(val);
+      if (Number.isFinite(n1) && n1 > 0) return n1;
+      const n2 = Number(alt);
+      if (Number.isFinite(n2) && n2 > 0) return n2;
+      return def;
+    };
+
+    return {
+      XAUUSD: numOr(prices?.XAUUSD, cached?.XAUUSD, base.XAUUSD),
+      US100: numOr(prices?.US100, cached?.US100, base.US100),
+      BTCUSDT: numOr(prices?.BTCUSDT, cached?.BTCUSDT, base.BTCUSDT),
+      EURUSD: numOr(prices?.EURUSD, cached?.EURUSD, base.EURUSD)
+    };
+  }
+
   function getWibTodayStrings() {
     const now = new Date();
     const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
@@ -65,6 +99,7 @@
   }
 
   function parseIsoDateToWib(isoStr) {
+    if (!isoStr || typeof isoStr !== 'string') return null;
     const dt = new Date(isoStr);
     if (!Number.isFinite(dt.getTime())) return null;
     const utcMs = dt.getTime() + dt.getTimezoneOffset() * 60000;
@@ -84,28 +119,32 @@
   function parseWibDateTimeMs(dateStr, timeWibStr) {
     try {
       const [y, m, d] = String(dateStr).split('-').map(Number);
-      const cleanTime = String(timeWibStr || '00:00').replace(/[^0-9:]/g, '');
+      const cleanTime = String(timeWibStr || '').replace(/[^0-9:]/g, '');
+      if (!y || !m || !d || !cleanTime.includes(':')) return null;
       const [hh, mm] = cleanTime.split(':').map(Number);
-      if (!y || !m || !d) return null;
-      return Date.UTC(y, m - 1, d, (hh || 0) - 7, mm || 0, 0);
+      if (!Number.isFinite(hh) || !Number.isFinite(mm)) return null;
+      return Date.UTC(y, m - 1, d, hh - 7, mm, 0);
     } catch (_) {
       return null;
     }
   }
 
   function mapRawLiveEventToInstitutionalCard(raw, prices) {
-    const xau = Number(prices?.XAUUSD) || 2650.00;
-    const us100 = Number(prices?.US100) || 20850.00;
-    const eur = Number(prices?.EURUSD) || 1.08500;
-    const btc = Number(prices?.BTCUSDT) || 92000.00;
+    const px = resolveEffectivePrices(prices);
+    const xau = px.XAUUSD;
+    const us100 = px.US100;
+    const eur = px.EURUSD;
+    const btc = px.BTCUSDT;
 
     const ccy = String(raw.country || 'USD').toUpperCase();
     const title = String(raw.title || 'Macro Economic Data');
     const tLow = title.toLowerCase();
     const impact = String(raw.impact || '').toLowerCase() === 'high' ? 'high' : 'medium';
-    const wibInfo = parseIsoDateToWib(raw.date) || {
+    const wibInfo = parseIsoDateToWib(raw.date);
+    const hasExactTime = Boolean(wibInfo && !/all\s*day|tentative/i.test(String(raw.time || '')));
+    const resolvedWib = wibInfo || {
       dateStr: getWibTodayStrings().today,
-      timeWib: '20:30 WIB',
+      timeWib: raw.time ? `${String(raw.time).trim()} WIB` : 'Tentatif WIB',
       timestampMs: null
     };
 
@@ -254,16 +293,16 @@
           };
     }
 
-    const slug = `${wibInfo.dateStr}-${ccy}-${title}`
+    const slug = `${resolvedWib.dateStr}-${ccy}-${title}`
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .slice(0, 44);
 
     return {
       id: `ff-live-${slug}`,
-      dateStr: wibInfo.dateStr,
-      timeWib: wibInfo.timeWib,
-      timestampMs: wibInfo.timestampMs,
+      dateStr: resolvedWib.dateStr,
+      timeWib: resolvedWib.timeWib,
+      timestampMs: hasExactTime ? resolvedWib.timestampMs : null,
       currency: ccy,
       impact,
       title,
@@ -286,10 +325,11 @@
 
   function buildFallbackStaticEvents(prices) {
     const d = getWibTodayStrings();
-    const xau = Number(prices?.XAUUSD) || 2650.00;
-    const us100 = Number(prices?.US100) || 20850.00;
-    const eur = Number(prices?.EURUSD) || 1.08500;
-    const btc = Number(prices?.BTCUSDT) || 92000.00;
+    const px = resolveEffectivePrices(prices);
+    const xau = px.XAUUSD;
+    const us100 = px.US100;
+    const eur = px.EURUSD;
+    const btc = px.BTCUSDT;
 
     return [
       {
@@ -728,9 +768,9 @@
     return buildFallbackStaticEvents(prices);
   }
 
-  async function syncLiveEconomicCalendar() {
+  async function syncLiveEconomicCalendar(force = false) {
     const cached = loadLiveCalendarCache();
-    if (cached && Date.now() - Number(cached.savedAtMs || 0) < CALENDAR_CACHE_TTL_MS) {
+    if (!force && cached && Date.now() - Number(cached.savedAtMs || 0) < CALENDAR_CACHE_TTL_MS) {
       return cached.items;
     }
 
@@ -854,6 +894,19 @@
     return upcoming[0] || candidates[0] || events[0];
   }
 
+  function getCalendarStatusMeta() {
+    const cached = loadLiveCalendarCache();
+    if (cached && Array.isArray(cached.items) && cached.items.length > 0) {
+      const ageMs = Math.max(0, Date.now() - Number(cached.savedAtMs || Date.now()));
+      return {
+        isLive: true,
+        count: cached.items.length,
+        ageMinutes: Math.floor(ageMs / 60000)
+      };
+    }
+    return { isLive: false, count: 11, ageMinutes: null };
+  }
+
   syncLiveEconomicCalendar();
 
   global.LiamNews = {
@@ -862,6 +915,7 @@
     syncLiveEconomicCalendar,
     getActiveNewsLock,
     fetchLiveMacroWire,
-    pickBestNewsOpportunity
+    pickBestNewsOpportunity,
+    getCalendarStatusMeta
   };
 })(window);
