@@ -106,8 +106,18 @@
   const lockedSignalCache = new Map();
   const lockedPairCandleBias = new Map();
 
+  function normalizePair(pair) {
+    const clean = String(pair || 'XAUUSD').trim().toUpperCase();
+    if (clean === 'BTC' || clean === 'BTCUSD') return 'BTCUSDT';
+    if (clean === 'NDX' || clean === 'NASDAQ') return 'US100';
+    if (clean === 'GOLD' || clean === 'XAU') return 'XAUUSD';
+    if (clean === 'EUR') return 'EURUSD';
+    return PAIR_SPECS[clean] ? clean : 'XAUUSD';
+  }
+
   function getPairSpec(pair) {
-    return PAIR_SPECS[pair] || PAIR_SPECS.XAUUSD;
+    const key = normalizePair(pair);
+    return PAIR_SPECS[key] || PAIR_SPECS.XAUUSD;
   }
 
   function formatPrice(pair, value) {
@@ -117,9 +127,10 @@
   }
 
   function toPips(pair, priceDiff) {
-    const spec = getPairSpec(pair);
+    const key = normalizePair(pair);
+    const spec = getPairSpec(key);
     const raw = Math.abs(priceDiff) / spec.pipSize;
-    return spec.decimals === 2 && pair === 'XAUUSD'
+    return spec.decimals === 2 && key === 'XAUUSD'
       ? Number(raw.toFixed(1))
       : Math.round(raw);
   }
@@ -211,7 +222,8 @@
   }
 
   function buildDeterministicSignalId(pair, timeframe, methodKey, candleCloseTs) {
-    return `${pair}_${timeframe}_${methodKey.toUpperCase()}_${candleCloseTs}`;
+    const cleanPair = normalizePair(pair);
+    return `${cleanPair}_${timeframe}_${methodKey.toUpperCase()}_${candleCloseTs}`;
   }
 
   function clearLockedSignal(signalId) {
@@ -225,6 +237,7 @@
 
   // Kunci 1 arah per pair + H1/M15 candle block agar tidak gonta-ganti BUY/SELL tiap scan
   function getLockedOneWayBias(pair, timeframe, candleCloseTs, opts, livePrice, equilibrium) {
+    const cleanPair = normalizePair(pair);
     const explicitBias = (opts.htfBias || opts.trendBias || opts.structureBias || '').toUpperCase();
     if (explicitBias === 'BUY' || explicitBias === 'BULLISH') {
       return { direction: 'BUY', source: 'bias struktur/tren BULLISH (1-Arah)' };
@@ -233,7 +246,7 @@
       return { direction: 'SELL', source: 'bias struktur/tren BEARISH (1-Arah)' };
     }
 
-    const biasKey = `${pair}_${timeframe}_${candleCloseTs}`;
+    const biasKey = `${cleanPair}_${timeframe}_${candleCloseTs}`;
     if (lockedPairCandleBias.has(biasKey)) {
       const cachedDir = lockedPairCandleBias.get(biasKey);
       return { direction: cachedDir, source: `arah terkunci 1-arah (${cachedDir})` };
@@ -265,7 +278,8 @@
   }
 
   function analyzeDealingRange(pair, livePrice, timeframe, deterministicSeed, marketContext) {
-    const spec = getPairSpec(pair);
+    const cleanPair = normalizePair(pair);
+    const spec = getPairSpec(cleanPair);
     const tfCfg = TF_CONFIG[timeframe] || TF_CONFIG.M15;
     const ctx = marketContext || {};
     const nyCtx = getNySessionContext(ctx.nowMs);
@@ -303,22 +317,22 @@
       Math.min(95, Math.max(5, ((livePrice - swingLow) / Math.max(spec.pipSize, totalRange)) * 100))
     );
 
-    const dirInfo = getLockedOneWayBias(pair, timeframe, ctx.candleCloseTs || 0, ctx, livePrice, equilibrium);
+    const dirInfo = getLockedOneWayBias(cleanPair, timeframe, ctx.candleCloseTs || 0, ctx, livePrice, equilibrium);
 
     return {
-      pair,
+      pair: cleanPair,
       timeframe,
       livePrice,
       unitAtr,
       hasRealAtr,
       hasRealSwing,
       swingHigh,
-      swingHighFmt: formatPrice(pair, swingHigh),
+      swingHighFmt: formatPrice(cleanPair, swingHigh),
       swingLow,
-      swingLowFmt: formatPrice(pair, swingLow),
+      swingLowFmt: formatPrice(cleanPair, swingLow),
       totalRange,
       equilibrium,
-      equilibriumFmt: formatPrice(pair, equilibrium),
+      equilibriumFmt: formatPrice(cleanPair, equilibrium),
       pdPercent,
       direction: dirInfo.direction,
       directionSource: dirInfo.source,
@@ -337,7 +351,7 @@
 
   function buildSignalSetup(options) {
     const opts = options || {};
-    const pair = opts.pair || 'XAUUSD';
+    const pair = normalizePair(opts.pair || 'XAUUSD');
     const timeframe = opts.timeframe || 'M15';
     const methodKey = METHOD_CATALOG[opts.method] ? opts.method : 'auto';
     const forceReanalyze = Boolean(opts.forceReanalyze);
@@ -789,7 +803,7 @@
   function evaluateRunningPositionMetrics(tradeOrSignal, currentPrice, options) {
     const src = tradeOrSignal || {};
     const opts = options || {};
-    const pair = src.pair || opts.pair || 'XAUUSD';
+    const pair = normalizePair(src.pair || opts.pair || 'XAUUSD');
     const spec = getPairSpec(pair);
     const direction = (src.direction || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : 'BUY';
     const entry = Number(src.entry);
@@ -871,7 +885,7 @@
 
   function calculateManualTpMetrics(tradeOrSignal, manualTpPrice, lot) {
     const src = tradeOrSignal || {};
-    const pair = src.pair || 'XAUUSD';
+    const pair = normalizePair(src.pair || 'XAUUSD');
     const spec = getPairSpec(pair);
     const direction = (src.direction || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : 'BUY';
     const entry = Number(src.entry);
@@ -943,6 +957,7 @@
     PAIR_SPECS,
     TF_CONFIG,
     METHOD_CATALOG,
+    normalizePair,
     getPairSpec,
     formatPrice,
     toPips,
