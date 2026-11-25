@@ -2,6 +2,11 @@
   'use strict';
 
   function getPairInfo(pair) {
+    const cleanPair =
+      global.LiamMethods && typeof global.LiamMethods.normalizePair === 'function'
+        ? global.LiamMethods.normalizePair(pair)
+        : String(pair || 'XAUUSD').toUpperCase();
+
     const specs = {
       XAUUSD: { decimals: 2, pipSize: 0.1, pipValuePerLot: 10 },
       US100: { decimals: 2, pipSize: 1.0, pipValuePerLot: 1 },
@@ -9,9 +14,9 @@
       EURUSD: { decimals: 5, pipSize: 0.0001, pipValuePerLot: 10 }
     };
     if (global.LiamMethods && typeof global.LiamMethods.getPairSpec === 'function') {
-      return global.LiamMethods.getPairSpec(pair);
+      return global.LiamMethods.getPairSpec(cleanPair);
     }
-    return specs[pair] || specs.XAUUSD;
+    return specs[cleanPair] || specs.XAUUSD;
   }
 
   function fmtPx(pair, val) {
@@ -21,6 +26,34 @@
       return global.LiamMethods.formatPrice(pair, num);
     }
     return num.toFixed(getPairInfo(pair).decimals);
+  }
+
+  function resolveState() {
+    if (global.state && typeof global.state === 'object') {
+      return global.state;
+    }
+    const bridge = global.__LIAM_TERMINAL_BRIDGE__;
+    if (bridge && typeof bridge.getState === 'function') {
+      const st = bridge.getState();
+      if (st && typeof st === 'object') {
+        global.state = st;
+        return st;
+      }
+    }
+    return null;
+  }
+
+  function resolveActivePair(st) {
+    const rawPair =
+      (st && st.signal && st.signal.pair) ||
+      (st && st.pair) ||
+      (document.getElementById('chart-pair-select') && document.getElementById('chart-pair-select').value) ||
+      'XAUUSD';
+
+    if (global.LiamMethods && typeof global.LiamMethods.normalizePair === 'function') {
+      return global.LiamMethods.normalizePair(rawPair);
+    }
+    return String(rawPair || 'XAUUSD').toUpperCase();
   }
 
   function setTextEl(id, text) {
@@ -58,10 +91,28 @@
     }
   }
 
+  function syncAfterCalibration(st) {
+    try {
+      localStorage.setItem('liamvtrade_quant_v29_state', JSON.stringify(st));
+    } catch (_) {}
+
+    try {
+      if (global.LiamMethods && typeof global.LiamMethods.clearLockedSignal === 'function') {
+        global.LiamMethods.clearLockedSignal();
+      }
+    } catch (_) {}
+
+    hideModalBox('modal-calibration');
+    if (typeof global.renderPriceDisplays === 'function') global.renderPriceDisplays();
+    if (typeof global.recalculateAndRenderSignal === 'function') global.recalculateAndRenderSignal(true);
+    if (typeof global.evaluateActiveTradesAgainstLivePrices === 'function') global.evaluateActiveTradesAgainstLivePrices();
+  }
+
   function openCalibrationModal() {
-    const pair = (global.state && global.state.signal && global.state.signal.pair) || 'XAUUSD';
-    const rawPx = Number(global.state && global.state.prices ? global.state.prices[pair] : 0) || 0;
-    const offset = Number(global.state && global.state.priceOffsets ? global.state.priceOffsets[pair] : 0) || 0;
+    const st = resolveState();
+    const pair = resolveActivePair(st);
+    const rawPx = Number(st && st.prices ? st.prices[pair] : 0) || 0;
+    const offset = Number(st && st.priceOffsets ? st.priceOffsets[pair] : 0) || 0;
     const currentPx = Number((rawPx + offset).toFixed(getPairInfo(pair).decimals));
 
     setTextEl('cal-pair-name', pair);
@@ -70,8 +121,8 @@
     setValEl('cal-broker-price-input', currentPx);
 
     const acc =
-      Array.isArray(global.state && global.state.accounts)
-        ? global.state.accounts.find((a) => a.id === global.state.activeAccountId) || global.state.accounts[0]
+      Array.isArray(st && st.accounts)
+        ? st.accounts.find((a) => a.id === st.activeAccountId) || st.accounts[0]
         : null;
 
     const breakdownEl = document.getElementById('cal-lot-breakdown');
@@ -89,8 +140,9 @@
   }
 
   function applyBrokerPriceCalibration() {
-    if (!global.state) return;
-    const pair = (global.state.signal && global.state.signal.pair) || 'XAUUSD';
+    const st = resolveState();
+    if (!st) return;
+    const pair = resolveActivePair(st);
     const inputEl = document.getElementById('cal-broker-price-input');
     const brokerPx = Number(inputEl && inputEl.value);
 
@@ -100,42 +152,29 @@
     }
 
     const spec = getPairInfo(pair);
-    global.state.prices = global.state.prices || {};
-    global.state.priceOffsets = global.state.priceOffsets || {};
+    st.prices = st.prices || {};
+    st.priceOffsets = st.priceOffsets || {};
 
-    const rawPx = Number(global.state.prices[pair]);
+    const rawPx = Number(st.prices[pair]);
     if (Number.isFinite(rawPx) && rawPx > 0) {
-      global.state.priceOffsets[pair] = Number((brokerPx - rawPx).toFixed(spec.decimals));
+      st.priceOffsets[pair] = Number((brokerPx - rawPx).toFixed(spec.decimals));
     } else {
-      global.state.prices[pair] = brokerPx;
-      global.state.priceOffsets[pair] = 0;
+      st.prices[pair] = brokerPx;
+      st.priceOffsets[pair] = 0;
     }
 
-    try {
-      localStorage.setItem('liamvtrade_quant_v29_state', JSON.stringify(global.state));
-    } catch (_) {}
-
-    hideModalBox('modal-calibration');
-    if (typeof global.renderPriceDisplays === 'function') global.renderPriceDisplays();
-    if (typeof global.recalculateAndRenderSignal === 'function') global.recalculateAndRenderSignal(false);
-    if (typeof global.evaluateActiveTradesAgainstLivePrices === 'function') global.evaluateActiveTradesAgainstLivePrices();
+    syncAfterCalibration(st);
     notifyUser(`Kalibrasi ${pair} diterapkan (${fmtPx(pair, brokerPx)}).`);
   }
 
   function resetBrokerPriceCalibration() {
-    if (!global.state) return;
-    const pair = (global.state.signal && global.state.signal.pair) || 'XAUUSD';
-    global.state.priceOffsets = global.state.priceOffsets || {};
-    global.state.priceOffsets[pair] = 0;
+    const st = resolveState();
+    if (!st) return;
+    const pair = resolveActivePair(st);
+    st.priceOffsets = st.priceOffsets || {};
+    st.priceOffsets[pair] = 0;
 
-    try {
-      localStorage.setItem('liamvtrade_quant_v29_state', JSON.stringify(global.state));
-    } catch (_) {}
-
-    hideModalBox('modal-calibration');
-    if (typeof global.renderPriceDisplays === 'function') global.renderPriceDisplays();
-    if (typeof global.recalculateAndRenderSignal === 'function') global.recalculateAndRenderSignal(false);
-    if (typeof global.evaluateActiveTradesAgainstLivePrices === 'function') global.evaluateActiveTradesAgainstLivePrices();
+    syncAfterCalibration(st);
     notifyUser(`Offset ${pair} direset ke 0.`);
   }
 
