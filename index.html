@@ -776,7 +776,7 @@
       <div id="news-lock-warning-banner" class="hidden rounded-2xl bg-amber-500/15 border border-amber-400/50 px-3.5 py-2.5 text-xs text-amber-200 leading-relaxed"></div>
 
       <div id="news-shield-status-bar" class="rounded-2xl bg-amber-500/10 border border-amber-400/35 px-3.5 py-2.5 text-xs text-amber-200 leading-relaxed">
-        🛡️ <strong>News Shield Aktif:</strong> Terminal memantau jadwal High Impact USD/EUR di tab News. Hindari entry ±15 menit saat rilis data merah.
+        🛡️ <strong>News Shield Aktif:</strong> Terminal memantau jadwal High Impact USD/EUR di tab News. Hindari entry ±30 menit saat rilis data merah.
       </div>
 
       <!-- MAIN SNIPER SIGNAL CARD -->
@@ -814,6 +814,16 @@
             Memvalidasi struktur candle terbentuk, konfluensi multi-timeframe, dan perlindungan risiko...
           </p>
           <div id="sig-score-breakdown" class="hidden pt-1.5 border-t border-slate-800/80 grid grid-cols-2 gap-1 text-[10px] font-mono text-slate-400"></div>
+
+          <!-- SLOT METADATA TAMBAHAN (TRIGGER, INVALIDATION, VALID UNTIL, RR TP1, SCORE & CHECKLIST) -->
+          <div id="sig-signal-meta-extra" class="pt-1.5 border-t border-slate-800/80 grid grid-cols-2 gap-1.5 text-[10px] font-mono text-slate-300">
+            <div class="truncate">Trigger: <strong id="sig-trigger-text" class="text-cyan-300">--</strong></div>
+            <div class="truncate">RR TP1: <strong id="sig-rr-tp1-text" class="text-emerald-300">--</strong></div>
+            <div class="truncate">Invalidation: <strong id="sig-invalidation-text" class="text-rose-300">--</strong></div>
+            <div class="truncate">Valid Until: <strong id="sig-valid-until-text" class="text-amber-300">--</strong></div>
+            <div class="truncate">Score: <strong id="sig-score-extra-text" class="text-sky-300">--</strong></div>
+            <div class="truncate">Checklist: <strong id="sig-checklist-text" class="text-slate-200">--</strong></div>
+          </div>
         </div>
 
         <div class="rounded-xl bg-slate-950/75 border border-slate-800/90 px-3 py-2 flex items-center justify-between gap-2 text-[11px] font-mono">
@@ -1606,7 +1616,8 @@
     </div>
   </div>
 
-  <!-- CORE SCRIPTS (URUTAN WAJIB + INTEGRASI PICKER, CALIBRATION & SW) -->
+  <!-- CORE SCRIPTS (URUTAN WAJIB + CANDLES + INTEGRASI PICKER, CALIBRATION & SW) -->
+  <script src="./candles.js"></script>
   <script src="./methods.js"></script>
   <script src="./news.js"></script>
   <script src="./price-feed.js"></script>
