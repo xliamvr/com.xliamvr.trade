@@ -1,0 +1,459 @@
+/**
+ * Liamvtrade Quant Terminal v3.0 — intelligence-upgrade.js
+ * 4-TF Multi-Timeframe Scanner, Market Regime Detector,
+ * Canvas Technical Chart PNG Generator & Action Controls
+ */
+
+(function (global) {
+  'use strict';
+
+  const TIMEFRAMES_4 = ['M5', 'M15', 'H1', 'H4'];
+
+  function detectMarketRegime(state, setup) {
+    const pair = state?.pair || setup?.pair || 'XAUUSD';
+    const tf = state?.timeframe || setup?.timeframe || 'M15';
+    const nyCtx = global.LiamMethods?.getNySessionContext
+      ? global.LiamMethods.getNySessionContext(Date.now())
+      : { isWeekend: false, sessionName: 'Active Session' };
+
+    if (nyCtx.isWeekend && pair !== 'BTCUSDT') {
+      return {
+        regime: 'WEEKEND / LOW LIQUIDITY',
+        badgeColor: '#f59e0b',
+        summary: 'Pasar utama libur akhir pekan; hindari entri agresif dan utamakan observasi struktur.',
+        suggestedAction: 'NO TRADE / MONITOR ONLY'
+      };
+    }
+
+    if (setup?.status === 'WAIT' && String(setup?.reasonCode || '').includes('NEWS')) {
+      return {
+        regime: 'HIGH-VOLATILITY NEWS LOCK',
+        badgeColor: '#ef4444',
+        summary: 'Jendela rilis data berdampak tinggi aktif; rawan spread melebar dan sapuan likuiditas dua arah.',
+        suggestedAction: 'WAIT FOR POST-NEWS STRUCTURE'
+      };
+    }
+
+    const atrRatio = (Number(setup?.slPips) || 25) / ((global.LiamMethods?.PAIR_SPECS?.[pair]?.maxSlPips?.[tf]) || 72);
+    if (atrRatio >= 0.72) {
+      return {
+        regime: 'EXPANSION / HIGH VOLATILITY',
+        badgeColor: '#38bdf8',
+        summary: `Volatilitas ${pair} (${tf}) sedang ekspansif; utamakan konfirmasi pullback ke POI/FVG dengan risk disiplin.`,
+        suggestedAction: 'PULLBACK LIMIT / PARTIAL TP'
+      };
+    }
+
+    return {
+      regime: 'BALANCED / DEALING RANGE',
+      badgeColor: '#10b981',
+      summary: `Struktur ${pair} (${tf}) berada di area dealing range terukur; perhatikan reaksi di zona Discount/Premium & likuiditas.`,
+      suggestedAction: 'SELECTIVE SNIPER ENTRY'
+    };
+  }
+
+  function runFourTimeframeScan(state, options = {}) {
+    const bridge = global.__LIAM_TERMINAL_BRIDGE__;
+    const methods = global.LiamMethods;
+    if (!methods || typeof methods.buildSignalSetup !== 'function') {
+      return { results: [], best: null };
+    }
+
+    const pair = options.pair || state?.pair || 'XAUUSD';
+    const method = options.method || state?.method || 'auto';
+    const livePrice = Number(options.livePrice ?? state?.prices?.[pair]);
+    const lastUpdateTs = Number(options.lastUpdateTs ?? state?.lastPriceUpdateMs ?? Date.now());
+    const newsInfo = options.newsInfo || {};
+
+    const results = TIMEFRAMES_4.map((tf) => {
+      return methods.buildSignalSetup({
+        pair,
+        timeframe: tf,
+        method,
+        livePrice,
+        lastUpdateTs,
+        nowMs: Date.now(),
+        spreadPips: state?.spreadPips,
+        htfBias: state?.htfBias,
+        newsLockActive: Boolean(newsInfo.locked),
+        newsBias: newsInfo.event?.verdictDirection || '',
+        forceReanalyze: Boolean(options.forceReanalyze),
+        scanSeed: Number(state?.scanCounter) || 1
+      });
+    });
+
+    const executable = results
+      .filter((r) => r && r.status === 'SIGNAL')
+      .sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+
+    const best = executable[0] || results.find((r) => r.status === 'WAIT') || results[1] || results[0] || null;
+
+    if (options.applyBest && best && bridge && typeof bridge.getState === 'function') {
+      const st = bridge.getState();
+      st.timeframe = best.timeframe;
+      if (typeof bridge.runAnalysis === 'function') {
+        bridge.runAnalysis({ skipScanIncrement: true });
+      }
+    }
+
+    return { results, best };
+  }
+
+  function renderFourTimeframeGrid(containerId, scanData, onSelectTf) {
+    const el = document.getElementById(containerId);
+    if (!el || !scanData || !Array.isArray(scanData.results)) return;
+
+    el.innerHTML = scanData.results
+      .map((item) => {
+        const isSig = item.status === 'SIGNAL';
+        const isWait = item.status === 'WAIT';
+        const statusBadge = isSig
+          ? `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">${item.direction} • ${item.score}</span>`
+          : isWait
+          ? `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-500/20 text-amber-300 border border-amber-500/30">WAIT</span>`
+          : `<span class="px-2 py-0.5 rounded text-[10px] font-bold bg-rose-500/20 text-rose-300 border border-rose-500/30">NO SETUP</span>`;
+
+        const detailLine = isSig
+          ? `Entry ${item.entryFmt} • SL ${item.slPips}p • TP1 ${item.tp1Fmt}`
+          : (item.poiSummary || item.reasonCode || 'Tidak ada setup valid');
+
+        return `
+          <button type="button" data-tf-scan="${item.timeframe}"
+            class="text-left p-3 rounded-xl bg-slate-900/80 hover:bg-slate-800/90 border border-slate-700/70 transition flex flex-col justify-between gap-2">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-xs font-extrabold tracking-wide text-slate-100">${item.timeframe}</span>
+              ${statusBadge}
+            </div>
+            <div class="text-[11px] text-slate-300 font-mono leading-snug">${detailLine}</div>
+          </button>
+        `;
+      })
+      .join('');
+
+    el.querySelectorAll('[data-tf-scan]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tf = btn.getAttribute('data-tf-scan');
+        if (typeof onSelectTf === 'function') onSelectTf(tf);
+      });
+    });
+  }
+
+  function generateTechnicalChartPng(setup, state, regimeInfo) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1200;
+    canvas.height = 675;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    const bgGrad = ctx.createLinearGradient(0, 0, 1200, 675);
+    bgGrad.addColorStop(0, '#070b12');
+    bgGrad.addColorStop(1, '#101827');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, 1200, 675);
+
+    // Grid halus
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.08)';
+    ctx.lineWidth = 1;
+    for (let x = 60; x < 1160; x += 60) {
+      ctx.beginPath();
+      ctx.moveTo(x, 90);
+      ctx.lineTo(x, 590);
+      ctx.stroke();
+    }
+    for (let y = 90; y <= 590; y += 50) {
+      ctx.beginPath();
+      ctx.moveTo(60, y);
+      ctx.lineTo(1140, y);
+      ctx.stroke();
+    }
+
+    // Header
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = 'bold 28px Inter, system-ui, sans-serif';
+    ctx.fillText(`LIAMVTRADE QUANT MAP — ${setup?.pair || state?.pair || 'XAUUSD'} (${setup?.timeframe || state?.timeframe || 'M15'})`, 60, 56);
+
+    ctx.fillStyle = '#94a3b8';
+    ctx.font = '600 15px monospace';
+    ctx.fillText(`Method: ${setup?.methodLabel || 'Auto Sniper'} | Session: ${setup?.sessionName || '-'} | Regime: ${regimeInfo?.regime || '-'}`, 60, 82);
+
+    const hasSignal = setup && setup.status === 'SIGNAL';
+    const isBuy = setup?.direction === 'BUY';
+
+    // Area chart ilustrasi struktur & zona POI
+    const chartLeft = 80;
+    const chartRight = 760;
+    const chartTop = 130;
+    const chartBottom = 560;
+
+    if (hasSignal) {
+      // Zona POI highlight
+      ctx.fillStyle = isBuy ? 'rgba(16, 185, 129, 0.14)' : 'rgba(244, 63, 94, 0.14)';
+      ctx.fillRect(chartLeft, 290, chartRight - chartLeft, 85);
+
+      ctx.strokeStyle = isBuy ? '#34d399' : '#fb7185';
+      ctx.setLineDash([6, 6]);
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(chartLeft, 290, chartRight - chartLeft, 85);
+      ctx.setLineDash([]);
+
+      // Kurva harga terukur
+      const pts = isBuy
+        ? [
+            [100, 220], [170, 260], [240, 235], [310, 310], [380, 355],
+            [450, 332], [520, 275], [590, 220], [660, 175], [730, 150]
+          ]
+        : [
+            [100, 460], [170, 415], [240, 440], [310, 365], [380, 320],
+            [450, 342], [520, 400], [590, 455], [660, 505], [730, 535]
+          ];
+
+      ctx.strokeStyle = '#e2e8f0';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      pts.forEach(([px, py], idx) => {
+        if (idx === 0) ctx.moveTo(px, py);
+        else ctx.lineTo(px, py);
+      });
+      ctx.stroke();
+
+      // Garis level Entry, SL, TP1, TP2, TP3
+      const levels = [
+        { label: `TP3 (${setup.tp3Fmt})`, y: isBuy ? 150 : 535, color: '#38bdf8' },
+        { label: `TP2 (${setup.tp2Fmt})`, y: isBuy ? 195 : 490, color: '#2dd4bf' },
+        { label: `TP1 (${setup.tp1Fmt})`, y: isBuy ? 245 : 440, color: '#10b981' },
+        { label: `ENTRY (${setup.entryFmt})`, y: 332, color: '#facc15' },
+        { label: `SL (${setup.slFmt} • ${setup.slPips}p)`, y: isBuy ? 450 : 215, color: '#f43f5e' }
+      ];
+
+      levels.forEach((lvl) => {
+        ctx.strokeStyle = lvl.color;
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(chartLeft, lvl.y);
+        ctx.lineTo(chartRight, lvl.y);
+        ctx.stroke();
+
+        ctx.fillStyle = lvl.color;
+        ctx.font = 'bold 13px monospace';
+        ctx.fillText(lvl.label, chartLeft + 10, lvl.y - 6);
+      });
+    } else {
+      ctx.fillStyle = 'rgba(245, 158, 11, 0.12)';
+      ctx.fillRect(chartLeft, 240, chartRight - chartLeft, 180);
+      ctx.fillStyle = '#fbbf24';
+      ctx.font = 'bold 24px Inter, system-ui, sans-serif';
+      ctx.fillText(setup?.status || 'NO SETUP', chartLeft + 40, 320);
+      ctx.fillStyle = '#cbd5e1';
+      ctx.font = '16px Inter, system-ui, sans-serif';
+      ctx.fillText(setup?.poiSummary || 'Menunggu konfluensi valid & data segar.', chartLeft + 40, 355);
+    }
+
+    // Panel kanan ringkasan eksekusi
+    ctx.fillStyle = 'rgba(15, 23, 42, 0.9)';
+    ctx.fillRect(800, 130, 340, 430);
+    ctx.strokeStyle = 'rgba(148, 163, 184, 0.2)';
+    ctx.lineWidth = 1.5;
+    ctx.strokeRect(800, 130, 340, 430);
+
+    ctx.fillStyle = '#f8fafc';
+    ctx.font = 'bold 18px Inter, system-ui, sans-serif';
+    ctx.fillText('EXECUTION BRIEF', 824, 168);
+
+    const rows = [
+      ['Status', setup?.status || 'NO SETUP'],
+      ['Arah', setup?.direction || '-'],
+      ['Order', setup?.orderType || '-'],
+      ['Entry', setup?.entryFmt || '--'],
+      ['Stop Loss', setup?.slFmt ? `${setup.slFmt} (${setup.slPips}p)` : '--'],
+      ['TP1 / TP2 / TP3', hasSignal ? `${setup.tp1Fmt} / ${setup.tp2Fmt} / ${setup.tp3Fmt}` : '--'],
+      ['Score', setup?.score ? `${setup.score}/10` : '-']
+    ];
+
+    rows.forEach(([k, v], i) => {
+      const yPos = 210 + i * 44;
+      ctx.fillStyle = '#94a3b8';
+      ctx.font = '600 13px monospace';
+      ctx.fillText(k, 824, yPos);
+
+      ctx.fillStyle = '#f1f5f9';
+      ctx.font = 'bold 14px monospace';
+      ctx.fillText(String(v), 824, yPos + 19);
+    });
+
+    // Footer
+    ctx.fillStyle = '#64748b';
+    ctx.font = '13px monospace';
+    ctx.fillText('Generated by Liamvtrade Quant Terminal (@xliamvr) • Disiplin Risk & SL', 60, 632);
+
+    return canvas.toDataURL('image/png');
+  }
+
+  function formatSetupSummaryText(setup, state, regimeInfo) {
+    if (!setup || setup.status !== 'SIGNAL') {
+      return `[LIAMVTRADE] ${state?.pair || 'XAUUSD'} (${state?.timeframe || 'M15'}) — ${setup?.status || 'NO SETUP'}: ${setup?.poiSummary || 'Belum ada setup valid.'}`;
+    }
+    return [
+      `📊 *LIAMVTRADE SIGNAL — ${setup.pair} (${setup.timeframe})*`,
+      `• Metode: *${setup.methodLabel}* (Score ${setup.score}/10)`,
+      `• Arah / Order: *${setup.direction}* (${setup.orderType})`,
+      `• Zona POI: *${setup.zoneRangeFormatted}*`,
+      `• Entry: *${setup.entryFmt}*`,
+      `• Stop Loss: *${setup.slFmt}* (${setup.slPips} pips)`,
+      `• TP1 / TP2 / TP3: *${setup.tp1Fmt}* / *${setup.tp2Fmt}* / *${setup.tp3Fmt}*`,
+      `• Regime: ${regimeInfo?.regime || '-'} | Sesi: ${setup.sessionName}`
+    ].join('\n');
+  }
+
+  function wireIntelligenceModule() {
+    const bridge = global.__LIAM_TERMINAL_BRIDGE__;
+    if (!bridge || typeof bridge.getState !== 'function') return;
+
+    let latestSetup = null;
+    let latestRegime = null;
+
+    const btnScan4Tf = document.getElementById('btnScan4Tf');
+    const btnApplyBestTf = document.getElementById('btnApplyBestTf');
+    const btnGenChartPng = document.getElementById('btnGenChartPng');
+    const btnDownloadPng = document.getElementById('btnDownloadPng');
+    const btnCopySummary = document.getElementById('btnCopySummary');
+    const btnSendSummaryTele = document.getElementById('btnSendSummaryTele');
+
+    const refreshIntelligence = (setup) => {
+      latestSetup = setup;
+      const st = bridge.getState();
+      latestRegime = detectMarketRegime(st, setup);
+
+      const regimeBox = document.getElementById('marketRegimeBox');
+      if (regimeBox && latestRegime) {
+        regimeBox.innerHTML = `
+          <div class="flex items-center justify-between gap-2 mb-1">
+            <span class="text-xs font-extrabold tracking-wide text-slate-100">MARKET REGIME</span>
+            <span class="px-2 py-0.5 rounded text-[11px] font-bold" style="background:${latestRegime.badgeColor}22;color:${latestRegime.badgeColor};border:1px solid ${latestRegime.badgeColor}55;">
+              ${latestRegime.regime}
+            </span>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">${latestRegime.summary}</p>
+          <p class="text-[11px] font-mono text-sky-300 mt-1">Action: ${latestRegime.suggestedAction}</p>
+        `;
+      }
+
+      const scanData = runFourTimeframeScan(st, {
+        pair: st.pair,
+        method: st.method,
+        livePrice: st.prices?.[st.pair],
+        lastUpdateTs: st.lastPriceUpdateMs || Date.now()
+      });
+
+      renderFourTimeframeGrid('fourTfScanGrid', scanData, (tf) => {
+        st.timeframe = tf;
+        if (typeof bridge.runAnalysis === 'function') bridge.runAnalysis({ skipScanIncrement: true });
+      });
+
+      const dataUrl = generateTechnicalChartPng(setup, st, latestRegime);
+      const previewImg = document.getElementById('technicalChartPreview');
+      if (previewImg && dataUrl) {
+        previewImg.src = dataUrl;
+        previewImg.dataset.pngDataUrl = dataUrl;
+      }
+    };
+
+    if (typeof bridge.onAnalysis === 'function') {
+      bridge.onAnalysis(refreshIntelligence);
+    }
+
+    if (btnScan4Tf) {
+      btnScan4Tf.addEventListener('click', () => {
+        const st = bridge.getState();
+        const scanData = runFourTimeframeScan(st, { forceReanalyze: true });
+        renderFourTimeframeGrid('fourTfScanGrid', scanData, (tf) => {
+          st.timeframe = tf;
+          if (typeof bridge.runAnalysis === 'function') bridge.runAnalysis({ skipScanIncrement: true });
+        });
+        if (typeof bridge.toast === 'function') {
+          bridge.toast(`Screening 4-TF selesai untuk ${st.pair}.`, 'info');
+        }
+      });
+    }
+
+    if (btnApplyBestTf) {
+      btnApplyBestTf.addEventListener('click', () => {
+        const st = bridge.getState();
+        const scanData = runFourTimeframeScan(st, { applyBest: true });
+        if (scanData.best && typeof bridge.toast === 'function') {
+          bridge.toast(`Terapkan TF terbaik: ${scanData.best.timeframe} (${scanData.best.status})`, 'success');
+        }
+      });
+    }
+
+    if (btnGenChartPng) {
+      btnGenChartPng.addEventListener('click', () => {
+        const st = bridge.getState();
+        const dataUrl = generateTechnicalChartPng(latestSetup, st, latestRegime);
+        const previewImg = document.getElementById('technicalChartPreview');
+        if (previewImg && dataUrl) {
+          previewImg.src = dataUrl;
+          previewImg.dataset.pngDataUrl = dataUrl;
+        }
+        if (typeof bridge.toast === 'function') {
+          bridge.toast('Peta teknikal PNG diperbarui.', 'success');
+        }
+      });
+    }
+
+    if (btnDownloadPng) {
+      btnDownloadPng.addEventListener('click', () => {
+        const st = bridge.getState();
+        const previewImg = document.getElementById('technicalChartPreview');
+        const dataUrl = previewImg?.dataset?.pngDataUrl || generateTechnicalChartPng(latestSetup, st, latestRegime);
+        if (!dataUrl) return;
+        const a = document.createElement('a');
+        a.href = dataUrl;
+        a.download = `liamvtrade-${st.pair || 'XAUUSD'}-${st.timeframe || 'M15'}.png`;
+        a.click();
+        if (typeof bridge.toast === 'function') {
+          bridge.toast('PNG peta teknikal diunduh.', 'success');
+        }
+      });
+    }
+
+    if (btnCopySummary) {
+      btnCopySummary.addEventListener('click', async () => {
+        const st = bridge.getState();
+        const text = formatSetupSummaryText(latestSetup, st, latestRegime).replace(/\*/g, '');
+        try {
+          await navigator.clipboard.writeText(text);
+          if (typeof bridge.toast === 'function') bridge.toast('Ringkasan sinyal disalin ke clipboard.', 'success');
+        } catch (_) {
+          if (typeof bridge.toast === 'function') bridge.toast('Gagal menyalin otomatis.', 'warn');
+        }
+      });
+    }
+
+    if (btnSendSummaryTele) {
+      btnSendSummaryTele.addEventListener('click', async () => {
+        const st = bridge.getState();
+        const text = formatSetupSummaryText(latestSetup, st, latestRegime);
+        if (typeof bridge.sendTelegram === 'function') {
+          const ok = await bridge.sendTelegram(text);
+          if (typeof bridge.toast === 'function') {
+            bridge.toast(ok ? 'Sinyal terkirim ke Telegram.' : 'Cek Bot Token / Chat ID Telegram.', ok ? 'success' : 'warn');
+          }
+        }
+      });
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', wireIntelligenceModule);
+  } else {
+    wireIntelligenceModule();
+  }
+
+  global.LiamIntelligence = {
+    detectMarketRegime,
+    runFourTimeframeScan,
+    renderFourTimeframeGrid,
+    generateTechnicalChartPng,
+    formatSetupSummaryText
+  };
+})(window);
