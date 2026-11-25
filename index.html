@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#060b16" />
-  <title>Liamvtrade Quant Terminal v2.9 — Institutional ICT/SMC</title>
+  <title>Liamvtrade Quant Terminal v3.0 — Institutional ICT/SMC Intelligence</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -22,6 +22,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet" />
+
+  <!-- GSAP + ScrollTrigger, Lenis Smooth Scroll & Motion (Progressive Enhancement) -->
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/lenis@1.1.18/dist/lenis.min.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/motion@11.11.13/dist/motion.js" defer></script>
+
   <style>
     * {
       -webkit-tap-highlight-color: transparent;
@@ -40,7 +47,7 @@
       background: linear-gradient(145deg, rgba(15, 23, 42, 0.92), rgba(9, 15, 29, 0.96));
       border: 1px solid rgba(51, 65, 85, 0.55);
       box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.65);
-      transition: background 0.2s ease, border-color 0.2s ease;
+      transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
     }
 
     .tab-pane {
@@ -61,6 +68,11 @@
         opacity: 1;
         transform: translateY(0);
       }
+    }
+
+    .gsap-word {
+      display: inline-block;
+      will-change: transform, opacity;
     }
 
     /* =======================================================================
@@ -232,7 +244,7 @@
             <span class="font-extrabold text-xs tracking-wide text-white truncate">XLIAMVR</span>
             <span class="px-1.5 py-0.5 rounded bg-blue-600 text-[9px] font-extrabold tracking-wider text-white">OWNER</span>
           </div>
-          <div id="header-wib-clock" class="text-[10px] font-mono text-slate-400 truncate">Sen, 09:20:00 WIB</div>
+          <div id="header-wib-clock" class="text-[10px] font-mono text-slate-400 truncate">Rab, 09:20:00 WIB</div>
         </div>
       </div>
 
@@ -240,6 +252,7 @@
         class="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-slate-900/90 border border-slate-700/80 active:scale-95 transition shrink-0">
         <span id="header-feed-dot" class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
         <span id="header-ticker-text" class="text-[11px] font-mono font-bold text-emerald-300">XAUUSD --</span>
+        <span id="header-feed-status-badge" class="px-1.5 py-0.5 rounded bg-slate-800 text-[9px] font-mono font-bold text-slate-300">INIT</span>
       </button>
 
       <div class="flex items-center gap-1.5 shrink-0">
@@ -254,6 +267,12 @@
       </div>
     </div>
 
+    <!-- Data Integrity Timestamp Strip -->
+    <div class="max-w-lg mx-auto mt-1.5 flex items-center justify-between text-[10px] font-mono text-slate-400 px-0.5">
+      <span id="header-feed-source">Sumber: Memverifikasi feed...</span>
+      <span id="header-feed-timestamp">Sync: --:--:-- WIB</span>
+    </div>
+
     <div id="global-broadcast-bar" class="hidden max-w-lg mx-auto mt-2 px-3 py-1.5 rounded-xl bg-amber-500/15 border border-amber-400/40 text-amber-200 text-[11px] flex items-center justify-between gap-2">
       <span id="global-broadcast-text" class="truncate"></span>
       <button type="button" onclick="dismissBroadcastBanner()" class="text-amber-300 font-bold text-xs">✕</button>
@@ -263,12 +282,9 @@
   <!-- MAIN APP CONTAINER -->
   <main class="max-w-lg mx-auto px-3.5 pt-3.5 space-y-4">
 
-    <!-- =====================================================================
-         TAB 1: BERANDA (SESSION, CIRCUIT BREAKER, SOP, PROP FIRM PORTFOLIO)
-         ===================================================================== -->
+    <!-- TAB 1: BERANDA -->
     <section id="tab-beranda" class="tab-pane active space-y-4">
-
-      <div class="glass-card rounded-2xl p-4 space-y-2.5">
+      <div class="glass-card motion-card rounded-2xl p-4 space-y-2.5">
         <div class="flex items-center justify-between gap-2">
           <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">ICT KILLZONE &amp; SESSION WIB</span>
           <div class="flex items-center gap-1.5">
@@ -281,7 +297,7 @@
             </span>
           </div>
         </div>
-        <h2 id="session-title" class="text-lg font-extrabold text-white leading-tight">Asia Accumulation Range</h2>
+        <h2 id="session-title" class="gsap-scroll-title text-lg font-extrabold text-white leading-tight">Asia Accumulation Range</h2>
         <p id="session-desc" class="text-xs text-slate-300 leading-relaxed">
           Pembentukan Asia High &amp; Asia Low sebagai kolam likuiditas (liquidity pool) untuk sesi London.
         </p>
@@ -291,7 +307,40 @@
         </div>
       </div>
 
-      <div class="glass-card rounded-2xl p-4 space-y-3">
+      <!-- MARKET REGIME & INTELLIGENCE BRIEF -->
+      <details class="glass-card motion-card rounded-2xl group" open>
+        <summary class="list-none cursor-pointer p-4 flex items-center justify-between gap-2">
+          <div>
+            <span class="text-[10px] font-extrabold tracking-wider uppercase text-cyan-400">MARKET REGIME &amp; INTELLIGENCE</span>
+            <h3 class="gsap-scroll-title text-base font-extrabold text-white">Deteksi Kondisi Pasar &amp; Makro</h3>
+          </div>
+          <span id="regime-status-pill" class="px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-[10px] font-mono font-extrabold text-cyan-300">
+            SCANNING
+          </span>
+        </summary>
+        <div class="px-4 pb-4 pt-1 border-t border-slate-800/80 space-y-2.5 text-xs">
+          <div class="grid grid-cols-3 gap-2 font-mono text-center">
+            <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2">
+              <span class="text-[9px] text-slate-400 block">REGIME</span>
+              <strong id="intel-market-regime" class="text-[11px] text-sky-300">--</strong>
+            </div>
+            <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2">
+              <span class="text-[9px] text-slate-400 block">ATR / VOL</span>
+              <strong id="intel-atr-vol" class="text-[11px] text-amber-300">--</strong>
+            </div>
+            <div class="rounded-xl bg-slate-900/80 border border-slate-800 p-2">
+              <span class="text-[9px] text-slate-400 block">DXY / US10Y</span>
+              <strong id="intel-macro-bias" class="text-[11px] text-slate-300">UNAVAILABLE</strong>
+            </div>
+          </div>
+          <p id="intel-regime-advice" class="text-[11px] text-slate-300 leading-relaxed">
+            Sistem memantau volatilitas dan struktur timeframe untuk mencegah entry saat kondisi sideways/choppy.
+          </p>
+        </div>
+      </details>
+
+      <!-- CIRCUIT BREAKER HARIAN -->
+      <div class="glass-card motion-card rounded-2xl p-4 space-y-3">
         <div class="flex items-center justify-between gap-2">
           <span class="text-[10px] font-extrabold tracking-wider uppercase text-rose-400">CIRCUIT BREAKER HARIAN</span>
           <button type="button" onclick="resetAllAccountsDailyTrackers()"
@@ -305,6 +354,11 @@
           <select id="active-account-select" onchange="switchActiveAccount(this.value)"
             class="w-full rounded-xl bg-slate-900 border border-slate-700/90 px-3 py-2.5 text-sm font-bold text-white focus:outline-none focus:border-sky-500">
           </select>
+        </div>
+
+        <div id="hard-risk-lock-banner" class="hidden rounded-xl bg-rose-950/75 border border-rose-500/60 p-3 space-y-1">
+          <div class="text-[10px] font-extrabold uppercase tracking-wider text-rose-300">⛔ TRADING LOCK AKTIF — BATAS RISIKO TERCAPAI</div>
+          <div id="hard-risk-lock-reason" class="text-xs text-rose-100 leading-relaxed"></div>
         </div>
 
         <div id="cooldown-banner" class="hidden rounded-xl bg-rose-950/60 border border-rose-500/50 p-3 flex items-center justify-between gap-2">
@@ -364,11 +418,12 @@
         </p>
       </div>
 
-      <div class="glass-card rounded-2xl p-4 space-y-3">
+      <!-- PRE-TRADE SOP -->
+      <div class="glass-card motion-card rounded-2xl p-4 space-y-3">
         <div class="flex items-center justify-between gap-2">
           <div>
             <span class="text-[10px] font-extrabold tracking-wider uppercase text-emerald-400">PRE-TRADE SOP</span>
-            <h3 class="text-base font-extrabold text-white">Checklist Validasi Struktur</h3>
+            <h3 class="gsap-scroll-title text-base font-extrabold text-white">Checklist Validasi Struktur</h3>
           </div>
           <div class="flex items-center gap-1.5">
             <span id="sop-score-boost" class="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-[11px] font-mono font-bold text-sky-400">
@@ -400,11 +455,12 @@
         </div>
       </div>
 
-      <div class="glass-card rounded-2xl p-4 space-y-3">
+      <!-- PROP FIRM PORTFOLIO -->
+      <div class="glass-card motion-card rounded-2xl p-4 space-y-3">
         <div class="flex items-center justify-between">
           <div>
             <span class="text-[10px] font-extrabold tracking-wider uppercase text-cyan-400">PROP FIRM PORTFOLIO</span>
-            <h3 class="text-base font-extrabold text-white">Manajemen Saldo &amp; Drawdown</h3>
+            <h3 class="gsap-scroll-title text-base font-extrabold text-white">Manajemen Saldo &amp; Drawdown</h3>
           </div>
           <span id="portfolio-dd-badge" class="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-[10px] font-bold text-emerald-300 text-center leading-tight">
             4% Daily<br>Guard
@@ -496,15 +552,13 @@
       </div>
     </section>
 
-    <!-- =====================================================================
-         TAB 2: NEWS (KALENDER EKONOMI, SCAN PELUANG TERBAIK, SINGLE VERDICT)
-         ===================================================================== -->
+    <!-- TAB 2: NEWS -->
     <section id="tab-news" class="tab-pane space-y-4">
-      <div class="glass-card rounded-2xl p-4 space-y-3">
+      <div class="glass-card motion-card rounded-2xl p-4 space-y-3">
         <div class="flex items-start justify-between gap-2">
           <div>
             <span class="text-[10px] font-extrabold tracking-wider uppercase text-amber-400">PRE &amp; POST-NEWS QUANT ENGINE</span>
-            <h2 class="text-lg font-extrabold text-white">Kalender Ekonomi &amp; Analisa</h2>
+            <h2 class="gsap-scroll-title text-lg font-extrabold text-white">Kalender Ekonomi &amp; Analisa</h2>
             <p id="news-sync-status" class="text-[11px] font-mono text-emerald-400 mt-0.5">● Kalender Terverifikasi + Live Wire</p>
           </div>
           <button type="button" onclick="syncNewsEngine(true)"
@@ -549,7 +603,7 @@
         </div>
       </div>
 
-      <div class="glass-card rounded-2xl p-4 space-y-2.5">
+      <div class="glass-card motion-card rounded-2xl p-4 space-y-2.5">
         <div class="flex items-center justify-between">
           <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">🌐 LIVE NEWS WIRE &amp; GEOPOLITIK</span>
           <span class="text-[10px] font-mono text-slate-400">MACRO DESK</span>
@@ -560,12 +614,9 @@
       <div id="news-events-list" class="space-y-3.5"></div>
     </section>
 
-    <!-- =====================================================================
-         TAB 3: SIGNALS (SNIPER ENGINE, LIVE RUNNING, NEWS SNIPER, JOURNAL)
-         ===================================================================== -->
+    <!-- TAB 3: SIGNALS -->
     <section id="tab-signals" class="tab-pane space-y-4">
-
-      <div class="glass-card rounded-2xl p-4 space-y-3">
+      <div class="glass-card motion-card rounded-2xl p-4 space-y-3">
         <div class="flex items-center justify-between gap-2">
           <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">ICT / SMC SNIPER ENGINE</span>
           <div class="flex items-center gap-1.5">
@@ -593,6 +644,10 @@
           <label class="flex items-center justify-between text-slate-300">
             <span>Blokir Ambil Setup saat Cooldown SL aktif</span>
             <input type="checkbox" id="chk-require-cooldown" onchange="saveTerminalGuardPrefs()" checked class="w-4 h-4 accent-sky-500" />
+          </label>
+          <label class="flex items-center justify-between text-slate-300">
+            <span>Gerbang Ketat NO SETUP jika Skor &lt; 7.0</span>
+            <input type="checkbox" id="chk-strict-no-setup" onchange="saveTerminalGuardPrefs()" checked class="w-4 h-4 accent-sky-500" />
           </label>
         </div>
 
@@ -657,14 +712,19 @@
           </select>
 
           <button type="button" onclick="forceRescanSignal()" title="Scan Ulang Struktur"
-            class="px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-extrabold active:scale-95 shrink-0">
+            class="px-3 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-slate-200 text-xs font-extrabold active:scale-95 shrink-0">
             🔄 Scan
+          </button>
+
+          <button type="button" onclick="openMappingFromSignals()" title="Screening + Generate Gambar Mapping"
+            class="px-3 py-2.5 rounded-xl bg-cyan-500/20 border border-cyan-400/50 text-cyan-300 text-xs font-extrabold active:scale-95 shrink-0">
+            🗺️ Map
           </button>
         </div>
       </div>
 
-      <!-- Modul Khusus Eksekusi News (News Sniper Mode) -->
-      <div class="glass-card rounded-2xl p-3.5 space-y-2.5 border border-amber-500/30">
+      <!-- NEWS SNIPER MODE -->
+      <div class="glass-card motion-card rounded-2xl p-3.5 space-y-2.5 border border-amber-500/30">
         <div class="flex items-center justify-between gap-2">
           <div>
             <div class="text-xs font-extrabold text-amber-300">📰 Modul Khusus Eksekusi News</div>
@@ -703,20 +763,18 @@
         </div>
       </div>
 
-      <!-- News Lock Warning Banner (Non-blocking warning) -->
       <div id="news-lock-warning-banner" class="hidden rounded-2xl bg-amber-500/15 border border-amber-400/50 px-3.5 py-2.5 text-xs text-amber-200 leading-relaxed"></div>
 
-      <!-- News Shield Status Banner -->
       <div id="news-shield-status-bar" class="rounded-2xl bg-amber-500/10 border border-amber-400/35 px-3.5 py-2.5 text-xs text-amber-200 leading-relaxed">
         🛡️ <strong>News Shield Aktif:</strong> Terminal memantau jadwal High Impact USD/EUR di tab News. Hindari entry ±15 menit saat rilis data merah.
       </div>
 
       <!-- MAIN SNIPER SIGNAL CARD -->
-      <div id="main-sniper-card" class="glass-card rounded-2xl p-4 border border-emerald-500/40 space-y-3.5">
+      <div id="main-sniper-card" class="glass-card motion-card rounded-2xl p-4 border border-emerald-500/40 space-y-3.5">
         <div class="flex items-start justify-between gap-2">
           <div>
             <div class="flex items-center gap-2 flex-wrap">
-              <h2 id="sig-pair-tf" class="text-xl font-extrabold text-white">XAUUSD • M15</h2>
+              <h2 id="sig-pair-tf" class="gsap-scroll-title text-xl font-extrabold text-white">XAUUSD • M15</h2>
               <span id="sig-expiry-timer" class="px-2 py-0.5 rounded-lg bg-slate-900 border border-slate-800 text-[11px] font-mono text-amber-300">
                 ⏳ 45:00
               </span>
@@ -733,13 +791,26 @@
           </span>
         </div>
 
-        <!-- Live Running Pips & Floating Readout -->
+        <div id="sig-gate-status-box" class="rounded-xl bg-slate-900/90 border border-slate-700/80 p-3 space-y-1.5">
+          <div class="flex items-center justify-between gap-2">
+            <span id="sig-gate-verdict-badge" class="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-[10px] font-mono font-extrabold text-emerald-300">
+              SETUP VALID • 1 ARAH TERKUNCI
+            </span>
+            <span id="sig-mtf-alignment-badge" class="text-[10px] font-mono text-sky-300">
+              MTF: H4/H1/M15 Selaras
+            </span>
+          </div>
+          <p id="sig-gate-reason-text" class="text-[11px] text-slate-300 leading-relaxed">
+            Memvalidasi struktur candle terbentuk, konfluensi multi-timeframe, dan perlindungan risiko...
+          </p>
+          <div id="sig-score-breakdown" class="hidden pt-1.5 border-t border-slate-800/80 grid grid-cols-2 gap-1 text-[10px] font-mono text-slate-400"></div>
+        </div>
+
         <div class="rounded-xl bg-slate-950/75 border border-slate-800/90 px-3 py-2 flex items-center justify-between gap-2 text-[11px] font-mono">
           <span id="sig-live-delta-pips" class="text-cyan-300 font-bold">--</span>
           <span id="sig-live-floating-usd" class="text-slate-300 font-bold">--</span>
         </div>
 
-        <!-- Active Position Controls: Manual TP Input/Hit + SL->BE + Cut Now -->
         <div id="sig-running-action-panel" class="hidden rounded-xl bg-slate-900/95 border border-cyan-500/35 p-3 space-y-2">
           <div class="text-[10px] font-extrabold uppercase tracking-wider text-cyan-300">
             ⚡ KONTROL POSISI RUNNING (MANUAL TP / SL→BE / CUT)
@@ -886,11 +957,11 @@
       </div>
 
       <!-- PERFORMANCE RECAP & JOURNAL -->
-      <div class="glass-card rounded-2xl p-4 space-y-3">
+      <div class="glass-card motion-card rounded-2xl p-4 space-y-3">
         <div class="flex items-center justify-between gap-2">
           <div>
             <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">PERFORMANCE RECAP &amp; JOURNAL</span>
-            <h3 class="text-base font-extrabold text-white">Statistik Winrate &amp; Pips</h3>
+            <h3 class="gsap-scroll-title text-base font-extrabold text-white">Statistik Winrate &amp; Pips</h3>
           </div>
           <span id="journal-count-pill" class="px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-[10px] font-mono font-bold text-slate-300">
             0 JURNAL
@@ -940,6 +1011,32 @@
           </div>
         </div>
 
+        <details class="rounded-xl bg-slate-900/75 border border-slate-800 overflow-hidden">
+          <summary class="list-none cursor-pointer px-3 py-2.5 flex items-center justify-between text-xs font-bold text-cyan-300">
+            <span>🧠 Analitik Lanjutan &amp; AI Trade Review</span>
+            <span class="text-[10px] text-slate-400">Buka</span>
+          </summary>
+          <div id="ai-trade-review-box" class="px-3 pb-3 pt-2 border-t border-slate-800/80 space-y-2 text-xs text-slate-300">
+            <div class="grid grid-cols-3 gap-1.5 text-center font-mono text-[11px]">
+              <div class="rounded-lg bg-slate-950/80 p-2 border border-slate-800">
+                <span class="text-[9px] text-slate-400 block">EXPECTANCY</span>
+                <strong id="stat-expectancy" class="text-sky-300">0.00R</strong>
+              </div>
+              <div class="rounded-lg bg-slate-950/80 p-2 border border-slate-800">
+                <span class="text-[9px] text-slate-400 block">MAX DD</span>
+                <strong id="stat-max-dd-pips" class="text-rose-300">0 pips</strong>
+              </div>
+              <div class="rounded-lg bg-slate-950/80 p-2 border border-slate-800">
+                <span class="text-[9px] text-slate-400 block">MAX LOSS STREAK</span>
+                <strong id="stat-loss-streak" class="text-amber-300">0x</strong>
+              </div>
+            </div>
+            <p id="ai-trade-review-summary" class="text-[11px] text-slate-300 leading-relaxed">
+              Evaluasi otomatis berbasis jurnal nyata akan merangkum kepatuhan SOP, winrate per pair/sesi, dan deteksi overtrading.
+            </p>
+          </div>
+        </details>
+
         <div class="grid grid-cols-2 gap-2">
           <button type="button" onclick="copyPerformanceRecap()"
             class="py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs font-bold text-slate-200 active:scale-95">
@@ -985,20 +1082,24 @@
       </div>
     </section>
 
-    <!-- =====================================================================
-         TAB 4: CHART (TRADINGVIEW RADAR & STRUCTURE SCANNER)
-         ===================================================================== -->
+    <!-- TAB 4: CHART -->
     <section id="tab-chart" class="tab-pane space-y-4">
-      <div class="glass-card rounded-2xl p-4 space-y-3">
-        <div class="flex items-center justify-between gap-2">
+      <div class="glass-card motion-card rounded-2xl p-4 space-y-3">
+        <div class="flex items-center justify-between gap-2 flex-wrap">
           <div>
             <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">LIVE CHART &amp; RADAR</span>
-            <h2 class="text-lg font-extrabold text-white">TradingView Radar</h2>
+            <h2 class="gsap-scroll-title text-lg font-extrabold text-white">TradingView Radar</h2>
           </div>
-          <button type="button" onclick="scanChartStructure(true)"
-            class="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-extrabold active:scale-95 shrink-0">
-            🔍 Scan Struktur
-          </button>
+          <div class="flex items-center gap-1.5">
+            <button type="button" onclick="scanChartStructure(true)"
+              class="px-3 py-2 rounded-xl bg-blue-600 text-white text-xs font-extrabold active:scale-95 shrink-0">
+              🔍 Scan Struktur
+            </button>
+            <button type="button" onclick="generateTechnicalMappingBoard(true)"
+              class="px-3 py-2 rounded-xl bg-gradient-to-r from-cyan-500 to-sky-400 text-slate-950 text-xs font-extrabold active:scale-95 shrink-0">
+              🗺️ Screening &amp; Mapping
+            </button>
+          </div>
         </div>
 
         <select id="chart-pair-select" onchange="changeChartPair(this.value)"
@@ -1008,6 +1109,41 @@
           <option value="BTCUSDT">₿ BTCUSDT (BINANCE:BTCUSDT)</option>
           <option value="EURUSD">💱 EURUSD (FX:EURUSD)</option>
         </select>
+
+        <div id="mtf-screening-grid" class="grid grid-cols-4 gap-1.5">
+          <button type="button" onclick="focusChartTimeframe('5')" class="rounded-xl bg-slate-900/90 border border-slate-800 p-2 text-left active:scale-95">
+            <div class="flex items-center justify-between text-[10px] font-mono font-extrabold text-slate-400">
+              <span>M5</span>
+              <span id="mtf-dot-M5" class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+            </div>
+            <div id="mtf-bias-M5" class="text-[11px] font-extrabold text-white mt-0.5">--</div>
+            <div id="mtf-note-M5" class="text-[9px] text-slate-400 truncate">Entry Trigger</div>
+          </button>
+          <button type="button" onclick="focusChartTimeframe('15')" class="rounded-xl bg-slate-900/90 border border-slate-800 p-2 text-left active:scale-95">
+            <div class="flex items-center justify-between text-[10px] font-mono font-extrabold text-slate-400">
+              <span>M15</span>
+              <span id="mtf-dot-M15" class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+            </div>
+            <div id="mtf-bias-M15" class="text-[11px] font-extrabold text-white mt-0.5">--</div>
+            <div id="mtf-note-M15" class="text-[9px] text-slate-400 truncate">Setup POI</div>
+          </button>
+          <button type="button" onclick="focusChartTimeframe('60')" class="rounded-xl bg-slate-900/90 border border-slate-800 p-2 text-left active:scale-95">
+            <div class="flex items-center justify-between text-[10px] font-mono font-extrabold text-slate-400">
+              <span>H1</span>
+              <span id="mtf-dot-H1" class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+            </div>
+            <div id="mtf-bias-H1" class="text-[11px] font-extrabold text-white mt-0.5">--</div>
+            <div id="mtf-note-H1" class="text-[9px] text-slate-400 truncate">Directional</div>
+          </button>
+          <button type="button" onclick="focusChartTimeframe('240')" class="rounded-xl bg-slate-900/90 border border-slate-800 p-2 text-left active:scale-95">
+            <div class="flex items-center justify-between text-[10px] font-mono font-extrabold text-slate-400">
+              <span>H4</span>
+              <span id="mtf-dot-H4" class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+            </div>
+            <div id="mtf-bias-H4" class="text-[11px] font-extrabold text-white mt-0.5">--</div>
+            <div id="mtf-note-H4" class="text-[9px] text-slate-400 truncate">Major Struct</div>
+          </button>
+        </div>
 
         <div id="tv-chart-wrapper" class="w-full h-[380px] rounded-2xl overflow-hidden border border-slate-800 bg-slate-950"></div>
 
@@ -1027,21 +1163,73 @@
         </div>
 
         <div id="chart-scan-verdict-box" class="rounded-xl bg-slate-900/90 border border-slate-800 p-3 text-xs text-slate-300 leading-relaxed">
-          Ketuk <strong>Scan Struktur</strong> untuk memetakan area Discount/Premium dan Liquidity Pool pada pair aktif.
+          Ketuk <strong>Scan Struktur</strong> atau <strong>Screening &amp; Mapping</strong> untuk memetakan area Discount/Premium, Liquidity Pool, dan gambar peta teknikal otomatis.
+        </div>
+
+        <div id="auto-mapping-result-card" class="hidden rounded-2xl bg-slate-950/90 border border-cyan-500/40 p-3.5 space-y-3">
+          <div class="flex items-center justify-between gap-2">
+            <div>
+              <span class="text-[10px] font-extrabold uppercase tracking-wider text-cyan-400">AUTO-GENERATED ICT/SMC MAPPING</span>
+              <h3 id="mapping-board-title" class="text-sm font-extrabold text-white">Peta Struktur &amp; Zona Likuiditas</h3>
+            </div>
+            <span id="mapping-verdict-badge" class="px-2.5 py-1 rounded-full bg-slate-800 text-[10px] font-mono font-extrabold text-cyan-300">
+              READY
+            </span>
+          </div>
+
+          <div class="rounded-xl overflow-hidden border border-slate-800 bg-[#0b1220]">
+            <canvas id="mapping-canvas" width="900" height="520" class="w-full h-auto block"></canvas>
+          </div>
+
+          <div id="mapping-areas-breakdown" class="space-y-1.5 text-xs text-slate-300 leading-relaxed"></div>
+
+          <div class="grid grid-cols-3 gap-2">
+            <button type="button" onclick="downloadMappingPng()"
+              class="py-2 rounded-xl bg-slate-900 border border-slate-700 text-[11px] font-bold text-slate-200 active:scale-95">
+              💾 Simpan PNG
+            </button>
+            <button type="button" onclick="copyMappingSummary()"
+              class="py-2 rounded-xl bg-slate-900 border border-slate-700 text-[11px] font-bold text-sky-300 active:scale-95">
+              📋 Copy Analisa
+            </button>
+            <button type="button" onclick="sendMappingToTelegram()"
+              class="py-2 rounded-xl bg-emerald-600 text-white text-[11px] font-extrabold active:scale-95">
+              📨 Kirim Tele
+            </button>
+          </div>
         </div>
       </div>
+
+      <details class="glass-card motion-card rounded-2xl">
+        <summary class="list-none cursor-pointer p-4 flex items-center justify-between gap-2">
+          <div>
+            <span class="text-[10px] font-extrabold tracking-wider uppercase text-amber-400">STRATEGY PERFORMANCE LAB</span>
+            <h3 class="gsap-scroll-title text-base font-extrabold text-white">Validasi Out-of-Sample &amp; Perbandingan RR</h3>
+          </div>
+          <span class="px-2.5 py-1 rounded-full bg-slate-800 border border-slate-700 text-[10px] font-mono font-bold text-amber-300">
+            LAB
+          </span>
+        </summary>
+        <div id="strategy-lab-body" class="px-4 pb-4 pt-2 border-t border-slate-800/80 space-y-2.5 text-xs text-slate-300">
+          <p class="text-[11px] text-slate-400 leading-relaxed">
+            Menguji expectancy berdasarkan data jurnal &amp; candle terverifikasi dengan memperhitungkan spread, komisi, dan slippage.
+          </p>
+          <button type="button" onclick="runStrategyLabAudit()"
+            class="w-full py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-xs font-extrabold text-sky-300 active:scale-95">
+            🧪 Jalankan Audit Strategy Lab
+          </button>
+          <div id="strategy-lab-results" class="space-y-2"></div>
+        </div>
+      </details>
     </section>
 
-    <!-- =====================================================================
-         TAB 5: PROFIL (SUPER ADMIN, SUPABASE 2-WAY SYNC, TELEGRAM VIP, PUSH)
-         ===================================================================== -->
+    <!-- TAB 5: PROFIL -->
     <section id="tab-profil" class="tab-pane space-y-4">
-
-      <div class="glass-card rounded-2xl p-4 space-y-3 border border-amber-500/35">
+      <div class="glass-card motion-card rounded-2xl p-4 space-y-3 border border-amber-500/35">
         <div class="flex items-center justify-between gap-2">
           <div>
             <span class="text-[10px] font-extrabold tracking-wider uppercase text-amber-400">SUPER ADMIN CONSOLE</span>
-            <h2 class="text-lg font-extrabold text-white">Kendali Penuh Owner (@xliamvr)</h2>
+            <h2 class="gsap-scroll-title text-lg font-extrabold text-white">Kendali Penuh Owner (@xliamvr)</h2>
           </div>
           <span class="px-2.5 py-1 rounded-full bg-amber-400 text-slate-950 text-[10px] font-extrabold">OWNER</span>
         </div>
@@ -1104,9 +1292,9 @@
         </div>
       </div>
 
-      <div class="glass-card rounded-2xl p-4 space-y-2.5">
+      <div class="glass-card motion-card rounded-2xl p-4 space-y-2.5">
         <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">REAL-TIME PUSH ALERT HP</span>
-        <h3 class="text-base font-extrabold text-white">Notifikasi Layar Kunci &amp; Pop-Up</h3>
+        <h3 class="gsap-scroll-title text-base font-extrabold text-white">Notifikasi Layar Kunci &amp; Pop-Up</h3>
         <p id="push-permission-status" class="text-xs font-mono text-amber-300">Status izin browser: DEFAULT</p>
         <div class="grid grid-cols-2 gap-2">
           <button type="button" onclick="requestNativePushPermission()"
@@ -1120,11 +1308,11 @@
         </div>
       </div>
 
-      <div class="glass-card rounded-2xl p-4 space-y-3">
+      <div class="glass-card motion-card rounded-2xl p-4 space-y-3">
         <div class="flex items-center justify-between">
           <div>
             <span class="text-[10px] font-extrabold tracking-wider uppercase text-cyan-400">LIVE DATA &amp; CLOUD CONFIG</span>
-            <h3 class="text-base font-extrabold text-white">Twelve Data &amp; Supabase</h3>
+            <h3 class="gsap-scroll-title text-base font-extrabold text-white">Twelve Data &amp; Supabase</h3>
           </div>
           <span id="td-quota-badge" class="px-2 py-0.5 rounded bg-slate-800 text-[10px] font-mono text-slate-300">Kuota TD: 0 / 800</span>
         </div>
@@ -1132,7 +1320,7 @@
         <div class="space-y-2">
           <div>
             <label class="text-[11px] text-slate-400 block mb-1">Twelve Data API Key (Opsional — Presisi Gold/Forex/US100):</label>
-            <input id="cfg-td-apikey" type="text" placeholder="Tempel Twelve Data API Key..."
+            <input id="cfg-td-apikey" type="text" placeholder="Tempel Twelve Data API Key (bukan URL)..."
               class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono text-white" />
           </div>
           <div>
@@ -1148,10 +1336,10 @@
         </div>
       </div>
 
-      <div class="glass-card rounded-2xl p-4 space-y-3">
+      <div class="glass-card motion-card rounded-2xl p-4 space-y-3">
         <div>
           <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">TELEGRAM VIP DISPATCHER</span>
-          <h3 class="text-base font-extrabold text-white">Integrasi Bot Channel &amp; Grup VIP</h3>
+          <h3 class="gsap-scroll-title text-base font-extrabold text-white">Integrasi Bot Channel &amp; Grup VIP</h3>
         </div>
 
         <div class="space-y-2">
@@ -1196,7 +1384,7 @@
     </section>
 
     <footer class="max-w-lg mx-auto pt-2 pb-4 text-center text-[11px] text-slate-400 space-y-0.5">
-      <div class="font-mono font-semibold text-slate-300">Liamvtrade Quant Terminal v2.9</div>
+      <div class="font-mono font-semibold text-slate-300">Liamvtrade Quant Terminal v3.0</div>
       <div>Crafted by <span class="font-semibold text-sky-400">@xliamvr</span> • &copy; 2026 Liamvtrade. All rights reserved.</div>
     </footer>
   </main>
@@ -1249,7 +1437,7 @@
   </nav>
 
   <!-- MODAL 1: KALIBRASI HARGA BROKER & KALKULATOR LOT -->
-  <div id="modal-calibration" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-3">
+  <div id="modal-calibration" data-lenis-prevent class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-3">
     <div class="glass-card w-full max-w-md rounded-2xl p-4 space-y-3 border border-slate-700">
       <div class="flex items-center justify-between">
         <div>
@@ -1291,7 +1479,7 @@
   </div>
 
   <!-- MODAL 2: EDIT SALDO & PARAMETER AKUN PROP FIRM LENGKAP -->
-  <div id="modal-edit-account" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-3 overflow-y-auto">
+  <div id="modal-edit-account" data-lenis-prevent class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-end sm:items-center justify-center p-3 overflow-y-auto">
     <div class="glass-card w-full max-w-md rounded-2xl p-4 space-y-3 border border-slate-700 my-auto">
       <div class="flex items-center justify-between">
         <div>
@@ -1390,17 +1578,17 @@
   </div>
 
   <!-- MODAL 3: PANDUAN CEPAT TERMINAL -->
-  <div id="modal-guide" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+  <div id="modal-guide" data-lenis-prevent class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="glass-card w-full max-w-md rounded-2xl p-4 space-y-3 border border-slate-700">
       <div class="flex items-center justify-between">
-        <h3 class="text-base font-extrabold text-white">📘 Panduan Cepat Liamvtrade v2.9</h3>
+        <h3 class="text-base font-extrabold text-white">📘 Panduan Cepat Liamvtrade v3.0</h3>
         <button type="button" onclick="closeModal('modal-guide')" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 font-bold">✕</button>
       </div>
       <ul class="space-y-2 text-xs text-slate-300 leading-relaxed">
         <li><strong class="text-sky-400">1. Kalibrasi Harga:</strong> Ketuk pill harga live di header atas kapan saja untuk menyamakan harga terminal dengan broker MT5/cTrader/TradingView kamu.</li>
         <li><strong class="text-emerald-400">2. Checklist SOP:</strong> Centang SOP di Beranda untuk menaikkan skor kesiapan sinyal hingga +0.6 sebelum mengeksekusi setup.</li>
-        <li><strong class="text-amber-300">3. Belajar Struktur POI:</strong> Pada kartu sinyal, ketuk bagian <em>Struktur POI (📖 Belajar)</em> untuk membedah alasan bias &amp; kamus ICT/SMC metode yang dipilih.</li>
-        <li><strong class="text-rose-400">4. Anti-Revenge Cooldown:</strong> Jika SL harian bertambah, timer jeda 20 menit aktif otomatis untuk menjaga disiplin prop firm.</li>
+        <li><strong class="text-amber-300">3. Screening &amp; Auto-Mapping:</strong> Buka tab Chart lalu tekan <em>Screening &amp; Mapping</em> untuk memeriksa 4 sudut timeframe (M5–H4) dan menghasilkan gambar peta teknikal otomatis.</li>
+        <li><strong class="text-rose-400">4. Gerbang NO SETUP:</strong> Terminal mengunci maksimal 1 arah bias dan akan menyatakan <em>NO SETUP</em> apabila syarat struktur atau risiko prop firm belum lolos.</li>
       </ul>
       <button type="button" onclick="closeModal('modal-guide')" class="w-full py-2.5 rounded-xl bg-blue-600 text-white text-xs font-extrabold">
         Mengerti
@@ -1415,6 +1603,7 @@
   <script src="app.js"></script>
   <script src="ui-picker.js"></script>
   <script src="calibration-fix.js"></script>
+  <script src="intelligence-upgrade.js"></script>
 
 </body>
 </html>
