@@ -327,7 +327,10 @@
 
   function runChartScreeningAndMapping(shouldShowCard = true) {
     const bridge = getBridge();
-    const st = bridge && typeof bridge.getState === 'function' ? bridge.getState() : {};
+        const st = (bridge && typeof bridge.getState === 'function')
+      ? bridge.getState()
+      : getFallbackTerminalState();
+
     const chartSelect = document.getElementById('chart-pair-select');
     const pair = (chartSelect && chartSelect.value) || st.pair || 'XAUUSD';
     const tf = st.timeframe || 'M15';
@@ -613,6 +616,36 @@
     document.addEventListener('DOMContentLoaded', wireIntelligenceModule);
   } else {
     wireIntelligenceModule();
+  }
+  function getFallbackTerminalState() {
+    const chartSelect = document.getElementById('chart-pair-select');
+    const pair = (chartSelect && chartSelect.value) || 'XAUUSD';
+    const methodSelect = document.getElementById('signal-method-select');
+    const method = (methodSelect && methodSelect.value) || 'auto';
+
+    let cachedPrices = {};
+    try {
+      const raw = localStorage.getItem('liamvtrade_last_live_prices_v2');
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') cachedPrices = parsed;
+      }
+    } catch (_) {}
+
+    const prices = {
+      XAUUSD: Number(cachedPrices.XAUUSD) || 3555.00,
+      US100: Number(cachedPrices.US100) || 21500.00,
+      BTCUSDT: Number(cachedPrices.BTCUSDT) || 95000.00,
+      EURUSD: Number(cachedPrices.EURUSD) || 1.08500
+    };
+
+    return {
+      pair,
+      timeframe: 'M15',
+      method,
+      prices,
+      lastPriceUpdateMs: Number(cachedPrices.fetchedAtMs) || Date.now()
+    };
   }
 
   global.LiamIntelligence = {
