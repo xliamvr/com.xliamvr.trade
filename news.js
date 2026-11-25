@@ -1,5 +1,5 @@
 /**
- * Liamvtrade Quant Terminal v2.9.4 — news.js (FULL INSTITUTIONAL + LIVE CALENDAR UPGRADE)
+ * Liamvtrade Quant Terminal v3.0 — news.js (FULL INSTITUTIONAL + LIVE CALENDAR SYNC)
  * Kalender Ekonomi Live (ff_calendar_thisweek.json) + Fallback 11 Agenda Lengkap
  * + Live Macro Wire + Scan Peluang News Terbaik + Analisa Sementara & Fundamental
  * + Dual Zona POI (Entry/SL/TP) + News Lock Warning Detector (±15m)
@@ -832,9 +832,8 @@
           impactTag: 'LIVE FEED'
         }));
       }
-    } catch (_) {
-      // Fallback ke macro desk wire terverifikasi
-    }
+    } catch (_) {}
+
     return getStaticFallbackWire();
   }
 
@@ -855,7 +854,6 @@
     return upcoming[0] || candidates[0] || events[0];
   }
 
-  // Jalankan prefetch kalender live saat file dimuat agar cache langsung siap
   syncLiveEconomicCalendar();
 
   global.LiamNews = {
