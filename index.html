@@ -4,7 +4,12 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#060b16" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="LiamvTrade" />
   <title>Liamvtrade Quant Terminal v3.0 — Institutional ICT/SMC Intelligence</title>
+  <link rel="manifest" href="./manifest.json" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -22,6 +27,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./style.css" />
 
   <!-- GSAP + ScrollTrigger, Lenis Smooth Scroll & Motion (Progressive Enhancement) -->
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js" defer></script>
@@ -73,6 +79,10 @@
     .gsap-word {
       display: inline-block;
       will-change: transform, opacity;
+    }
+
+    .active\:scale-98:active {
+      transform: scale(0.98);
     }
 
     /* =======================================================================
@@ -1411,7 +1421,7 @@
       <div class="flex flex-col items-center -mt-6">
         <button type="button" data-nav="signals" onclick="switchMainTab('signals')"
           aria-label="Signals Terminal"
-          class="w-13 h-13 p-3.5 rounded-2xl rotate-45 bg-gradient-to-br from-sky-400 to-blue-600 text-white shadow-lg shadow-sky-500/35 border-2 border-slate-950 active:scale-95 transition">
+          class="w-14 h-14 p-3.5 rounded-2xl rotate-45 bg-gradient-to-br from-sky-400 to-blue-600 text-white shadow-lg shadow-sky-500/35 border-2 border-slate-950 active:scale-95 transition">
           <svg class="w-6 h-6 -rotate-45 text-white" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" d="M3 12h4l3-7 4 14 3-7h4" />
           </svg>
@@ -1596,16 +1606,24 @@
     </div>
   </div>
 
-  <!-- CORE SCRIPTS (URUTAN WAJIB) -->
-  <script src="methods.js"></script>
-  <script src="news.js"></script>
-  <script src="price-feed.js"></script>
-  <script src="app.js"></script>
-  <script src="intelligence-upgrade.js"></script>
+  <!-- CORE SCRIPTS (URUTAN WAJIB + INTEGRASI PICKER, CALIBRATION & SW) -->
+  <script src="./methods.js"></script>
+  <script src="./news.js"></script>
+  <script src="./price-feed.js"></script>
+  <script src="./app.js"></script>
+  <script src="./intelligence-upgrade.js"></script>
+  <script src="./calibration-fix.js"></script>
+  <script src="./ui-picker.js"></script>
 
-  <!-- PROGRESSIVE SCROLL & MOTION ENHANCEMENT -->
+  <!-- PROGRESSIVE SCROLL, SW & MOTION ENHANCEMENT -->
   <script>
     (function () {
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () {
+          navigator.serviceWorker.register('./sw.js').catch(function () {});
+        });
+      }
+
       window.addEventListener('load', function () {
         try {
           if (typeof Lenis === 'function') {
