@@ -1,8 +1,8 @@
 /**
- * Liamvtrade Quant Terminal v3.0 — news.js (FULL INSTITUTIONAL + LIVE CALENDAR SYNC)
+ * Liamvtrade Quant Terminal v3.0 — news.js (FULL INSTITUTIONAL + LIVE CALENDAR SYNC + ENGINE BRIDGE)
  * Kalender Ekonomi Live (ff_calendar_thisweek.json) + Fallback 11 Agenda Lengkap
  * + Live Macro Wire + Scan Peluang News Terbaik + Analisa Sementara & Fundamental
- * + Dual Zona POI (Entry/SL/TP) + News Lock Warning Detector (±15m)
+ * + Dual Zona POI (Entry/SL/TP) + News Lock Warning Detector + Engine Event Bridge
  */
 
 (function (global) {
@@ -11,6 +11,7 @@
   const CALENDAR_CACHE_KEY = 'liamvtrade_live_ff_calendar_v1';
   const CALENDAR_CACHE_TTL_MS = 15 * 60 * 1000;
   const FF_THIS_WEEK_URL = 'https://nfs.faireconomy.media/ff_calendar_thisweek.json';
+  const DEFAULT_LOCK_WINDOW_MINUTES = 30;
 
   const FALLBACK_DEFAULT_PRICES = Object.freeze({
     XAUUSD: 3555.00,
@@ -18,6 +19,21 @@
     BTCUSDT: 95000.00,
     EURUSD: 1.08500
   });
+
+  function sanitizeActualForecast(val, placeholderFallback) {
+    if (val === undefined || val === null) return placeholderFallback || null;
+    if (typeof val === 'string' && val.trim() === '') return placeholderFallback || null;
+    return String(val).trim();
+  }
+
+  function extractNumericActualForecast(val) {
+    if (val === undefined || val === null) return null;
+    if (typeof val === 'string' && val.trim() === '') return null;
+    const cleaned = String(val).replace(/[^0-9.\-]/g, '').trim();
+    if (!cleaned || cleaned === '-' || cleaned === '.') return null;
+    const num = Number(cleaned);
+    return Number.isFinite(num) ? num : null;
+  }
 
   function resolveEffectivePrices(prices) {
     let cached = null;
@@ -174,8 +190,11 @@
       primaryPair === 'BTCUSDT';
 
     const direction = isBuy ? 'BUY' : 'SELL';
-    const forecastStr = raw.forecast || '-';
-    const prevStr = raw.previous || '-';
+    const forecastStr = sanitizeActualForecast(raw.forecast, '-');
+    const prevStr = sanitizeActualForecast(raw.previous, '-');
+    const actualDisplay = sanitizeActualForecast(raw.actual, 'Live Kalender');
+    const actualNum = extractNumericActualForecast(raw.actual);
+    const forecastNum = extractNumericActualForecast(raw.forecast);
 
     let poiPreNews;
     let poiPostNews;
@@ -310,7 +329,9 @@
       primaryPair,
       forecast: forecastStr,
       previous: prevStr,
-      actual: raw.actual || 'Live Kalender',
+      actual: actualDisplay,
+      actualNum,
+      forecastNum,
       verdictDirection: direction,
       verdictPair: primaryPair,
       verdictConfidence: impact === 'high' ? '85% Live High-Impact Catalyst' : '78% Live Session Catalyst',
@@ -344,6 +365,8 @@
         forecast: '55.2',
         previous: '55.0',
         actual: 'Menunggu Rilis',
+        actualNum: null,
+        forecastNum: 55.2,
         verdictDirection: 'SELL',
         verdictPair: 'XAUUSD',
         verdictConfidence: '86% Bearish Gold Bias',
@@ -382,6 +405,8 @@
         forecast: '86.1',
         previous: '86.5',
         actual: 'Menunggu Rilis',
+        actualNum: null,
+        forecastNum: 86.1,
         verdictDirection: 'SELL',
         verdictPair: 'EURUSD',
         verdictConfidence: '79% Bearish EUR Bias',
@@ -420,6 +445,8 @@
         forecast: '111.8',
         previous: '108.7',
         actual: 'Terjadwal',
+        actualNum: null,
+        forecastNum: 111.8,
         verdictDirection: 'BUY',
         verdictPair: 'US100',
         verdictConfidence: '84% Bullish Nasdaq Bias',
@@ -458,6 +485,8 @@
         forecast: 'Hawkish Hold',
         previous: 'Data-Dependent',
         actual: 'Terjadwal',
+        actualNum: null,
+        forecastNum: null,
         verdictDirection: 'SELL',
         verdictPair: 'XAUUSD',
         verdictConfidence: '87% High-Volatility Setup',
@@ -496,6 +525,8 @@
         forecast: '224K',
         previous: '217K',
         actual: 'Terjadwal',
+        actualNum: null,
+        forecastNum: 224,
         verdictDirection: 'BUY',
         verdictPair: 'XAUUSD',
         verdictConfidence: '81% Bullish Reversal Play',
@@ -534,6 +565,8 @@
         forecast: '0.2%',
         previous: '0.3%',
         actual: 'Terjadwal',
+        actualNum: null,
+        forecastNum: 0.2,
         verdictDirection: 'BUY',
         verdictPair: 'BTCUSDT',
         verdictConfidence: '85% Risk-On Liquidity Surge',
@@ -572,6 +605,8 @@
         forecast: '2.7%',
         previous: '2.7%',
         actual: 'Bulan Ini',
+        actualNum: null,
+        forecastNum: 2.7,
         verdictDirection: 'BUY',
         verdictPair: 'EURUSD',
         verdictConfidence: '80% Bullish EUR Reclaim',
@@ -610,6 +645,8 @@
         forecast: '47.6',
         previous: '46.5',
         actual: 'Bulan Ini',
+        actualNum: null,
+        forecastNum: 47.6,
         verdictDirection: 'BUY',
         verdictPair: 'US100',
         verdictConfidence: '82% Bullish Recovery',
@@ -648,6 +685,8 @@
         forecast: '185K',
         previous: '227K',
         actual: 'Bulan Ini',
+        actualNum: null,
+        forecastNum: 185,
         verdictDirection: 'BUY',
         verdictPair: 'XAUUSD',
         verdictConfidence: '89% Major Macro Catalyst',
@@ -686,6 +725,8 @@
         forecast: '2.6%',
         previous: '2.7%',
         actual: 'Bulan Ini',
+        actualNum: null,
+        forecastNum: 2.6,
         verdictDirection: 'BUY',
         verdictPair: 'XAUUSD',
         verdictConfidence: '88% Tier-1 Inflation Play',
@@ -724,6 +765,8 @@
         forecast: '0.3%',
         previous: '0.4%',
         actual: 'Bulan Ini',
+        actualNum: null,
+        forecastNum: 0.3,
         verdictDirection: 'BUY',
         verdictPair: 'EURUSD',
         verdictConfidence: '77% Moderate USD Pullback',
@@ -768,9 +811,32 @@
     return buildFallbackStaticEvents(prices);
   }
 
+  function dispatchNewsEventsToEngine(events, prices) {
+    const safeEvents = Array.isArray(events) ? events : buildDynamicEconomicEvents(prices);
+    global.LiamNewsEvents = safeEvents;
+    global.LiamEngineNews = buildEngineNewsPayload(prices, 'ALL', Date.now(), DEFAULT_LOCK_WINDOW_MINUTES, safeEvents);
+
+    try {
+      if (typeof global.dispatchEvent === 'function' && typeof global.CustomEvent === 'function') {
+        global.dispatchEvent(
+          new global.CustomEvent('liamvtrade:news-updated', {
+            detail: {
+              events: safeEvents,
+              enginePayload: global.LiamEngineNews,
+              syncedAtMs: Date.now()
+            }
+          })
+        );
+      }
+    } catch (_) {}
+
+    return safeEvents;
+  }
+
   async function syncLiveEconomicCalendar(force = false) {
     const cached = loadLiveCalendarCache();
     if (!force && cached && Date.now() - Number(cached.savedAtMs || 0) < CALENDAR_CACHE_TTL_MS) {
+      dispatchNewsEventsToEngine(buildDynamicEconomicEvents());
       return cached.items;
     }
 
@@ -789,17 +855,20 @@
         const data = await res.json();
         if (Array.isArray(data) && data.length > 0) {
           saveLiveCalendarCache(data);
+          dispatchNewsEventsToEngine(buildDynamicEconomicEvents());
           return data;
         }
       } catch (_) {}
     }
 
-    return cached ? cached.items : [];
+    const fallbackItems = cached ? cached.items : [];
+    dispatchNewsEventsToEngine(buildDynamicEconomicEvents());
+    return fallbackItems;
   }
 
-  function getActiveNewsLock(nowMs = Date.now(), pair = 'ALL', windowMinutes = 15) {
+  function getActiveNewsLock(nowMs = Date.now(), pair = 'ALL', windowMinutes = DEFAULT_LOCK_WINDOW_MINUTES) {
     const events = buildDynamicEconomicEvents({});
-    const windowMs = Math.max(5, Number(windowMinutes) || 15) * 60000;
+    const windowMs = Math.max(5, Number(windowMinutes) || DEFAULT_LOCK_WINDOW_MINUTES) * 60000;
 
     for (const evt of events) {
       if (evt.impact !== 'high') continue;
@@ -814,12 +883,39 @@
           locked: true,
           event: evt,
           minutesAway: Math.round((evtMs - nowMs) / 60000),
-          reason: `Peringatan News (±${windowMinutes}m): ${evt.title} (${evt.timeWib})`
+          reason: `Peringatan News (±${Math.round(windowMs / 60000)}m): ${evt.title} (${evt.timeWib})`
         };
       }
     }
 
     return { locked: false, event: null, minutesAway: null, reason: '' };
+  }
+
+  function buildEngineNewsPayload(prices, pair = 'ALL', nowMs = Date.now(), windowMinutes = DEFAULT_LOCK_WINDOW_MINUTES, prebuiltEvents = null) {
+    const events = Array.isArray(prebuiltEvents) ? prebuiltEvents : buildDynamicEconomicEvents(prices);
+    const lock = getActiveNewsLock(nowMs, pair, windowMinutes);
+    const highImpactEvents = events
+      .filter((e) => e.impact === 'high')
+      .map((e) => ({
+        id: e.id,
+        title: e.title,
+        currency: e.currency,
+        impact: e.impact,
+        timestampMs: e.timestampMs || parseWibDateTimeMs(e.dateStr, e.timeWib),
+        timeWib: e.timeWib,
+        actual: e.actualNum !== null && e.actualNum !== undefined ? e.actualNum : null,
+        forecast: e.forecastNum !== null && e.forecastNum !== undefined ? e.forecastNum : null,
+        rawActual: e.actual,
+        rawForecast: e.forecast,
+        affectedPairs: e.affectedPairs
+      }));
+
+    return {
+      highImpactEvents,
+      allEvents: events,
+      newsLockActive: Boolean(lock.locked),
+      lockDetail: lock
+    };
   }
 
   function getStaticFallbackWire() {
@@ -912,6 +1008,8 @@
   global.LiamNews = {
     getWibTodayStrings,
     buildDynamicEconomicEvents,
+    buildEngineNewsPayload,
+    dispatchNewsEventsToEngine,
     syncLiveEconomicCalendar,
     getActiveNewsLock,
     fetchLiveMacroWire,
