@@ -12,7 +12,30 @@
     'chart-pair-select'
   ];
 
+  function ensurePickerStyles() {
+    if (document.getElementById('custom-picker-styles')) return;
+    const styleEl = document.createElement('style');
+    styleEl.id = 'custom-picker-styles';
+    styleEl.textContent = `
+      @keyframes fadeSlideIn {
+        0% {
+          opacity: 0;
+          transform: translateY(14px) scale(0.98);
+        }
+        100% {
+          opacity: 1;
+          transform: translateY(0) scale(1);
+        }
+      }
+      .picker-sheet-anim {
+        animation: fadeSlideIn 0.18s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+      }
+    `;
+    document.head.appendChild(styleEl);
+  }
+
   function ensureSheetModal() {
+    ensurePickerStyles();
     let modal = document.getElementById('custom-option-sheet');
     if (modal) return modal;
 
@@ -20,10 +43,10 @@
     modal.id = 'custom-option-sheet';
     modal.className = 'hidden fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-end justify-center p-3';
     modal.innerHTML = `
-      <div class="glass-card w-full max-w-md rounded-2xl p-4 space-y-2.5 border border-slate-700 animate-[fadeSlideIn_0.16s_ease-out]">
-        <div class="flex items-center justify-between pb-1 border-b border-slate-800">
-          <span id="custom-sheet-title" class="text-xs font-extrabold uppercase tracking-wider text-sky-400">PILIH OPSI</span>
-          <button type="button" id="custom-sheet-close" class="w-7 h-7 rounded-full bg-slate-800 text-slate-300 text-xs font-bold">✕</button>
+      <div class="glass-card w-full max-w-md rounded-2xl p-4 space-y-2.5 border border-slate-300/70 dark:border-slate-700 picker-sheet-anim">
+        <div class="flex items-center justify-between pb-1 border-b border-slate-200 dark:border-slate-800">
+          <span id="custom-sheet-title" class="text-xs font-extrabold uppercase tracking-wider text-sky-600 dark:text-sky-400">PILIH OPSI</span>
+          <button type="button" id="custom-sheet-close" class="w-7 h-7 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-300 text-xs font-bold">✕</button>
         </div>
         <div id="custom-sheet-list" class="max-h-[55vh] overflow-y-auto space-y-1.5 pr-0.5"></div>
       </div>
@@ -57,7 +80,7 @@
             class="w-full text-left px-3.5 py-2.5 rounded-xl border text-xs font-bold flex items-center justify-between gap-2 transition active:scale-98 ${
               isSelected
                 ? 'bg-blue-600 border-blue-400 text-white'
-                : 'bg-slate-900/85 border-slate-800 text-slate-200'
+                : 'bg-white/80 dark:bg-slate-900/85 border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200'
             }">
             <span class="leading-snug">${opt.textContent}</span>
             ${isSelected ? '<span class="text-xs font-extrabold shrink-0">✓</span>' : ''}
