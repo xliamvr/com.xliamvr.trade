@@ -132,6 +132,16 @@
     return `${y}-${m}-${d}`;
   }
 
+  function sanitizeOffsets(rawOffsets, baseOffsets) {
+    const merged = { ...baseOffsets, ...(rawOffsets || {}) };
+    return {
+      XAUUSD: Number.isFinite(Number(merged.XAUUSD)) ? Number(merged.XAUUSD) : 0,
+      US100: Number.isFinite(Number(merged.US100)) ? Number(merged.US100) : 0,
+      BTCUSDT: Number.isFinite(Number(merged.BTCUSDT)) ? Number(merged.BTCUSDT) : 0,
+      EURUSD: Number.isFinite(Number(merged.EURUSD)) ? Number(merged.EURUSD) : 0
+    };
+  }
+
   function createInitialState() {
     const nowTs = Date.now();
     return {
@@ -255,7 +265,7 @@
         flags: { ...base.flags, ...(parsed.flags || {}) },
         config: { ...base.config, ...(parsed.config || {}) },
         prices: cleanPrices,
-        priceOffsets: { ...base.priceOffsets, ...(parsed.priceOffsets || {}) },
+        priceOffsets: sanitizeOffsets(parsed.priceOffsets, base.priceOffsets),
         signal: { ...base.signal, ...(parsed.signal || {}) },
         chart: { ...base.chart, ...(parsed.chart || {}) },
         news: { ...base.news, ...(parsed.news || {}) },
@@ -780,6 +790,9 @@
 
     const offset = Number((brokerPx - raw).toFixed(spec.decimals));
     state.priceOffsets[pair] = offset;
+    if (global.LiamMethods && typeof global.LiamMethods.clearLockedSignal === 'function') {
+      global.LiamMethods.clearLockedSignal();
+    }
     saveState();
     closeModal('modal-calibration');
     renderPriceDisplays();
@@ -791,6 +804,9 @@
   function resetBrokerPriceCalibration(pairOverride = null) {
     const pair = String(pairOverride || document.getElementById('cal-pair-name')?.textContent || state.signal?.pair || 'XAUUSD').toUpperCase();
     state.priceOffsets[pair] = 0;
+    if (global.LiamMethods && typeof global.LiamMethods.clearLockedSignal === 'function') {
+      global.LiamMethods.clearLockedSignal();
+    }
     setVal('cal-broker-price-input', formatPriceSafe(pair, Number(state.prices[pair]) || 0));
     setText('cal-current-offset', '0.00');
     saveState();
@@ -1975,10 +1991,34 @@
     copyTextValue(txt, 'Rencana News');
   }
 
+  function canExecuteNewsPlan() {
+    if (!state.config.engineMasterActive) {
+      showToast('Mesin sinyal sedang dijeda oleh Owner di tab Profil.', 'warn');
+      return false;
+    }
+    const hardLock = evaluateHardRiskLock();
+    if (hardLock.locked) {
+      showToast(`⛔ ${hardLock.reason}`, 'error');
+      return false;
+    }
+    if (state.flags.blockOnCooldown && state.cooldownUntilMs > Date.now()) {
+      showToast('🧊 Masih dalam masa Anti-Revenge Cooldown! Tunggu atau lewati dulu.', 'warn');
+      return false;
+    }
+    if (state.flags.requireSop100) {
+      const sop = getSopProgress();
+      if (sop.percent < 100) {
+        showToast(`SOP baru ${sop.percent}%. Centang 100% SOP terlebih dahulu!`, 'warn');
+        return false;
+      }
+    }
+    return true;
+  }
+
   function executeNewsPlanToJournal(id) {
     const evt = findNewsEventById(id);
     if (!evt) return;
-    if (!canExecuteNewTrade()) return;
+    if (!canExecuteNewsPlan()) return;
 
     const acc = getActiveAccount();
     const tp = evt.tradePlan || {};
@@ -2498,7 +2538,6 @@
       sig = computeFallbackSignalSetup(pair, tf, methodKey, livePrice, seed, sop.scoreBonus);
     }
 
-    // Evaluasi Gerbang Ketat NO SETUP & Hard Risk Lock
     const hardLock = evaluateHardRiskLock();
     const ctx = getWibContextSafe();
     const isMondayBlocked = state.flags.mondayFilter && ctx.day === 1 && ctx.hour < 14;
@@ -3499,6 +3538,7 @@
       const rows = await res.json();
       if (Array.isArray(rows) && rows.length > 0 && rows[0].state_json) {
         const merged = { ...createInitialState(), ...rows[0].state_json };
+        merged.priceOffsets = sanitizeOffsets(rows[0].state_json.priceOffsets, merged.priceOffsets);
         state = merged;
         saveState();
         applyTheme();
@@ -3535,7 +3575,11 @@
     reader.onload = () => {
       try {
         const parsed = JSON.parse(String(reader.result || '{}'));
-        state = { ...createInitialState(), ...parsed };
+        state = {
+          ...createInitialState(),
+          ...parsed,
+          priceOffsets: sanitizeOffsets(parsed.priceOffsets, createInitialState().priceOffsets)
+        };
         saveState();
         applyTheme();
         renderBroadcastBanner();
