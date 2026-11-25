@@ -1,6 +1,6 @@
 /**
  * price-feed.js — Modul Khusus Harga Live Real-Time (US100, BTCUSDT, EURUSD, XAUUSD)
- * Dengan Timestamp Update (fetchedAtMs), Fallback Aman & Timeout Responsif
+ * Dengan Timestamp Update (fetchedAtMs), Tracking Kuota TwelveData, Fallback Aman & Timeout Responsif
  */
 (function (global) {
   'use strict';
@@ -47,6 +47,16 @@
     return Number.isFinite(num) && num > minVal && num < maxVal ? num : null;
   }
 
+  function incrementTdQuota(amount = 4) {
+    try {
+      const bridge = global.__LIAM_TERMINAL_BRIDGE__;
+      if (bridge && typeof bridge.getState === 'function') {
+        const st = bridge.getState();
+        st.tdQuotaUsed = Math.min(800, (Number(st.tdQuotaUsed) || 0) + amount);
+      }
+    } catch (_) {}
+  }
+
   async function fetchAccuratePrices(tdApiKey) {
     const cached = loadCache() || {};
     const nowMs = Date.now();
@@ -65,9 +75,13 @@
     if (tdApiKey && String(tdApiKey).trim().length > 8) {
       try {
         const key = encodeURIComponent(String(tdApiKey).trim());
-        const res = await fetchWithTimeout(`https://api.twelvedata.com/price?symbol=XAU/USD,NDX,BTC/USD,EUR/USD&apikey=${key}`, 4500);
+        const res = await fetchWithTimeout(
+          `https://api.twelvedata.com/price?symbol=XAU/USD,NDX,BTC/USD,EUR/USD&apikey=${key}`,
+          4500
+        );
         if (res.ok) {
           const d = await res.json();
+          incrementTdQuota(4);
           const pxXau = pickValidPrice(d['XAU/USD']?.price, 500, 20000);
           const pxUs = pickValidPrice(d['NDX']?.price, 5000, 100000);
           const pxBtc = pickValidPrice(d['BTC/USD']?.price, 1000, 1000000);
