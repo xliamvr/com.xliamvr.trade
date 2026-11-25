@@ -1,20 +1,22 @@
 /**
- * price-feed.js — Modul Khusus Harga Live Real-Time (US100, BTCUSDT, EURUSD, XAUUSD)
- * Dengan Timestamp Update (fetchedAtMs), Tracking Kuota TwelveData, Fallback Aman & Timeout Responsif
+ * price-feed.js — Modul Harga Live (US100, BTCUSDT, EURUSD, XAUUSD)
+ * Prioritas TwelveData (jika API Key diisi) + Fallback Sumber Terverifikasi
+ * Timestamp Real-Time Akurat + Kalibrasi Offset Aman
  */
 (function (global) {
   'use strict';
 
   const CACHE_KEY = 'liamvtrade_last_live_prices_v2';
+  const MAX_REAL_AGE_MS = 5 * 60 * 1000; // dianggap fresh jika fetch <= 5 menit lalu
 
   const BASELINE_PRICES = {
-    XAUUSD: 2650.00,
-    US100: 20850.00,
-    BTCUSDT: 92000.00,
+    XAUUSD: 3555.00,
+    US100: 21500.00,
+    BTCUSDT: 95000.00,
     EURUSD: 1.08500
   };
 
-  async function fetchWithTimeout(url, ms = 4000) {
+  async function fetchWithTimeout(url, ms = 4500) {
     const ctrl = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), ms);
     try {
@@ -30,7 +32,19 @@
   function loadCache() {
     try {
       const raw = localStorage.getItem(CACHE_KEY);
-      return raw ? JSON.parse(raw) : null;
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object') return null;
+
+      // Bersihkan timestamp korup / masa depan / > 7 hari agar tidak memicu "4583d lalu"
+      const now = Date.now();
+      const ts = Number(parsed.fetchedAtMs || 0);
+      const isTsSane = ts > 1700000000000 && ts <= now + 60000 && (now - ts) < 7 * 86400000;
+
+      return {
+        ...parsed,
+        fetchedAtMs: isTsSane ? ts : 0
+      };
     } catch (_) {
       return null;
     }
@@ -60,18 +74,21 @@
   async function fetchAccuratePrices(tdApiKey) {
     const cached = loadCache() || {};
     const nowMs = Date.now();
+    let anyFreshSuccess = false;
+    let detectedSource = '';
 
     const result = {
       XAUUSD: pickValidPrice(cached.XAUUSD, 500, 20000) ?? BASELINE_PRICES.XAUUSD,
       US100: pickValidPrice(cached.US100, 5000, 100000) ?? BASELINE_PRICES.US100,
       BTCUSDT: pickValidPrice(cached.BTCUSDT, 1000, 1000000) ?? BASELINE_PRICES.BTCUSDT,
       EURUSD: pickValidPrice(cached.EURUSD, 0.5, 2.5) ?? BASELINE_PRICES.EURUSD,
-      source: cached.source || 'Cached / Baseline',
-      fetchedAtMs: nowMs,
-      liveUpdated: false
+      source: cached.source || 'Baseline / Cache',
+      fetchedAtMs: cached.fetchedAtMs || 0,
+      liveUpdated: false,
+      isFresh: false
     };
 
-    // 1. TwelveData (jika API key diisi)
+    // 1. TwelveData (paling dekat ke feed TV/institusional jika API Key diisi)
     if (tdApiKey && String(tdApiKey).trim().length > 8) {
       try {
         const key = encodeURIComponent(String(tdApiKey).trim());
@@ -81,17 +98,19 @@
         );
         if (res.ok) {
           const d = await res.json();
-          incrementTdQuota(4);
-          const pxXau = pickValidPrice(d['XAU/USD']?.price, 500, 20000);
-          const pxUs = pickValidPrice(d['NDX']?.price, 5000, 100000);
-          const pxBtc = pickValidPrice(d['BTC/USD']?.price, 1000, 1000000);
-          const pxEur = pickValidPrice(d['EUR/USD']?.price, 0.5, 2.5);
+          if (d && !d.code && d.status !== 'error') {
+            incrementTdQuota(4);
+            const pxXau = pickValidPrice(d['XAU/USD']?.price, 500, 20000);
+            const pxUs = pickValidPrice(d['NDX']?.price, 5000, 100000);
+            const pxBtc = pickValidPrice(d['BTC/USD']?.price, 1000, 1000000);
+            const pxEur = pickValidPrice(d['EUR/USD']?.price, 0.5, 2.5);
 
-          if (pxXau) { result.XAUUSD = Number(pxXau.toFixed(2)); result.liveUpdated = true; }
-          if (pxUs)  { result.US100 = Number(pxUs.toFixed(2));   result.liveUpdated = true; }
-          if (pxBtc) { result.BTCUSDT = Number(pxBtc.toFixed(2)); result.liveUpdated = true; }
-          if (pxEur) { result.EURUSD = Number(pxEur.toFixed(5));  result.liveUpdated = true; }
-          if (result.liveUpdated) result.source = 'TwelveData';
+            if (pxXau) { result.XAUUSD = Number(pxXau.toFixed(2)); anyFreshSuccess = true; }
+            if (pxUs)  { result.US100 = Number(pxUs.toFixed(2));   anyFreshSuccess = true; }
+            if (pxBtc) { result.BTCUSDT = Number(pxBtc.toFixed(2)); anyFreshSuccess = true; }
+            if (pxEur) { result.EURUSD = Number(pxEur.toFixed(5));  anyFreshSuccess = true; }
+            if (anyFreshSuccess) detectedSource = 'TwelveData';
+          }
         }
       } catch (_) {}
     }
@@ -106,8 +125,8 @@
         if (px) {
           result.BTCUSDT = Number(px.toFixed(2));
           btcUpdated = true;
-          result.liveUpdated = true;
-          if (!result.source.includes('TwelveData')) result.source = 'Binance Live';
+          anyFreshSuccess = true;
+          if (!detectedSource) detectedSource = 'Binance';
         }
       }
     } catch (_) {}
@@ -121,24 +140,24 @@
           if (px) {
             result.BTCUSDT = Number(px.toFixed(2));
             btcUpdated = true;
-            result.liveUpdated = true;
-            if (!result.source.includes('TwelveData')) result.source = 'CoinGecko Live';
+            anyFreshSuccess = true;
+            if (!detectedSource) detectedSource = 'CoinGecko';
           }
         }
       } catch (_) {}
     }
 
-    // 3. XAUUSD (Gold-API -> GoldPrice -> Yahoo GC=F)
+    // 3. XAUUSD (GoldPrice -> Gold-API -> Yahoo GC=F)
     const goldSources = [
-      async () => {
-        const r = await fetchWithTimeout('https://api.gold-api.com/price/XAU', 3500);
-        if (!r.ok) return null;
-        return pickValidPrice((await r.json())?.price, 500, 20000);
-      },
       async () => {
         const r = await fetchWithTimeout('https://data-asg.goldprice.org/dbAsset/XAU', 3500);
         if (!r.ok) return null;
         return pickValidPrice((await r.json())?.items?.[0]?.xauPrice, 500, 20000);
+      },
+      async () => {
+        const r = await fetchWithTimeout('https://api.gold-api.com/price/XAU', 3500);
+        if (!r.ok) return null;
+        return pickValidPrice((await r.json())?.price, 500, 20000);
       },
       async () => {
         const u = encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1m&range=1d');
@@ -152,8 +171,8 @@
         const px = await fn();
         if (px) {
           result.XAUUSD = Number(px.toFixed(2));
-          result.liveUpdated = true;
-          if (!result.source.includes('TwelveData')) result.source = 'Live Spot';
+          anyFreshSuccess = true;
+          if (!detectedSource) detectedSource = 'Spot Gold';
           break;
         }
       } catch (_) {}
@@ -169,7 +188,7 @@
         if (px) {
           result.EURUSD = Number(px.toFixed(5));
           eurUpdated = true;
-          result.liveUpdated = true;
+          anyFreshSuccess = true;
         }
       }
     } catch (_) {}
@@ -183,7 +202,7 @@
           if (px) {
             result.EURUSD = Number(px.toFixed(5));
             eurUpdated = true;
-            result.liveUpdated = true;
+            anyFreshSuccess = true;
           }
         }
       } catch (_) {}
@@ -216,14 +235,27 @@
         const px = await fn();
         if (px) {
           result.US100 = Number(px.toFixed(2));
-          result.liveUpdated = true;
+          anyFreshSuccess = true;
           break;
         }
       } catch (_) {}
     }
 
-    result.fetchedAtMs = Date.now();
-    saveCache(result);
+    if (anyFreshSuccess) {
+      result.fetchedAtMs = Date.now();
+      result.liveUpdated = true;
+      result.isFresh = true;
+      result.source = detectedSource ? `${detectedSource} Live` : 'Live Feed';
+      saveCache(result);
+    } else {
+      result.liveUpdated = false;
+      result.isFresh = result.fetchedAtMs > 0 && (nowMs - result.fetchedAtMs) <= MAX_REAL_AGE_MS;
+      if (!result.fetchedAtMs) {
+        result.fetchedAtMs = nowMs;
+      }
+      result.source = cached.source ? `${cached.source} (Fallback)` : 'Fallback Baseline';
+    }
+
     return result;
   }
 
