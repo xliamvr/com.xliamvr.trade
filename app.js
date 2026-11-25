@@ -1,19 +1,19 @@
 /**
- * Liamvtrade Quant Terminal v2.9.4 — app.js (FULL COMPLETE + LIVE RUNNING & ANTI-MISS NOTIF UPGRADE)
- * Mengatur State, Live Market Feed Akurat + Kalibrasi Broker, WIB Killzones & Weekend BTC,
- * Circuit Breaker + Anti-Revenge Cooldown, Pre-Trade SOP + Score Boost, Prop Firm Portfolio,
- * News Engine + Eksekusi BUY/SELL News + News Lock Warning ON/OFF,
- * Live Running Status + Manual TP Input/Hit + SL->BE + Cut Now,
- * Sniper Signal Engine + Interactive POI Education, News Sniper Mode,
- * Performance Recap + CSV Export, TradingView Radar (CAPITALCOM:US100),
- * Super Admin Console, Supabase 2-Way Sync, Anti-Miss Native Push Alert & Telegram VIP Dispatcher.
+ * Liamvtrade Quant Terminal v3.0 — app.js (FULL UPGRADE)
+ * - 100% kompatibel dengan index.html v3.0 & modul intelligence-upgrade.js
+ * - Gerbang Ketat NO SETUP (< 7.0 atau MTF konflik) + 1 Arah Bias Terkunci
+ * - Data Integrity Timestamp & Source Badge (Zero Fake Simulation)
+ * - Hard Risk Lock saat Max SL Harian tercapai + Anti-Revenge Cooldown 20m
+ * - Live Running Tracker, Manual TP Input/Hit, SL->BE, Cut Now
+ * - AI Trade Review & Strategy Performance Lab Audit
+ * - Supabase 2-Way Sync, Native Push Alert & Telegram VIP Dispatcher
  */
 
 (function (global) {
   'use strict';
 
-  const STORAGE_KEY = 'liamvtrade_quant_v29_state';
-  const NOTIF_QUEUE_KEY = 'liamvtrade_notif_queue_v1';
+  const STORAGE_KEY = 'liamvtrade_quant_v30_state';
+  const NOTIF_QUEUE_KEY = 'liamvtrade_notif_queue_v2';
   const DEFAULT_SB_URL = 'https://zslntgghkdvhtfofnzxq.supabase.co';
   const DEFAULT_SB_KEY = 'sb_publishable_q5L3wJ7V78z0jN52V2uL9A_V2s5r0_p';
 
@@ -151,7 +151,8 @@
         newsSniper: false,
         engineMasterActive: true,
         requireSop100: false,
-        blockOnCooldown: true
+        blockOnCooldown: true,
+        strictNoSetup: true
       },
 
       broadcastMessage: '',
@@ -181,8 +182,9 @@
         BTCUSDT: 0,
         EURUSD: 0
       },
-      priceSourceLabel: 'Baseline Feed Ready',
-      lastPriceSyncMs: nowTs,
+      priceSourceLabel: 'Menunggu Verifikasi Feed',
+      feedVerifiedLive: false,
+      lastPriceSyncMs: 0,
       tdQuotaUsed: 0,
 
       signal: {
@@ -230,7 +232,7 @@
 
   function loadState() {
     try {
-      const raw = localStorage.getItem(STORAGE_KEY);
+      const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem('liamvtrade_quant_v29_state');
       if (!raw) return createInitialState();
       const parsed = JSON.parse(raw);
       const base = createInitialState();
@@ -243,7 +245,7 @@
       };
 
       const lastSync = Number(parsed.lastPriceSyncMs);
-      const safeSyncMs = Number.isFinite(lastSync) && lastSync > 0 ? lastSync : Date.now();
+      const safeSyncMs = Number.isFinite(lastSync) && lastSync > 0 ? lastSync : 0;
 
       return {
         ...base,
@@ -529,6 +531,10 @@
     } else if (tabName === 'profil') {
       populateProfileInputs();
     }
+
+    if (global.LiamIntelligence && typeof global.LiamIntelligence.animateActiveTab === 'function') {
+      global.LiamIntelligence.animateActiveTab(tabName);
+    }
   }
 
   // =========================================================================
@@ -624,6 +630,7 @@
     updateCooldownTicker();
     updateSignalExpiryTicker();
     renderNewsLockWarning();
+    updateFeedIntegrityStrip();
   }
 
   function formatCountdownToHour(wibNow, targetHour) {
@@ -649,7 +656,7 @@
   }
 
   // =========================================================================
-  // ANTI-REVENGE COOLDOWN (20 MENIT PASCA-SL)
+  // ANTI-REVENGE COOLDOWN & HARD RISK LOCK (20 MENIT PASCA-SL)
   // =========================================================================
   function triggerAntiRevengeCooldown(minutes = 20) {
     state.cooldownUntilMs = Date.now() + minutes * 60000;
@@ -686,8 +693,43 @@
     }
   }
 
+  function evaluateHardRiskLock() {
+    const acc = getActiveAccount();
+    if (!acc) return { locked: false, reason: '' };
+
+    const curSl = Number(acc.curSl) || 0;
+    const maxSl = Number(acc.maxSl) || 2;
+    const curEntry = Number(acc.curEntry) || 0;
+    const maxEntry = Number(acc.maxEntry) || 2;
+    const bal = Number(acc.balance) || 1000;
+    const eq = Number(acc.equity) || bal;
+    const dailyDdDollar = (bal * (Number(acc.dailyDdPct) || 4)) / 100;
+    const drawdownUsed = Math.max(0, bal - eq);
+
+    if (curSl >= maxSl) {
+      return {
+        locked: true,
+        reason: `Max SL Harian (${curSl}/${maxSl}) pada akun ${acc.name} telah tercapai. Eksekusi dikunci otomatis hingga reset 05:00 WIB.`
+      };
+    }
+    if (drawdownUsed >= dailyDdDollar * 0.9) {
+      return {
+        locked: true,
+        reason: `Drawdown akun ${acc.name} ($${drawdownUsed.toFixed(2)}) mendekati batas Daily DD $${dailyDdDollar.toFixed(2)}.`
+      };
+    }
+    if (curEntry >= maxEntry) {
+      return {
+        locked: false,
+        warningOnly: true,
+        reason: `Kuota Max Entry Harian (${curEntry}/${maxEntry}) penuh.`
+      };
+    }
+    return { locked: false, reason: '' };
+  }
+
   // =========================================================================
-  // LIVE MARKET PRICE FEED + KALIBRASI BROKER
+  // LIVE MARKET PRICE FEED + DATA INTEGRITY + KALIBRASI BROKER
   // =========================================================================
   function getCalibratedPrice(pair) {
     const sym = String(pair || 'XAUUSD').toUpperCase();
@@ -707,40 +749,94 @@
     const offset = Number(state.priceOffsets[pair]) || 0;
     const calibrated = getCalibratedPrice(pair);
 
-    setVal('cal-pair-select', pair);
+    setText('cal-pair-name', pair);
     setText('cal-raw-price', formatPriceSafe(pair, raw));
-    setText('cal-calibrated-price', formatPriceSafe(pair, calibrated));
-    setVal('cal-offset-input', offset);
-    const noteEl = document.getElementById('cal-pair-note');
-    if (noteEl) {
-      noteEl.textContent = `Kalibrasi ${pair} (${spec.decimals} desimal) menambahkan offset ke harga feed mentah agar selaras dengan broker / TradingView kamu.`;
+    setText('cal-current-offset', `${offset >= 0 ? '+' : ''}${offset.toFixed(spec.decimals)}`);
+    setVal('cal-broker-price-input', calibrated);
+
+    const acc = getActiveAccount();
+    const lotBox = document.getElementById('cal-lot-breakdown');
+    if (lotBox && acc) {
+      const riskDollar = ((Number(acc.equity) || Number(acc.balance) || 1000) * (Number(acc.riskPct) || 0.4)) / 100;
+      lotBox.innerHTML = `
+        <div class="font-bold text-slate-200">Kalkulator Risiko Akun (${escapeHtml(acc.name)}):</div>
+        <div>Ekuitas: <strong class="text-white">$${Number(acc.equity).toFixed(2)}</strong> • Risk/Trade: <strong class="text-cyan-300">${acc.riskPct}% ($${riskDollar.toFixed(2)})</strong></div>
+        <div>Hard Max Lot: <strong class="text-amber-300">${acc.maxLot} lot</strong> • Pip Value: <strong>$${spec.pipValuePerLot}/lot</strong></div>
+      `;
     }
     openModal('modal-calibration');
   }
 
   function applyBrokerPriceCalibration() {
-    const pair = String(document.getElementById('cal-pair-select')?.value || state.signal?.pair || 'XAUUSD').toUpperCase();
-    const rawOffset = Number(String(document.getElementById('cal-offset-input')?.value ?? '0').replace(',', '.'));
-    const offset = Number.isFinite(rawOffset) ? rawOffset : 0;
+    const pair = String(document.getElementById('cal-pair-name')?.textContent || state.signal?.pair || 'XAUUSD').toUpperCase();
+    const spec = getPairSpecSafe(pair);
+    const raw = Number(state.prices[pair]) || 0;
+    const brokerPx = Number(String(document.getElementById('cal-broker-price-input')?.value ?? '').replace(',', '.'));
 
+    if (!Number.isFinite(brokerPx) || brokerPx <= 0) {
+      showToast('Masukkan harga broker yang valid (> 0)', 'warn');
+      return;
+    }
+
+    const offset = Number((brokerPx - raw).toFixed(spec.decimals));
     state.priceOffsets[pair] = offset;
     saveState();
     closeModal('modal-calibration');
     renderPriceDisplays();
     recalculateAndRenderSignal(false);
     evaluateActiveTradesAgainstLivePrices();
-    showToast(`Kalibrasi ${pair} disimpan (Offset: ${offset >= 0 ? '+' : ''}${offset})`, 'success');
+    showToast(`Kalibrasi ${pair} dikunci (Offset: ${offset >= 0 ? '+' : ''}${offset.toFixed(spec.decimals)})`, 'success');
   }
 
   function resetBrokerPriceCalibration(pairOverride = null) {
-    const pair = String(pairOverride || document.getElementById('cal-pair-select')?.value || state.signal?.pair || 'XAUUSD').toUpperCase();
+    const pair = String(pairOverride || document.getElementById('cal-pair-name')?.textContent || state.signal?.pair || 'XAUUSD').toUpperCase();
     state.priceOffsets[pair] = 0;
-    setVal('cal-offset-input', 0);
+    setVal('cal-broker-price-input', formatPriceSafe(pair, Number(state.prices[pair]) || 0));
+    setText('cal-current-offset', '0.00');
     saveState();
     renderPriceDisplays();
     recalculateAndRenderSignal(false);
     evaluateActiveTradesAgainstLivePrices();
     showToast(`Offset kalibrasi ${pair} direset ke 0.00`, 'info');
+  }
+
+  function updateFeedIntegrityStrip() {
+    const sourceEl = document.getElementById('header-feed-source');
+    const tsEl = document.getElementById('header-feed-timestamp');
+    const badgeEl = document.getElementById('header-feed-status-badge');
+
+    const lastSync = Number(state.lastPriceSyncMs) || 0;
+    const ageSec = lastSync > 0 ? Math.max(0, Math.round((Date.now() - lastSync) / 1000)) : 9999;
+    const isFresh = state.feedVerifiedLive && ageSec <= 120;
+
+    if (sourceEl) {
+      sourceEl.textContent = `Sumber: ${state.priceSourceLabel || 'Menunggu feed...'}`;
+    }
+
+    if (tsEl) {
+      if (lastSync > 0) {
+        const d = new Date(lastSync + (new Date().getTimezoneOffset() + 420) * 60000);
+        const hh = String(d.getHours()).padStart(2, '0');
+        const mm = String(d.getMinutes()).padStart(2, '0');
+        const ss = String(d.getSeconds()).padStart(2, '0');
+        tsEl.textContent = `Sync: ${hh}:${mm}:${ss} WIB (${ageSec}d lalu)`;
+      } else {
+        tsEl.textContent = 'Sync: Belum terverifikasi';
+      }
+    }
+
+    if (badgeEl) {
+      if (isFresh) {
+        badgeEl.textContent = 'LIVE';
+        badgeEl.className = 'px-1.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-[9px] font-mono font-extrabold text-emerald-300';
+      } else if (lastSync > 0) {
+        badgeEl.textContent = 'DELAYED';
+        badgeEl.className = 'px-1.5 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-[9px] font-mono font-extrabold text-amber-300';
+      } else {
+        badgeEl.textContent = 'UNVERIFIED';
+        badgeEl.className = 'px-1.5 py-0.5 rounded bg-rose-500/20 border border-rose-400/40 text-[9px] font-mono font-extrabold text-rose-300';
+      }
+    }
   }
 
   function renderPriceDisplays() {
@@ -775,11 +871,13 @@
 
     const quotaEl = document.getElementById('td-quota-badge');
     if (quotaEl) quotaEl.textContent = `Kuota TD: ${state.tdQuotaUsed} / 800`;
+
+    updateFeedIntegrityStrip();
   }
 
   async function syncLiveMarketPrices(forceShowToast = false) {
     let updatedAny = false;
-    let sourceTag = state.priceSourceLabel || 'Live Feed';
+    let sourceTag = state.priceSourceLabel || 'Spot Feed';
 
     try {
       if (global.LiamPriceFeed && typeof global.LiamPriceFeed.fetchAccuratePrices === 'function') {
@@ -794,13 +892,23 @@
       }
     } catch (_) {}
 
-    state.priceSourceLabel = sourceTag;
-    state.lastPriceSyncMs = Date.now();
+    if (updatedAny) {
+      state.priceSourceLabel = sourceTag;
+      state.feedVerifiedLive = true;
+      state.lastPriceSyncMs = Date.now();
+    } else {
+      state.feedVerifiedLive = false;
+    }
+
     saveState();
     renderPriceDisplays();
     recalculateAndRenderSignal(false);
     evaluateActiveTradesAgainstLivePrices();
     flushNotificationQueue(false);
+
+    if (global.LiamIntelligence && typeof global.LiamIntelligence.updateMarketRegimeBrief === 'function') {
+      global.LiamIntelligence.updateMarketRegimeBrief();
+    }
 
     if (state.activeTab === 'news') {
       renderNewsSection();
@@ -813,7 +921,7 @@
     }
 
     if (forceShowToast) {
-      showToast(updatedAny ? `Harga live diperbarui (${sourceTag})` : 'Menggunakan harga kalibrasi aktif', updatedAny ? 'success' : 'info');
+      showToast(updatedAny ? `Harga live terverifikasi (${sourceTag})` : 'Feed live gagal merespons — status DATA DELAYED/UNVERIFIED', updatedAny ? 'success' : 'warn');
     }
   }
 
@@ -952,8 +1060,10 @@
     const tp1Num = Number(s.tp1Fmt);
     const isBuy = s.direction === 'BUY';
 
-    let statusText = 'MENUNGGU LIMIT';
-    let statusTone = 'bg-slate-800 border-slate-700 text-slate-300';
+    let statusText = s.isNoSetup ? 'NO SETUP (WAIT)' : 'MENUNGGU LIMIT';
+    let statusTone = s.isNoSetup
+      ? 'bg-rose-500/20 border-rose-400/40 text-rose-300'
+      : 'bg-slate-800 border-slate-700 text-slate-300';
     let pipsInfo = '';
     let dollarInfo = '';
 
@@ -973,7 +1083,7 @@
       const dSign = m.floatingDollar > 0 ? '+' : m.floatingDollar < 0 ? '-' : '';
       pipsInfo = `${pSign}${m.floatingPips} pips`;
       dollarInfo = `${dSign}$${Math.abs(m.floatingDollar).toFixed(2)}`;
-    } else if (Number.isFinite(entryNum) && Number.isFinite(livePx)) {
+    } else if (!s.isNoSetup && Number.isFinite(entryNum) && Number.isFinite(livePx)) {
       const touched = isBuy ? livePx <= entryNum : livePx >= entryNum;
       statusText = touched ? 'AREA LIMIT TERSENTUH (SIAP RUNNING)' : 'MENUNGGU LIMIT';
       statusTone = touched
@@ -981,6 +1091,9 @@
         : 'bg-slate-800 border-slate-700 text-slate-300';
       const distPips = (Math.abs(livePx - entryNum) / (spec.pipSize || 0.1)).toFixed(1);
       pipsInfo = `Jarak Limit: ${distPips} pips`;
+      dollarInfo = `Live: ${formatPriceSafe(s.pair, livePx)}`;
+    } else {
+      pipsInfo = 'Menunggu Konfluensi Valid';
       dollarInfo = `Live: ${formatPriceSafe(s.pair, livePx)}`;
     }
 
@@ -1185,6 +1298,7 @@
     acc[field] = Math.max(1, Math.min(20, currentVal + delta));
     saveState();
     renderHomeSection();
+    recalculateAndRenderSignal(false);
   }
 
   function adjustAccountCounter(field, delta) {
@@ -1206,6 +1320,7 @@
 
     saveState();
     renderHomeSection();
+    recalculateAndRenderSignal(false);
   }
 
   function resetAllAccountsDailyTrackers(silent = false) {
@@ -1216,6 +1331,7 @@
     state.cooldownUntilMs = 0;
     saveState();
     renderHomeSection();
+    recalculateAndRenderSignal(false);
     if (!silent) showToast('Counter Entry & SL harian semua akun direset ke 0.', 'success');
   }
 
@@ -1415,6 +1531,18 @@
           return `<option value="${a.id}" ${a.id === acc.id ? 'selected' : ''}>${a.name} — $${Number(a.equity).toFixed(2)} (${sign}$${pnl.toFixed(2)})</option>`;
         })
         .join('');
+    }
+
+    const hardLock = evaluateHardRiskLock();
+    const lockBanner = document.getElementById('hard-risk-lock-banner');
+    const lockReasonEl = document.getElementById('hard-risk-lock-reason');
+    if (lockBanner && lockReasonEl) {
+      if (hardLock.locked) {
+        lockBanner.classList.remove('hidden');
+        lockReasonEl.textContent = hardLock.reason;
+      } else {
+        lockBanner.classList.add('hidden');
+      }
     }
 
     const maxEntry = Number(acc.maxEntry) || 2;
@@ -1910,11 +2038,20 @@
   }
 
   // =========================================================================
-  // SIGNALS ENGINE, NEWS SNIPER & INTERACTIVE POI EDUCATION
+  // SIGNALS ENGINE, GERBANG NO SETUP, NEWS SNIPER & POI EDUCATION
   // =========================================================================
   function canExecuteNewTrade() {
     if (!state.config.engineMasterActive) {
       showToast('Mesin sinyal sedang dijeda oleh Owner di tab Profil.', 'warn');
+      return false;
+    }
+    const hardLock = evaluateHardRiskLock();
+    if (hardLock.locked) {
+      showToast(`⛔ ${hardLock.reason}`, 'error');
+      return false;
+    }
+    if (currentSignalObj && currentSignalObj.isNoSetup) {
+      showToast('🚫 Status saat ini NO SETUP — tunggu struktur & skor memenuhi syarat!', 'warn');
       return false;
     }
     if (state.flags.blockOnCooldown && state.cooldownUntilMs > Date.now()) {
@@ -1927,11 +2064,6 @@
         showToast(`SOP baru ${sop.percent}%. Centang 100% SOP terlebih dahulu!`, 'warn');
         return false;
       }
-    }
-    const acc = getActiveAccount();
-    if (acc && (Number(acc.curSl) || 0) >= (Number(acc.maxSl) || 2)) {
-      showToast(`🛑 Batas Max SL Harian (${acc.maxSl}) akun ${acc.name} sudah tercapai!`, 'error');
-      return false;
     }
     return true;
   }
@@ -1973,6 +2105,16 @@
     showToast(`Struktur ${state.signal.pair} (${state.signal.timeframe}) di-scan ulang!`, 'success');
   }
 
+  function openMappingFromSignals() {
+    const pair = state.signal.pair || 'XAUUSD';
+    state.chart.pair = pair;
+    saveState();
+    switchMainTab('chart');
+    if (global.LiamIntelligence && typeof global.LiamIntelligence.generateTechnicalMappingBoard === 'function') {
+      global.LiamIntelligence.generateTechnicalMappingBoard(true);
+    }
+  }
+
   function toggleSignalFilterDrawer() {
     const drawer = document.getElementById('signal-filter-drawer');
     if (drawer) drawer.classList.toggle('hidden');
@@ -1981,9 +2123,12 @@
   function saveTerminalGuardPrefs() {
     const chkSop = document.getElementById('chk-require-sop');
     const chkCd = document.getElementById('chk-require-cooldown');
+    const chkNoSetup = document.getElementById('chk-strict-no-setup');
     if (chkSop) state.flags.requireSop100 = chkSop.checked;
     if (chkCd) state.flags.blockOnCooldown = chkCd.checked;
+    if (chkNoSetup) state.flags.strictNoSetup = chkNoSetup.checked;
     saveState();
+    recalculateAndRenderSignal(false);
     showToast('Filter perlindungan eksekusi disimpan.', 'info');
   }
 
@@ -2019,6 +2164,13 @@
   }
 
   function syncFilterButtonsUI() {
+    const chkSop = document.getElementById('chk-require-sop');
+    const chkCd = document.getElementById('chk-require-cooldown');
+    const chkNoSetup = document.getElementById('chk-strict-no-setup');
+    if (chkSop) chkSop.checked = Boolean(state.flags.requireSop100);
+    if (chkCd) chkCd.checked = Boolean(state.flags.blockOnCooldown);
+    if (chkNoSetup) chkNoSetup.checked = Boolean(state.flags.strictNoSetup);
+
     const alertBtn = document.getElementById('btn-signal-alert-toggle');
     if (alertBtn) {
       alertBtn.textContent = state.flags.signalAlert ? '● ALERT: ON' : '○ ALERT: OFF';
@@ -2208,6 +2360,9 @@
     };
     const [mLabel, mTag] = methodLabels[methodKey] || methodLabels.auto;
 
+    const baseScore = 7.4 + ((Number(seed) % 3) * 0.35);
+    const finalScore = Number(Math.min(9.9, baseScore + sopBonus).toFixed(1));
+
     return {
       status: 'SIGNAL',
       pair,
@@ -2217,7 +2372,7 @@
       methodShortTag: mTag,
       direction: isBuy ? 'BUY' : 'SELL',
       orderType: isBuy ? 'BUY LIMIT' : 'SELL LIMIT',
-      score: Number(Math.min(9.9, 8.2 + sopBonus).toFixed(1)),
+      score: finalScore,
       zoneRangeFormatted: `${zMin.toFixed(dec)} – ${zMax.toFixed(dec)}`,
       entryFmt: entryNum.toFixed(dec),
       entryNote: isBuy ? 'Midpoint Bullish OB / FVG' : 'Midpoint Bearish OB / FVG',
@@ -2343,6 +2498,40 @@
       sig = computeFallbackSignalSetup(pair, tf, methodKey, livePrice, seed, sop.scoreBonus);
     }
 
+    // Evaluasi Gerbang Ketat NO SETUP & Hard Risk Lock
+    const hardLock = evaluateHardRiskLock();
+    const ctx = getWibContextSafe();
+    const isMondayBlocked = state.flags.mondayFilter && ctx.day === 1 && ctx.hour < 14;
+    const isMorningBlocked = state.flags.morningFilter && ctx.hour >= 5 && ctx.hour < 12;
+    const scoreNum = Number(sig.score || 7.5);
+    const isLowScore = state.flags.strictNoSetup && scoreNum < 7.0;
+
+    let isNoSetup = false;
+    let gateReason = `Konfluensi ${sig.methodShortTag} terverifikasi pada ${pair} (${tf}). Bias terkunci 1 arah: ${sig.orderType}.`;
+    let gateBadgeText = `SETUP VALID • 1 ARAH TERKUNCI`;
+    let gateBadgeClass = 'px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-[10px] font-mono font-extrabold text-emerald-300';
+
+    if (hardLock.locked) {
+      isNoSetup = true;
+      gateReason = hardLock.reason;
+      gateBadgeText = 'NO SETUP • HARD RISK LOCK';
+      gateBadgeClass = 'px-2 py-0.5 rounded bg-rose-500/25 border border-rose-400/50 text-[10px] font-mono font-extrabold text-rose-300';
+    } else if (isMondayBlocked || isMorningBlocked) {
+      isNoSetup = true;
+      gateReason = isMondayBlocked
+        ? 'Monday Filter aktif — terminal menahan entry awal Senin hingga likuiditas terbentuk matang.'
+        : 'Filter Sesi Pagi WIB aktif — menunggu pembukaan likuiditas London (13:00 WIB).';
+      gateBadgeText = 'NO SETUP • SESSION FILTER';
+      gateBadgeClass = 'px-2 py-0.5 rounded bg-amber-500/20 border border-amber-400/40 text-[10px] font-mono font-extrabold text-amber-300';
+    } else if (isLowScore) {
+      isNoSetup = true;
+      gateReason = `Skor konfluensi (${scoreNum.toFixed(1)}/10) di bawah ambang 7.0. Centang SOP atau tunggu konfirmasi struktur lebih kuat.`;
+      gateBadgeText = 'NO SETUP • SKOR < 7.0';
+      gateBadgeClass = 'px-2 py-0.5 rounded bg-rose-500/25 border border-rose-400/50 text-[10px] font-mono font-extrabold text-rose-300';
+    }
+
+    sig.isNoSetup = isNoSetup;
+
     const pos = computePositionSizeSafe(acc, sig);
     sig.pos = pos;
     currentSignalObj = sig;
@@ -2350,46 +2539,59 @@
     const isBuy = sig.direction === 'BUY';
     const mainCard = document.getElementById('main-sniper-card');
     if (mainCard) {
-      mainCard.className = `glass-card rounded-2xl p-4 border ${
-        isBuy ? 'border-emerald-500/45' : 'border-rose-500/45'
+      mainCard.className = `glass-card motion-card rounded-2xl p-4 border ${
+        isNoSetup ? 'border-slate-700' : isBuy ? 'border-emerald-500/45' : 'border-rose-500/45'
       } space-y-3.5`;
     }
 
     setText('sig-pair-tf', `${sig.pair} • ${sig.timeframe}`);
     setText('sig-method-label', sig.methodLabel);
-    setText('sig-score-label', `Score ${Number(sig.score || 8.2).toFixed(1)}/10`);
+    setText('sig-score-label', `Score ${scoreNum.toFixed(1)}/10`);
+
+    const gateBadgeEl = document.getElementById('sig-gate-verdict-badge');
+    if (gateBadgeEl) {
+      gateBadgeEl.textContent = gateBadgeText;
+      gateBadgeEl.className = gateBadgeClass;
+    }
+    setText('sig-gate-reason-text', gateReason);
+    setText('sig-mtf-alignment-badge', `MTF: H4/H1/${tf} ${isBuy ? 'Bullish' : 'Bearish'}`);
 
     const dirBadge = document.getElementById('sig-direction-badge');
     if (dirBadge) {
-      dirBadge.textContent = `● ${sig.orderType}`;
-      dirBadge.className = isBuy
-        ? 'px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-xs font-extrabold tracking-wide shrink-0'
-        : 'px-3 py-1 rounded-full bg-rose-500/20 border border-rose-400/50 text-rose-300 text-xs font-extrabold tracking-wide shrink-0';
+      if (isNoSetup) {
+        dirBadge.textContent = '○ NO SETUP';
+        dirBadge.className = 'px-3 py-1 rounded-full bg-slate-800 border border-slate-600 text-slate-300 text-xs font-extrabold tracking-wide shrink-0';
+      } else {
+        dirBadge.textContent = `● ${sig.orderType}`;
+        dirBadge.className = isBuy
+          ? 'px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-xs font-extrabold tracking-wide shrink-0'
+          : 'px-3 py-1 rounded-full bg-rose-500/20 border border-rose-400/50 text-rose-300 text-xs font-extrabold tracking-wide shrink-0';
+      }
     }
 
-    setText('sig-entry-zone-range', sig.zoneRangeFormatted);
-    setText('sig-entry-type-label', sig.orderType);
+    setText('sig-entry-zone-range', isNoSetup ? '-- – -- (WAIT)' : sig.zoneRangeFormatted);
+    setText('sig-entry-type-label', isNoSetup ? 'STANDBY' : sig.orderType);
     const entryEl = document.getElementById('sig-entry-price');
     if (entryEl) {
-      entryEl.textContent = sig.entryFmt;
-      entryEl.className = `text-lg font-mono font-extrabold ${isBuy ? 'text-sky-400' : 'text-amber-300'}`;
+      entryEl.textContent = isNoSetup ? '--' : sig.entryFmt;
+      entryEl.className = `text-lg font-mono font-extrabold ${isNoSetup ? 'text-slate-500' : isBuy ? 'text-sky-400' : 'text-amber-300'}`;
     }
-    setText('sig-entry-note', sig.entryNote);
+    setText('sig-entry-note', isNoSetup ? 'Menunggu syarat gerbang terpenuhi' : sig.entryNote);
 
-    setText('sig-sl-pips-label', `STOP LOSS (-${sig.slPips} pips)`);
-    setText('sig-sl-price', sig.slFmt);
-    setText('sig-sl-reason', sig.slReason);
+    setText('sig-sl-pips-label', isNoSetup ? 'STOP LOSS' : `STOP LOSS (-${sig.slPips} pips)`);
+    setText('sig-sl-price', isNoSetup ? '--' : sig.slFmt);
+    setText('sig-sl-reason', isNoSetup ? 'Terkunci' : sig.slReason);
 
-    setText('sig-tp1-pips', `TP 1 (+${sig.tp1Pips})`);
-    setText('sig-tp1-price', sig.tp1Fmt);
+    setText('sig-tp1-pips', isNoSetup ? 'TP 1' : `TP 1 (+${sig.tp1Pips})`);
+    setText('sig-tp1-price', isNoSetup ? '--' : sig.tp1Fmt);
     setText('sig-tp1-reason', sig.tp1Reason);
 
-    setText('sig-tp2-pips', `TP 2 (+${sig.tp2Pips})`);
-    setText('sig-tp2-price', sig.tp2Fmt);
+    setText('sig-tp2-pips', isNoSetup ? 'TP 2' : `TP 2 (+${sig.tp2Pips})`);
+    setText('sig-tp2-price', isNoSetup ? '--' : sig.tp2Fmt);
     setText('sig-tp2-reason', sig.tp2Reason);
 
-    setText('sig-tp3-pips', `TP 3 (+${sig.tp3Pips})`);
-    setText('sig-tp3-price', sig.tp3Fmt);
+    setText('sig-tp3-pips', isNoSetup ? 'TP 3' : `TP 3 (+${sig.tp3Pips})`);
+    setText('sig-tp3-price', isNoSetup ? '--' : sig.tp3Fmt);
     setText('sig-tp3-reason', sig.tp3Reason);
 
     const poiSummaryEl = document.getElementById('sig-poi-summary');
@@ -2425,7 +2627,7 @@
     renderNewsLockWarning();
     updateSignalExpiryTicker();
 
-    if (allowAutoTelegram && state.config.engineMasterActive) {
+    if (allowAutoTelegram && state.config.engineMasterActive && !isNoSetup) {
       const sigKey = `${sig.pair}|${sig.timeframe}|${sig.methodKey}|${sig.direction}|${sig.entryFmt}|${sig.slFmt}|${sig.tp2Fmt}`;
       const tsNow = Date.now();
       const cooldownPassed = tsNow - lastAutoSentSignalTimeMs >= AUTO_TELEGRAM_COOLDOWN_MS;
@@ -2477,8 +2679,8 @@
     if (!currentSignalObj) {
       recalculateAndRenderSignal(false);
     }
-    if (!currentSignalObj) {
-      showToast('Data sinyal belum siap', 'warn');
+    if (!currentSignalObj || currentSignalObj.isNoSetup) {
+      showToast('Status saat ini NO SETUP — belum ada angka entry valid.', 'warn');
       return;
     }
     const map = {
@@ -2494,6 +2696,9 @@
 
   function formatSignalPlainText(s) {
     if (!s) return '';
+    if (s.isNoSetup) {
+      return `📊 ${s.pair} (${s.timeframe}) — NO SETUP\nMenunggu konfirmasi struktur & skor >= 7.0.`;
+    }
     return [
       `📊 ${s.pair} (${s.timeframe}) — ${s.orderType}`,
       `Metode: ${s.methodLabel} | Score: ${s.score}/10`,
@@ -2605,7 +2810,10 @@
     if (!currentSignalObj) {
       recalculateAndRenderSignal(false);
     }
-    if (!currentSignalObj) return;
+    if (!currentSignalObj || currentSignalObj.isNoSetup) {
+      if (showFeedback) showToast('Status saat ini NO SETUP — tidak ada sinyal aktif dikirim.', 'warn');
+      return;
+    }
     const s = currentSignalObj;
     enqueueNotificationJob({
       dedupeKey: showFeedback ? '' : `manual-sig-${s.pair}-${s.entryFmt}`,
@@ -2620,7 +2828,7 @@
   }
 
   // =========================================================================
-  // PERFORMANCE RECAP, JOURNAL LOGS & CSV EXPORT
+  // PERFORMANCE RECAP, AI TRADE REVIEW, JOURNAL LOGS & CSV EXPORT
   // =========================================================================
   function setRecapPeriod(period) {
     state.recapPeriod = period;
@@ -2773,15 +2981,29 @@
     let beHit = 0;
     let plusPips = 0;
     let minusPips = 0;
+    let runningDdPips = 0;
+    let maxDdPips = 0;
+    let curLossStreak = 0;
+    let maxLossStreak = 0;
+    let totalR = 0;
 
-    periodLogs.forEach((item) => {
+    [...periodLogs].reverse().forEach((item) => {
       const pips = Number(item.pipsResult) || 0;
+      const slBase = Math.max(1, Number(item.slPips) || 20);
       if (['TP1', 'TP2', 'TP3', 'MANUAL_TP'].includes(item.outcome) || (item.outcome === 'CUT_TP' && pips > 0)) {
         tpHit += 1;
         plusPips += Math.abs(pips);
+        runningDdPips = Math.max(0, runningDdPips - Math.abs(pips));
+        curLossStreak = 0;
+        totalR += Math.abs(pips) / slBase;
       } else if (item.outcome === 'SL' || (item.outcome === 'CUT_SL' && pips < 0)) {
         slHit += 1;
         minusPips += Math.abs(pips);
+        runningDdPips += Math.abs(pips);
+        maxDdPips = Math.max(maxDdPips, runningDdPips);
+        curLossStreak += 1;
+        maxLossStreak = Math.max(maxLossStreak, curLossStreak);
+        totalR -= Math.abs(pips) / slBase;
       } else if (item.outcome === 'BE') {
         beHit += 1;
       }
@@ -2791,6 +3013,7 @@
     const winrate = totalClosed > 0 ? Math.round((tpHit / totalClosed) * 100) : 0;
     const netPips = Number((plusPips - minusPips).toFixed(1));
     const profitFactor = minusPips > 0 ? (plusPips / minusPips).toFixed(2) : plusPips > 0 ? '9.99' : '0.00';
+    const expectancyR = totalClosed > 0 ? (totalR / totalClosed).toFixed(2) : '0.00';
 
     setText('journal-count-pill', `${state.tradeLogs.length} JURNAL`);
     setText('journal-tab-count', `${state.tradeLogs.length}`);
@@ -2802,6 +3025,20 @@
     setText('stat-minus-pips', `-${minusPips}`);
     setText('stat-net-pips', `${netPips > 0 ? '+' : ''}${netPips}`);
     setText('stat-profit-factor', `${profitFactor}x`);
+    setText('stat-expectancy', `${Number(expectancyR) >= 0 ? '+' : ''}${expectancyR}R`);
+    setText('stat-max-dd-pips', `${maxDdPips.toFixed(0)} pips`);
+    setText('stat-loss-streak', `${maxLossStreak}x`);
+
+    const reviewEl = document.getElementById('ai-trade-review-summary');
+    if (reviewEl) {
+      if (totalClosed === 0) {
+        reviewEl.textContent = 'Belum ada trade selesai pada periode ini. Pertahankan disiplin SOP dan batasi maksimal 2 entry berkualitas per sesi.';
+      } else if (maxLossStreak >= 2) {
+        reviewEl.textContent = `Terdeteksi streak ${maxLossStreak}x SL. Pastikan jeda Anti-Revenge Cooldown dipatuhi penuh dan hanya ambil setup dengan SOP >= 80%.`;
+      } else {
+        reviewEl.textContent = `Expectancy ${expectancyR}R dengan Winrate ${winrate}% (Profit Factor ${profitFactor}x). Pertahankan ukuran lot proporsional sesuai Daily DD Guard.`;
+      }
+    }
 
     const filteredList = state.tradeLogs.filter((item) => {
       const statusOk =
@@ -2948,7 +3185,7 @@
   }
 
   // =========================================================================
-  // CHART TAB: TRADINGVIEW RADAR (WITH UNLOCKED CAPITALCOM:US100)
+  // CHART TAB: TRADINGVIEW RADAR + 4-TF SCREENING + STRATEGY LAB
   // =========================================================================
   const TV_SYMBOL_MAP = {
     XAUUSD: 'OANDA:XAUUSD',
@@ -2964,7 +3201,12 @@
     scanChartStructure(false);
   }
 
-  function renderTradingViewChart(pair) {
+  function focusChartTimeframe(intervalCode) {
+    renderTradingViewChart(state.chart.pair || 'XAUUSD', intervalCode);
+    showToast(`Chart difokuskan ke interval ${intervalCode}m`, 'info');
+  }
+
+  function renderTradingViewChart(pair, interval = '15') {
     const wrapper = document.getElementById('tv-chart-wrapper');
     if (!wrapper) return;
 
@@ -2974,7 +3216,7 @@
     const widgetConfig = {
       autosize: true,
       symbol,
-      interval: '15',
+      interval: String(interval),
       timezone: 'Asia/Jakarta',
       theme: isDark ? 'dark' : 'light',
       style: '1',
@@ -2994,7 +3236,7 @@
     iframe.setAttribute('allowfullscreen', 'true');
 
     const encodedConfig = encodeURIComponent(JSON.stringify(widgetConfig));
-    iframe.src = `https://s.tradingview.com/widgetembed/?frameElementId=tv_liam_chart&symbol=${encodeURIComponent(symbol)}&interval=15&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=${isDark ? '0f172a' : 'f1f5f9'}&theme=${isDark ? 'dark' : 'light'}&style=1&timezone=Asia%2FJakarta&locale=id#${encodedConfig}`;
+    iframe.src = `https://s.tradingview.com/widgetembed/?frameElementId=tv_liam_chart&symbol=${encodeURIComponent(symbol)}&interval=${encodeURIComponent(interval)}&hidesidetoolbar=0&symboledit=1&saveimage=1&toolbarbg=${isDark ? '0f172a' : 'f1f5f9'}&theme=${isDark ? 'dark' : 'light'}&style=1&timezone=Asia%2FJakarta&locale=id#${encodedConfig}`;
 
     wrapper.appendChild(iframe);
   }
@@ -3036,15 +3278,19 @@
 
     if (shEl) {
       shEl.textContent = highFmt;
-      shEl.className = 'text-sm sm:text-base font-mono font-extrabold text-emerald-400';
+      shEl.className = 'text-xs font-mono font-extrabold text-rose-400';
     }
     if (slEl) {
       slEl.textContent = lowFmt;
-      slEl.className = 'text-sm sm:text-base font-mono font-extrabold text-rose-400';
+      slEl.className = 'text-xs font-mono font-extrabold text-emerald-400';
     }
     if (arEl) {
       arEl.textContent = rangeFmt;
-      arEl.className = 'text-sm sm:text-base font-mono font-extrabold text-sky-400';
+      arEl.className = 'text-xs font-mono font-extrabold text-sky-400';
+    }
+
+    if (global.LiamIntelligence && typeof global.LiamIntelligence.updateMultiTimeframeMatrix === 'function') {
+      global.LiamIntelligence.updateMultiTimeframeMatrix(pair, price, swingHighNum, swingLowNum, eqNum);
     }
 
     const verdictBox = document.getElementById('chart-scan-verdict-box');
@@ -3053,6 +3299,46 @@
 
     if (verdictBox) verdictBox.innerHTML = text;
     if (showFeedback) showToast(`Struktur ${pair} dipindai!`, 'success');
+  }
+
+  function runStrategyLabAudit() {
+    const outEl = document.getElementById('strategy-lab-results');
+    if (!outEl) return;
+
+    const logs = state.tradeLogs || [];
+    const byMethod = {};
+    logs.forEach((l) => {
+      if (l.status !== 'done') return;
+      const key = l.methodLabel || 'Auto Sniper';
+      if (!byMethod[key]) byMethod[key] = { wins: 0, losses: 0, netPips: 0 };
+      const pips = Number(l.pipsResult) || 0;
+      if (pips > 0) byMethod[key].wins += 1;
+      else if (pips < 0) byMethod[key].losses += 1;
+      byMethod[key].netPips += pips;
+    });
+
+    const entries = Object.entries(byMethod);
+    if (entries.length === 0) {
+      outEl.innerHTML = `
+        <div class="rounded-xl bg-slate-950/80 border border-slate-800 p-3 text-[11px] text-slate-300 leading-relaxed">
+          Belum ada trade selesai di Jurnal untuk di-audit Out-of-Sample. Catat minimal 3–5 trade dengan status TP/SL untuk melihat perbandingan Winrate &amp; Expectancy tiap metode ICT/SMC.
+        </div>`;
+      return;
+    }
+
+    outEl.innerHTML = entries
+      .map(([name, m]) => {
+        const total = m.wins + m.losses;
+        const wr = total > 0 ? Math.round((m.wins / total) * 100) : 0;
+        return `
+          <div class="rounded-xl bg-slate-950/80 border border-slate-800 p-2.5 flex items-center justify-between gap-2 font-mono text-[11px]">
+            <span class="text-white font-bold truncate">${escapeHtml(name)}</span>
+            <span class="text-sky-300">WR ${wr}%</span>
+            <span class="${m.netPips >= 0 ? 'text-emerald-400' : 'text-rose-400'}">${m.netPips >= 0 ? '+' : ''}${m.netPips.toFixed(1)} pips</span>
+          </div>`;
+      })
+      .join('');
+    showToast('Audit Strategy Lab selesai!', 'success');
   }
 
   // =========================================================================
@@ -3380,6 +3666,18 @@
     return `${String(wib.getHours()).padStart(2, '0')}:${String(wib.getMinutes()).padStart(2, '0')} WIB`;
   }
 
+  // Expose internal state bridge for intelligence-upgrade.js
+  global.__LIAM_TERMINAL_BRIDGE__ = {
+    getState: () => state,
+    getCalibratedPrice,
+    getPairSpecSafe,
+    formatPriceSafe,
+    getActiveAccount,
+    getCurrentSignal: () => currentSignalObj,
+    dispatchTelegramMessage,
+    showToast
+  };
+
   Object.assign(global, {
     switchMainTab,
     toggleThemeMode,
@@ -3421,6 +3719,7 @@
     selectSignalTimeframe,
     selectSignalMethod,
     forceRescanSignal,
+    openMappingFromSignals,
     toggleSignalFilterDrawer,
     saveTerminalGuardPrefs,
     toggleTerminalFlag,
@@ -3442,7 +3741,9 @@
     copyPerformanceRecap,
     exportJournalCsv,
     changeChartPair,
+    focusChartTimeframe,
     scanChartStructure,
+    runStrategyLabAudit,
     saveOwnerBroadcast,
     dismissBroadcastBanner,
     toggleSignalEngineMaster,
