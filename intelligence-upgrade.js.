@@ -13,6 +13,18 @@
     return global.__LIAM_TERMINAL_BRIDGE__ || null;
   }
 
+  function normalizePairCode(pair) {
+    if (global.LiamMethods && typeof global.LiamMethods.normalizePair === 'function') {
+      return global.LiamMethods.normalizePair(pair);
+    }
+    var clean = String(pair || 'XAUUSD').trim().toUpperCase();
+    if (clean === 'BTC' || clean === 'BTCUSD') return 'BTCUSDT';
+    if (clean === 'NDX' || clean === 'NASDAQ') return 'US100';
+    if (clean === 'GOLD' || clean === 'XAU') return 'XAUUSD';
+    if (clean === 'EUR') return 'EURUSD';
+    return clean || 'XAUUSD';
+  }
+
   function showQuickNotice(msg) {
     var bridge = getBridge();
     if (bridge && typeof bridge.toast === 'function') {
@@ -31,7 +43,7 @@
 
   function getFallbackTerminalState() {
     var chartSelect = document.getElementById('chart-pair-select');
-    var pair = (chartSelect && chartSelect.value) || 'XAUUSD';
+    var pair = normalizePairCode((chartSelect && chartSelect.value) || 'XAUUSD');
     var methodSelect = document.getElementById('signal-method-select');
     var method = (methodSelect && methodSelect.value) || 'auto';
 
@@ -44,11 +56,18 @@
       }
     } catch (e) {}
 
+    var base = (global.LiamPriceFeed && global.LiamPriceFeed.BASELINE_PRICES) || {
+      XAUUSD: 3555.00,
+      US100: 21500.00,
+      BTCUSDT: 95000.00,
+      EURUSD: 1.08500
+    };
+
     var prices = {
-      XAUUSD: Number(cachedPrices.XAUUSD) || 3555.00,
-      US100: Number(cachedPrices.US100) || 21500.00,
-      BTCUSDT: Number(cachedPrices.BTCUSDT) || 95000.00,
-      EURUSD: Number(cachedPrices.EURUSD) || 1.08500
+      XAUUSD: Number(cachedPrices.XAUUSD) || base.XAUUSD,
+      US100: Number(cachedPrices.US100) || base.US100,
+      BTCUSDT: Number(cachedPrices.BTCUSDT) || base.BTCUSDT,
+      EURUSD: Number(cachedPrices.EURUSD) || base.EURUSD
     };
 
     return {
@@ -61,7 +80,7 @@
   }
 
   function detectMarketRegime(state, setup) {
-    var pair = (state && state.pair) || (setup && setup.pair) || 'XAUUSD';
+    var pair = normalizePairCode((state && state.pair) || (setup && setup.pair) || 'XAUUSD');
     var tf = (state && state.timeframe) || (setup && setup.timeframe) || 'M15';
     var nyCtx = (global.LiamMethods && typeof global.LiamMethods.getNySessionContext === 'function')
       ? global.LiamMethods.getNySessionContext(Date.now())
@@ -105,9 +124,10 @@
   }
 
   function buildFallbackScanItem(pair, tf, basePrice) {
+    var cleanPair = normalizePairCode(pair);
     var px = Number(basePrice) || 3555.00;
     var isBuy = tf === 'M15' || tf === 'H1';
-    var step = pair === 'EURUSD' ? 0.0025 : (pair === 'BTCUSDT' ? 650 : (pair === 'US100' ? 95 : 14));
+    var step = cleanPair === 'EURUSD' ? 0.0025 : (cleanPair === 'BTCUSDT' ? 650 : (cleanPair === 'US100' ? 95 : 14));
     var entry = isBuy ? (px - step * 0.35) : (px + step * 0.35);
     var sl = isBuy ? (entry - step * 0.9) : (entry + step * 0.9);
     var tp1 = isBuy ? (entry + step * 1.1) : (entry - step * 1.1);
@@ -115,8 +135,8 @@
     var tp3 = isBuy ? (entry + step * 3.0) : (entry - step * 3.0);
 
     var fmt = function (v) {
-      if (pair === 'EURUSD') return v.toFixed(5);
-      if (pair === 'BTCUSDT' || pair === 'US100') return v.toFixed(1);
+      if (cleanPair === 'EURUSD') return v.toFixed(5);
+      if (cleanPair === 'BTCUSDT' || cleanPair === 'US100') return v.toFixed(1);
       return v.toFixed(2);
     };
 
@@ -124,7 +144,7 @@
     var zoneHigh = fmt(Math.max(entry, isBuy ? entry : entry + step * 0.2));
 
     return {
-      pair: pair,
+      pair: cleanPair,
       timeframe: tf,
       status: 'SIGNAL',
       direction: isBuy ? 'BUY' : 'SELL',
@@ -132,7 +152,7 @@
       methodLabel: 'Auto Sniper (Fallback Map)',
       sessionName: 'Active Session',
       score: tf === 'M15' ? '8.2' : '7.4',
-      slPips: pair === 'EURUSD' ? 22 : 28,
+      slPips: cleanPair === 'EURUSD' ? 22 : 28,
       entryFmt: fmt(entry),
       slFmt: fmt(sl),
       tp1Fmt: fmt(tp1),
@@ -147,7 +167,7 @@
     var opts = options || {};
     var bridge = getBridge();
     var methods = global.LiamMethods;
-    var pair = opts.pair || (state && state.pair) || 'XAUUSD';
+    var pair = normalizePairCode(opts.pair || (state && state.pair) || 'XAUUSD');
     var method = opts.method || (state && state.method) || 'auto';
     var statePrices = (state && state.prices) || {};
     var livePrice = Number(opts.livePrice !== undefined ? opts.livePrice : statePrices[pair]);
@@ -190,6 +210,7 @@
 
     if (opts.applyBest && best && bridge && typeof bridge.getState === 'function') {
       var st = bridge.getState();
+      st.pair = pair;
       st.timeframe = best.timeframe;
       if (typeof bridge.runAnalysis === 'function') {
         bridge.runAnalysis({ skipScanIncrement: true });
@@ -267,7 +288,7 @@
       ctx.stroke();
     }
 
-    var pair = (setup && setup.pair) || (state && state.pair) || 'XAUUSD';
+    var pair = normalizePairCode((setup && setup.pair) || (state && state.pair) || 'XAUUSD');
     var tf = (setup && setup.timeframe) || (state && state.timeframe) || 'M15';
 
     ctx.fillStyle = '#f8fafc';
@@ -390,7 +411,7 @@
 
   function formatSetupSummaryText(setup, state, regimeInfo) {
     if (!setup || setup.status !== 'SIGNAL') {
-      return '[LIAMVTRADE] ' + ((state && state.pair) || 'XAUUSD') + ' (' + ((state && state.timeframe) || 'M15') + ') — ' + ((setup && setup.status) || 'NO SETUP') + ': ' + ((setup && setup.poiSummary) || 'Belum ada setup valid.');
+      return '[LIAMVTRADE] ' + normalizePairCode((state && state.pair) || 'XAUUSD') + ' (' + ((state && state.timeframe) || 'M15') + ') — ' + ((setup && setup.status) || 'NO SETUP') + ': ' + ((setup && setup.poiSummary) || 'Belum ada setup valid.');
     }
     return [
       '📊 *LIAMVTRADE SIGNAL — ' + setup.pair + ' (' + setup.timeframe + ')*',
@@ -439,7 +460,7 @@
       : getFallbackTerminalState();
 
     var chartSelect = document.getElementById('chart-pair-select');
-    var pair = (chartSelect && chartSelect.value) || st.pair || 'XAUUSD';
+    var pair = normalizePairCode((chartSelect && chartSelect.value) || st.pair || 'XAUUSD');
     var tf = st.timeframe || 'M15';
     var method = st.method || 'auto';
     var stPrices = st.prices || {};
@@ -605,7 +626,7 @@
     if (!url) return;
     var a = document.createElement('a');
     a.href = url;
-    a.download = 'mapping-' + ((latest && latest.state && latest.state.pair) || 'XAUUSD') + '-' + ((latest && latest.setup && latest.setup.timeframe) || 'M15') + '.png';
+    a.download = 'mapping-' + normalizePairCode((latest && latest.state && latest.state.pair) || 'XAUUSD') + '-' + ((latest && latest.setup && latest.setup.timeframe) || 'M15') + '.png';
     a.click();
     showQuickNotice('PNG peta teknikal diunduh.');
   };
