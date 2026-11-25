@@ -147,6 +147,12 @@
     return new Date(Number(ts)).toISOString();
   }
 
+  function hasNonEmptyNumericValue(val) {
+    if (val === undefined || val === null) return false;
+    if (typeof val === 'string' && val.trim() === '') return false;
+    return Number.isFinite(Number(val));
+  }
+
   function getWibContext(refTimeMs) {
     const ms = Number.isFinite(refTimeMs) ? refTimeMs : Date.now();
     const now = new Date(ms);
@@ -286,7 +292,6 @@
     for (let i = 0; i < rawCandles.length; i += 1) {
       const c = rawCandles[i];
       if (!c) continue;
-      // Mendukung format object { open, high, low, close, time/timestamp/ts } maupun array [openTime, open, high, low, close, ...]
       let open, high, low, close, ts;
       if (Array.isArray(c)) {
         ts = Number(c[0]);
@@ -362,7 +367,6 @@
     return atrSeries;
   }
 
-  // Swing pivot fractal 3 kiri / 3 kanan
   function detectFractalSwings(candles, leftBars, rightBars) {
     const L = leftBars || 3;
     const R = rightBars || 3;
@@ -405,7 +409,6 @@
     return { swingHighs, swingLows };
   }
 
-  // Displacement: body >= 1.5x ATR atau 3 candle searah
   function isDisplacementCandle(candles, idx, atrSeries) {
     const c = candles[idx];
     if (!c) return { valid: false, type: null, reason: '' };
@@ -440,7 +443,6 @@
     return { valid: false, direction: null, reason: '' };
   }
 
-  // FVG: celah candle 1 dan 3 (idx-2 dan idx), ukuran minimal 0.3 ATR + cek mitigasi
   function detectFVGs(candles, atrSeries, minAtrRatio) {
     const ratio = Number.isFinite(minAtrRatio) ? minAtrRatio : 0.3;
     const fvgs = [];
@@ -452,13 +454,11 @@
       const atr = Math.max(1e-9, (atrSeries && atrSeries[i]) || c3.range);
       const minGap = ratio * atr;
 
-      // Bullish FVG: low candle 3 > high candle 1
       if (c3.low > c1.high) {
         const gapSize = c3.low - c1.high;
         if (gapSize >= minGap) {
           let mitigated = false;
           for (let j = i + 1; j < candles.length; j += 1) {
-            // Dianggap termitigasi jika harga menembus masuk jauh / melewati zona FVG
             if (candles[j].low <= c1.high + gapSize * 0.25) {
               mitigated = true;
               break;
@@ -477,7 +477,6 @@
         }
       }
 
-      // Bearish FVG: high candle 3 < low candle 1
       if (c3.high < c1.low) {
         const gapSize = c1.low - c3.high;
         if (gapSize >= minGap) {
@@ -505,7 +504,6 @@
     return fvgs;
   }
 
-  // OB: candle berlawanan terakhir sebelum displacement yang mematahkan struktur & berkaitan dengan FVG
   function detectOrderBlocks(candles, atrSeries, fvgs) {
     const obs = [];
     if (!Array.isArray(candles) || candles.length < 4) return obs;
@@ -515,7 +513,6 @@
       if (!disp.valid) continue;
 
       if (disp.direction === 'BUY') {
-        // Cari candle bearish terakhir sebelum i
         let obCandle = null;
         for (let k = i - 1; k >= Math.max(0, i - 6); k -= 1) {
           if (candles[k].isBear) {
@@ -597,7 +594,6 @@
     return obs;
   }
 
-  // MSS / BOS: candle close melewati swing terakhir
   function detectStructureShifts(candles, swings) {
     const events = [];
     const highs = (swings && swings.swingHighs) || [];
@@ -607,7 +603,6 @@
       const c = candles[i];
       const prev = candles[i - 1];
 
-      // Bullish break: close menembus swing high sebelumnya
       const lastHigh = highs.filter((h) => h.index < i).pop();
       if (lastHigh && c.close > lastHigh.price && prev.close <= lastHigh.price) {
         events.push({
@@ -620,7 +615,6 @@
         });
       }
 
-      // Bearish break: close menembus swing low sebelumnya
       const lastLow = lows.filter((l) => l.index < i).pop();
       if (lastLow && c.close < lastLow.price && prev.close >= lastLow.price) {
         events.push({
@@ -637,13 +631,11 @@
     return events;
   }
 
-  // Ekstraksi level likuiditas: PDH/PDL, Asia high/low, equal highs/lows, swing high/low
   function extractLiquidityLevels(candles, swings, pair) {
     const spec = getPairSpec(pair);
     const eqTol = Math.max(spec.pipSize * 1.5, ((candles[candles.length - 1] && candles[candles.length - 1].range) || spec.pipSize * 5) * 0.08);
     const levels = [];
 
-    // 1. Swing High / Low
     for (const sh of (swings.swingHighs || [])) {
       levels.push({ kind: 'SWING_HIGH', side: 'HIGH', price: sh.price, index: sh.index, ts: sh.ts, label: `Swing High ${formatPrice(pair, sh.price)}` });
     }
@@ -651,7 +643,6 @@
       levels.push({ kind: 'SWING_LOW', side: 'LOW', price: sl.price, index: sl.index, ts: sl.ts, label: `Swing Low ${formatPrice(pair, sl.price)}` });
     }
 
-    // 2. Equal Highs / Equal Lows
     const highs = swings.swingHighs || [];
     for (let i = 0; i < highs.length; i += 1) {
       for (let j = i + 1; j < highs.length; j += 1) {
@@ -671,7 +662,6 @@
       }
     }
 
-    // 3. PDH / PDL & Asia High / Low berdasarkan tanggal NY
     const byDate = new Map();
     const asiaByDate = new Map();
 
@@ -685,7 +675,6 @@
         if (c.low < d.low) d.low = c.low;
       }
 
-      // Asia range: 19:00–00:00 NY (nyHour >= 19)
       if (ny.nyHour >= 19) {
         if (!asiaByDate.has(ny.dateKey)) {
           asiaByDate.set(ny.dateKey, { high: c.high, low: c.low, ts: c.ts, endTs: c.ts });
@@ -718,7 +707,6 @@
     return { levels, latestAsia };
   }
 
-  // Sweep: wick menembus level, lalu close balik ke dalam dalam 1–3 candle
   function detectSweeps(candles, liquidityLevels, pair) {
     const sweeps = [];
     if (!Array.isArray(candles) || candles.length < 2) return sweeps;
@@ -727,10 +715,9 @@
       if (lvl.index >= candles.length - 1) continue;
 
       for (let startIdx = lvl.index + 1; startIdx < candles.length; startIdx += 1) {
-        const maxWindow = Math.min(candles.length - 1, startIdx + 2); // total 1–3 candle window
+        const maxWindow = Math.min(candles.length - 1, startIdx + 2);
 
         if (lvl.side === 'LOW') {
-          // Wick tembus di bawah lvl.price, lalu close balik >= lvl.price dalam 1–3 candle
           let extremeLow = Infinity;
           let sweepCandle = null;
           for (let k = startIdx; k <= maxWindow; k += 1) {
@@ -745,7 +732,7 @@
           if (sweepCandle && Number.isFinite(extremeLow)) {
             sweeps.push({
               side: 'LOW',
-              direction: 'BUY', // sweep low -> bias reversal/bullish
+              direction: 'BUY',
               level: lvl.price,
               levelLabel: lvl.label,
               levelKind: lvl.kind,
@@ -771,7 +758,7 @@
           if (sweepCandle && Number.isFinite(extremeHigh)) {
             sweeps.push({
               side: 'HIGH',
-              direction: 'SELL', // sweep high -> bias reversal/bearish
+              direction: 'SELL',
               level: lvl.price,
               levelLabel: lvl.label,
               levelKind: lvl.kind,
@@ -790,7 +777,6 @@
     return sweeps;
   }
 
-  // Bias HTF dari H4/H1: arah BOS terakhir di H4/H1 + posisi premium/discount di dealing range
   function computeHtfBias(h4Candles, h1Candles, entryCandles) {
     const h4Norm = normalizeCandleArray(h4Candles);
     const h1Norm = normalizeCandleArray(h1Candles);
@@ -832,9 +818,13 @@
 
   function inferNewsDirectionFromActualForecast(event, pair) {
     if (!event) return null;
-    const explicitDir = String(event.direction || event.bias || '').toUpperCase();
+    const explicitDir = String(event.direction || event.bias || '').trim().toUpperCase();
     if (explicitDir === 'BUY' || explicitDir === 'BULLISH') return 'BUY';
     if (explicitDir === 'SELL' || explicitDir === 'BEARISH') return 'SELL';
+
+    if (!hasNonEmptyNumericValue(event.actual) || !hasNonEmptyNumericValue(event.forecast)) {
+      return null;
+    }
 
     const actual = Number(event.actual);
     const forecast = Number(event.forecast);
@@ -845,14 +835,12 @@
     const title = String(event.title || event.name || '').toUpperCase();
     const isAbove = actual > forecast;
 
-    // Aturan khusus CPI: di atas forecast biasanya bearish XAU, US100, dan EURUSD
     if (title.includes('CPI')) {
       if (cleanPair === 'XAUUSD' || cleanPair === 'US100' || cleanPair === 'EURUSD') {
         return isAbove ? 'SELL' : 'BUY';
       }
     }
 
-    // Aturan umum per pair (data ekonomi USD/makro lebih kuat -> USD menguat -> XAU & EURUSD cenderung turun)
     if (cleanPair === 'XAUUSD' || cleanPair === 'EURUSD') {
       return isAbove ? 'SELL' : 'BUY';
     }
@@ -870,7 +858,6 @@
     const events = Array.isArray(opts.highImpactEvents) ? opts.highImpactEvents : [];
     const pair = normalizePair(opts.pair);
 
-    // 1. Cek news high impact dalam ±30 menit -> WAIT
     const nearEvent = events.find((ev) => {
       const evTs = Number(ev && (ev.timestampMs || ev.timeMs || ev.ts));
       return Number.isFinite(evTs) && Math.abs(nowMs - evTs) <= NEWS_LOCK_WINDOW_MS;
@@ -887,7 +874,6 @@
       };
     }
 
-    // 2. Cek event yang baru saja dirilis (0 sampai 45 menit lalu) dengan actual & forecast tersedia
     let postReleaseBias = null;
     let postReleaseReason = null;
 
@@ -896,17 +882,22 @@
       const evTs = Number(ev && (ev.timestampMs || ev.timeMs || ev.ts));
       if (!Number.isFinite(evTs)) continue;
       const diffMs = nowMs - evTs;
-      if (diffMs > 0 && diffMs <= 45 * 60 * 1000 && ev.actual !== undefined && ev.actual !== null && ev.forecast !== undefined && ev.forecast !== null) {
+      if (
+        diffMs > 0 &&
+        diffMs <= 45 * 60 * 1000 &&
+        hasNonEmptyNumericValue(ev.actual) &&
+        hasNonEmptyNumericValue(ev.forecast)
+      ) {
         const inferred = inferNewsDirectionFromActualForecast(ev, pair);
         if (inferred) {
           postReleaseBias = inferred;
-          postReleaseReason = `Rilis ${ev.title || 'Event'}: actual (${ev.actual}) vs forecast (${ev.forecast}) → ${inferred} pada ${pair}`;
+          postReleaseReason = `Rilis ${ev.title || 'Event'}: actual (${Number(ev.actual)}) vs forecast (${Number(ev.forecast)}) → ${inferred} pada ${pair}`;
           break;
         }
       }
     }
 
-    const explicitNewsBias = String(opts.newsBias || '').toUpperCase();
+    const explicitNewsBias = String(opts.newsBias || '').trim().toUpperCase();
     if (!postReleaseBias && (explicitNewsBias === 'BUY' || explicitNewsBias === 'SELL')) {
       postReleaseBias = explicitNewsBias;
       postReleaseReason = `Bias news terkonfirmasi: ${explicitNewsBias}`;
@@ -1086,18 +1077,16 @@
   // ============================================================================
 
   function detectLiquiditySweepSetup(ctx) {
-    const { candles, atrSeries, swings, sweeps, shifts, fvgList, obList, liquidityLevels, spreadPrice, atrNow, tfCfg, nowMs, pair, htfBias, postReleaseBias } = ctx;
+    const { candles, swings, sweeps, shifts, fvgList, obList, liquidityLevels, spreadPrice, atrNow, tfCfg, nowMs, pair, htfBias, postReleaseBias } = ctx;
     if (!sweeps || sweeps.length === 0) return null;
 
     const recentSweep = sweeps[sweeps.length - 1];
     if (candles.length - 1 - recentSweep.candleIndex > 12) return null;
 
     const dir = recentSweep.direction;
-    // Harus ada MSS setelah sweep
     const mssAfter = (shifts || []).find((s) => s.direction === dir && s.index >= recentSweep.candleIndex);
     if (!mssAfter) return null;
 
-    // Cari FVG atau OB unmitigated hasil displacement setelah sweep
     const fvgAfter = (fvgList || []).slice().reverse().find((f) => f.direction === dir && !f.mitigated && f.createdIndex >= recentSweep.candleIndex);
     const obAfter = (obList || []).slice().reverse().find((o) => o.direction === dir && !o.mitigated && o.displacementIndex >= recentSweep.candleIndex);
     if (!fvgAfter && !obAfter) return null;
@@ -1160,7 +1149,6 @@
     if (!nyCtx.isJudasWindow) return null;
     if (!latestAsia || !(latestAsia.high > latestAsia.low)) return null;
 
-    // Cari sapuan Asia high atau Asia low di sesi London (02–05 NY) atau NY Open (07–09 NY)
     let judasSweep = null;
     for (let i = 0; i < candles.length; i += 1) {
       const p = getNyParts(candles[i].ts);
@@ -1170,7 +1158,7 @@
       if (candles[i].high > latestAsia.high && candles[i].close <= latestAsia.high) {
         judasSweep = {
           side: 'HIGH',
-          direction: 'SELL', // sapuan Asia High -> bias berlawanan (SELL)
+          direction: 'SELL',
           level: latestAsia.high,
           extreme: candles[i].high,
           index: i,
@@ -1179,7 +1167,7 @@
       } else if (candles[i].low < latestAsia.low && candles[i].close >= latestAsia.low) {
         judasSweep = {
           side: 'LOW',
-          direction: 'BUY', // sapuan Asia Low -> bias berlawanan (BUY)
+          direction: 'BUY',
           level: latestAsia.low,
           extreme: candles[i].low,
           index: i,
@@ -1202,7 +1190,6 @@
     const buffer = atrNow * 0.2 + spreadPrice;
     const sl = dir === 'BUY' ? judasSweep.extreme - buffer : judasSweep.extreme + buffer;
 
-    // TP sisi lain range Asia dulu, lalu PDH/PDL
     const asiaOppositeLevel = {
       kind: 'ASIA_OPPOSITE',
       side: dir === 'BUY' ? 'HIGH' : 'LOW',
@@ -1250,7 +1237,6 @@
     if (!htfBias || !htfBias.direction) return null;
     const dir = htfBias.direction;
 
-    // Harus ada BOS/MSS searah bias HTF dan OB valid yang memiliki overlap dengan FVG serta unmitigated
     const validBos = (shifts || []).slice().reverse().find((s) => s.direction === dir);
     if (!validBos) return null;
 
@@ -1308,7 +1294,6 @@
     const { candles, nyCtx, sweeps, shifts, fvgList, liquidityLevels, atrNow, tfCfg, nowMs, pair, htfBias, postReleaseBias } = ctx;
     if (!nyCtx.isSilverBulletWindow) return null;
 
-    // Harus ada sweep dan MSS dulu, lalu FVG terbentuk di dalam jendela 03–04, 10–11, atau 14–15 NY
     const recentSweep = (sweeps || []).slice().reverse().find((sw) => candles.length - 1 - sw.candleIndex <= 20);
     if (!recentSweep) return null;
 
@@ -1323,7 +1308,6 @@
     });
     if (!windowFvg) return null;
 
-    // SL di balik candle pertama FVG (windowFvg.createdIndex - 2)
     const firstFvgCandle = candles[Math.max(0, windowFvg.createdIndex - 2)];
     const sl = dir === 'BUY' ? firstFvgCandle.low : firstFvgCandle.high;
     const entry = windowFvg.ce;
@@ -1371,7 +1355,6 @@
     const lastCandle = candles[candles.length - 1];
     const currentPrice = lastCandle.close;
 
-    // Leg impuls valid setelah MSS: swing low -> high (BUY) atau swing high -> low (SELL)
     let dir = null;
     let legLow = null;
     let legHigh = null;
@@ -1397,11 +1380,10 @@
 
     let fib062, fib079, entry0705, sl, extLevels;
     if (dir === 'BUY') {
-      // Retracement dari high ke low: 0.62–0.79 diukur dari swing high ke swing low
       fib062 = legHigh - legRange * 0.62;
       fib079 = legHigh - legRange * 0.79;
       entry0705 = legHigh - legRange * 0.705;
-      sl = legLow; // di balik titik 0 leg
+      sl = legLow;
       const ext027 = legHigh + legRange * 0.27;
       const ext062 = legHigh + legRange * 0.62;
       extLevels = [
@@ -1412,7 +1394,7 @@
       fib062 = legLow + legRange * 0.62;
       fib079 = legLow + legRange * 0.79;
       entry0705 = legLow + legRange * 0.705;
-      sl = legHigh; // di balik titik 0 leg
+      sl = legHigh;
       const ext027 = legLow - legRange * 0.27;
       const ext062 = legLow - legRange * 0.62;
       extLevels = [
@@ -1503,11 +1485,9 @@
       };
     }
 
-    // Urutkan berdasarkan jumlah syarat terpenuhi (score) tertinggi
     validSetups.sort((a, b) => b.score - a.score);
     const best = Object.assign({}, validSetups[0]);
 
-    // Jika >= 2 metode searah memiliki zona entry yang berdekatan/overlap, beri bonus skor
     if (validSetups.length >= 2) {
       const tol = Math.max(ctx.atrNow * 0.4, ctx.spreadPrice * 3);
       const hasOverlap = validSetups.slice(1).some((other) => Math.abs(other.entry - best.entry) <= tol);
@@ -1682,6 +1662,15 @@
       livePrice: Number.isFinite(livePrice) ? livePrice : null
     };
 
+    if (opts.feedVerifiedLive === false) {
+      const res = createNoTradeResult(baseMeta, 'UNVERIFIED_FEED', [
+        'Feed harga live belum terverifikasi sebagai data live nyata.'
+      ], { poiSummary: 'NO_TRADE: Feed live belum terverifikasi.' });
+      lockedSignalCache.set(signalId, res);
+      pruneCacheMap(lockedSignalCache, 400);
+      return res;
+    }
+
     if (nyCtx.isWeekend && pair !== 'BTCUSDT') {
       const res = createNoTradeResult(baseMeta, 'WEEKEND_MARKET_CLOSED', [
         `Pasar tutup akhir pekan (${baseMeta.nyTimeLabel}).`
@@ -1720,7 +1709,6 @@
       return res;
     }
 
-    // Gate News: ±30 menit -> WAIT, dan evaluasi actual vs forecast
     const newsGate = evaluateNewsGate(opts, nowMs);
     if (newsGate.status === 'WAIT') {
       const res = createWaitResult(baseMeta, newsGate.reasonCode, [newsGate.message], {
@@ -1731,7 +1719,6 @@
       return res;
     }
 
-    // Wajib ada candle OHLC nyata minimal untuk analisis struktur
     if (candles.length < 15) {
       const res = createNoTradeResult(baseMeta, 'INSUFFICIENT_OHLC_CANDLES', [
         `Jumlah candle OHLC (${candles.length}) kurang untuk deteksi swing/struktur nyata.`
@@ -1922,6 +1909,7 @@
     };
   }
 
+  // Evaluasi urutan ketat: SL -> TP3 -> TP2 -> TP1 (tanpa BE otomatis)
   function evaluateRunningPositionMetrics(tradeOrSignal, currentPrice, options) {
     const src = tradeOrSignal || {};
     const opts = options || {};
@@ -1972,21 +1960,19 @@
     const floatingUsd = Number((deltaPips * pipValPerLot * lot).toFixed(2));
 
     let status = 'RUNNING';
-    if (Number.isFinite(tp3) && (direction === 'BUY' ? price >= tp3 : price <= tp3)) {
+    if (Number.isFinite(sl) && (direction === 'BUY' ? price <= sl : price >= sl)) {
+      status = 'SL';
+    } else if (Number.isFinite(tp3) && (direction === 'BUY' ? price >= tp3 : price <= tp3)) {
       status = 'TP3';
     } else if (Number.isFinite(tp2) && (direction === 'BUY' ? price >= tp2 : price <= tp2)) {
       status = 'TP2';
     } else if (Number.isFinite(tp1) && (direction === 'BUY' ? price >= tp1 : price <= tp1)) {
       status = 'TP1';
-    } else if (Number.isFinite(sl) && Math.abs(sl - entry) <= spec.pipSize * 0.5 && Math.abs(price - entry) <= spec.pipSize * 1.5) {
-      status = 'BE';
-    } else if (Number.isFinite(sl) && (direction === 'BUY' ? price <= sl : price >= sl)) {
-      status = 'SL';
     }
 
     return {
       isTriggered: true,
-      isClosed: ['TP1', 'TP2', 'TP3', 'SL'].includes(status),
+      isClosed: ['SL', 'TP3', 'TP2', 'TP1'].includes(status),
       status,
       deltaPips,
       floatingUsd
