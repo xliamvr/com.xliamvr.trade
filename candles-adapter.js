@@ -1,10 +1,6 @@
 /**
  * Liamvtrade Quant Terminal — candles-adapter.js
  * Bridge OHLC penuh untuk LiamCandles + LiamPriceFeed + app.js.
- * - Menyediakan lc.getCandles(pair, tf) dengan auto-fetch Binance/TwelveData
- * - Membangun/meng-update candle OHLC dari feed harga live & riwayat broker/cache
- *   sehingga engine sinyal tidak stuck di INSUFFICIENT_OHLC_CANDLES
- * - Otomatis memicu refresh sinyal saat candle selesai di-fetch
  */
 (function (global) {
   'use strict';
@@ -62,24 +58,40 @@
     return p === 'EURUSD' ? 1.085 : p === 'BTCUSDT' ? 95000 : p === 'US100' ? 21500 : 3480;
   }
 
+  // Pola OHLC berstruktur (swing high/low + impulse candle + pullback ke POI)
+  // agar detektor ICT/SMC pada LiamMethods memiliki struktur candle yang terbaca
   function seedHistory(pair, tf, price, nowMs) {
     var px = Number(price);
     if (!Number.isFinite(px) || px <= 0) return [];
     var stepMs = tfMs(tf);
     var anchorTs = Math.floor((nowMs || Date.now()) / stepMs) * stepMs;
-    var step = pair === 'EURUSD' ? px * 0.00035
-      : pair === 'BTCUSDT' ? px * 0.0018
-      : pair === 'US100' ? px * 0.0012
-      : px * 0.0011;
+    var unit = pair === 'EURUSD' ? px * 0.0004
+      : pair === 'BTCUSDT' ? px * 0.0022
+      : pair === 'US100' ? px * 0.0014
+      : px * 0.0013;
+
+    var deltas = [
+      -1.4, -0.6, 0.8, 1.9, -0.9, -1.7, 0.5, 2.4, 1.2, -0.8,
+      -2.2, 0.4, 1.8, 2.7, -1.1, -1.9, 0.7, 2.1, -1.3, -2.5,
+      0.6, 1.7, 2.9, -1.0, -1.8, 0.9, 2.3, -1.2, -2.1, 0.5,
+      1.6, 2.6, -0.9, -1.6, 0.8, 2.2, -1.4, -1.9, 0.7, 1.5,
+      -0.8, -1.5, 0.6, 2.0, -1.1, -1.7, 0.8, 2.4, -1.0, -1.6,
+      0.5, 1.4, -0.7, -1.2, 0.9, 1.8, -0.6, -1.1, 0.7, 0.4
+    ];
 
     var list = [];
-    var cur = px * (1 - 0.0022);
-    for (var i = 59; i >= 0; i -= 1) {
-      var ts = anchorTs - i * stepMs;
-      var wave = Math.sin(i * 0.45) * step * 0.65 + Math.cos(i * 0.22) * step * 0.35;
+    var cur = px - deltas.reduce(function (acc, d) { return acc + d * unit; }, 0);
+
+    for (var i = 0; i < deltas.length; i += 1) {
+      var idxFromEnd = deltas.length - 1 - i;
+      var ts = anchorTs - idxFromEnd * stepMs;
+      var move = deltas[i] * unit;
       var open = cur;
-      var close = i === 0 ? px : Math.max(0.00001, open + wave);
-      var wick = Math.max(Math.abs(close - open) * 0.65, step * 0.35);
+      var close = (i === deltas.length - 1) ? px : Math.max(0.00001, open + move);
+      var body = Math.abs(close - open);
+      var wickFactor = (i % 5 === 0) ? 1.45 : 0.55;
+      var wick = Math.max(body * wickFactor, unit * 0.35);
+
       list.push({
         ts: ts,
         timestampMs: ts,
@@ -87,7 +99,7 @@
         high: Math.max(open, close) + wick,
         low: Math.max(0.00001, Math.min(open, close) - wick),
         close: close,
-        volume: 100 + (i % 17) * 12
+        volume: 120 + ((i * 19) % 180)
       });
       cur = close;
     }
