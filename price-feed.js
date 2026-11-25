@@ -9,12 +9,12 @@
   const CACHE_KEY = 'liamvtrade_last_live_prices_v2';
   const MAX_REAL_AGE_MS = 5 * 60 * 1000; // dianggap fresh jika fetch <= 5 menit lalu
 
-  const BASELINE_PRICES = {
+  const BASELINE_PRICES = Object.freeze({
     XAUUSD: 3555.00,
     US100: 21500.00,
     BTCUSDT: 95000.00,
     EURUSD: 1.08500
-  };
+  });
 
   async function fetchWithTimeout(url, ms = 4500) {
     const ctrl = new AbortController();
@@ -71,18 +71,33 @@
     } catch (_) {}
   }
 
+  function getPairDecimals(pair) {
+    return String(pair || '').toUpperCase() === 'EURUSD' ? 5 : 2;
+  }
+
+  function formatPairPrice(pair, price) {
+    const num = Number(price);
+    if (!Number.isFinite(num)) return '--';
+    const dec = getPairDecimals(pair);
+    return num.toLocaleString('en-US', {
+      minimumFractionDigits: dec,
+      maximumFractionDigits: dec
+    });
+  }
+
   async function fetchAccuratePrices(tdApiKey) {
     const cached = loadCache() || {};
     const nowMs = Date.now();
     let anyFreshSuccess = false;
     let detectedSource = '';
+    const activeSources = [];
 
     const result = {
       XAUUSD: pickValidPrice(cached.XAUUSD, 500, 20000) ?? BASELINE_PRICES.XAUUSD,
       US100: pickValidPrice(cached.US100, 5000, 100000) ?? BASELINE_PRICES.US100,
       BTCUSDT: pickValidPrice(cached.BTCUSDT, 1000, 1000000) ?? BASELINE_PRICES.BTCUSDT,
       EURUSD: pickValidPrice(cached.EURUSD, 0.5, 2.5) ?? BASELINE_PRICES.EURUSD,
-      source: cached.source || 'Baseline / Cache',
+      source: cached.source || 'Baseline',
       fetchedAtMs: cached.fetchedAtMs || 0,
       liveUpdated: false,
       isFresh: false
@@ -109,7 +124,10 @@
             if (pxUs)  { result.US100 = Number(pxUs.toFixed(2));   anyFreshSuccess = true; }
             if (pxBtc) { result.BTCUSDT = Number(pxBtc.toFixed(2)); anyFreshSuccess = true; }
             if (pxEur) { result.EURUSD = Number(pxEur.toFixed(5));  anyFreshSuccess = true; }
-            if (anyFreshSuccess) detectedSource = 'TwelveData';
+            if (anyFreshSuccess) {
+              detectedSource = 'TwelveData';
+              activeSources.push('TwelveData');
+            }
           }
         }
       } catch (_) {}
@@ -127,6 +145,7 @@
           btcUpdated = true;
           anyFreshSuccess = true;
           if (!detectedSource) detectedSource = 'Binance';
+          activeSources.push('Binance');
         }
       }
     } catch (_) {}
@@ -142,6 +161,7 @@
             btcUpdated = true;
             anyFreshSuccess = true;
             if (!detectedSource) detectedSource = 'CoinGecko';
+            activeSources.push('CoinGecko');
           }
         }
       } catch (_) {}
@@ -149,30 +169,40 @@
 
     // 3. XAUUSD (GoldPrice -> Gold-API -> Yahoo GC=F)
     const goldSources = [
-      async () => {
-        const r = await fetchWithTimeout('https://data-asg.goldprice.org/dbAsset/XAU', 3500);
-        if (!r.ok) return null;
-        return pickValidPrice((await r.json())?.items?.[0]?.xauPrice, 500, 20000);
+      {
+        label: 'GoldPrice',
+        fn: async () => {
+          const r = await fetchWithTimeout('https://data-asg.goldprice.org/dbAsset/XAU', 3500);
+          if (!r.ok) return null;
+          return pickValidPrice((await r.json())?.items?.[0]?.xauPrice, 500, 20000);
+        }
       },
-      async () => {
-        const r = await fetchWithTimeout('https://api.gold-api.com/price/XAU', 3500);
-        if (!r.ok) return null;
-        return pickValidPrice((await r.json())?.price, 500, 20000);
+      {
+        label: 'Gold-API',
+        fn: async () => {
+          const r = await fetchWithTimeout('https://api.gold-api.com/price/XAU', 3500);
+          if (!r.ok) return null;
+          return pickValidPrice((await r.json())?.price, 500, 20000);
+        }
       },
-      async () => {
-        const u = encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1m&range=1d');
-        const r = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${u}`, 4500);
-        if (!r.ok) return null;
-        return pickValidPrice((await r.json())?.chart?.result?.[0]?.meta?.regularMarketPrice, 500, 20000);
+      {
+        label: 'Yahoo GC=F',
+        fn: async () => {
+          const u = encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/GC=F?interval=1m&range=1d');
+          const r = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${u}`, 4500);
+          if (!r.ok) return null;
+          return pickValidPrice((await r.json())?.chart?.result?.[0]?.meta?.regularMarketPrice, 500, 20000);
+        }
       }
     ];
-    for (const fn of goldSources) {
+    for (const item of goldSources) {
       try {
-        const px = await fn();
+        const px = await item.fn();
         if (px) {
           result.XAUUSD = Number(px.toFixed(2));
           anyFreshSuccess = true;
-          if (!detectedSource) detectedSource = 'Spot Gold';
+          if (!detectedSource) detectedSource = item.label;
+          activeSources.push(item.label);
           break;
         }
       } catch (_) {}
@@ -189,6 +219,8 @@
           result.EURUSD = Number(px.toFixed(5));
           eurUpdated = true;
           anyFreshSuccess = true;
+          if (!detectedSource) detectedSource = 'Frankfurter';
+          activeSources.push('Frankfurter');
         }
       }
     } catch (_) {}
@@ -203,6 +235,8 @@
             result.EURUSD = Number(px.toFixed(5));
             eurUpdated = true;
             anyFreshSuccess = true;
+            if (!detectedSource) detectedSource = 'OpenER';
+            activeSources.push('OpenER');
           }
         }
       } catch (_) {}
@@ -210,32 +244,43 @@
 
     // 5. US100 (Yahoo NQ=F -> ^NDX -> Stooq)
     const ndxSources = [
-      async () => {
-        const u = encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/NQ=F?interval=1m&range=1d');
-        const r = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${u}`, 4500);
-        if (!r.ok) return null;
-        return pickValidPrice((await r.json())?.chart?.result?.[0]?.meta?.regularMarketPrice, 5000, 100000);
+      {
+        label: 'Yahoo NQ=F',
+        fn: async () => {
+          const u = encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/NQ=F?interval=1m&range=1d');
+          const r = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${u}`, 4500);
+          if (!r.ok) return null;
+          return pickValidPrice((await r.json())?.chart?.result?.[0]?.meta?.regularMarketPrice, 5000, 100000);
+        }
       },
-      async () => {
-        const u = encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/%5ENDX?interval=1m&range=1d');
-        const r = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${u}`, 4500);
-        if (!r.ok) return null;
-        return pickValidPrice((await r.json())?.chart?.result?.[0]?.meta?.regularMarketPrice, 5000, 100000);
+      {
+        label: 'Yahoo ^NDX',
+        fn: async () => {
+          const u = encodeURIComponent('https://query1.finance.yahoo.com/v8/finance/chart/%5ENDX?interval=1m&range=1d');
+          const r = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${u}`, 4500);
+          if (!r.ok) return null;
+          return pickValidPrice((await r.json())?.chart?.result?.[0]?.meta?.regularMarketPrice, 5000, 100000);
+        }
       },
-      async () => {
-        const u = encodeURIComponent('https://stooq.com/q/l/?s=nq.f&f=sd2t2ohlcv&h&e=csv');
-        const r = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${u}`, 4500);
-        if (!r.ok) return null;
-        const lines = (await r.text()).trim().split('\n');
-        return lines.length > 1 ? pickValidPrice(lines[1].split(',')[6], 5000, 100000) : null;
+      {
+        label: 'Stooq NQ.F',
+        fn: async () => {
+          const u = encodeURIComponent('https://stooq.com/q/l/?s=nq.f&f=sd2t2ohlcv&h&e=csv');
+          const r = await fetchWithTimeout(`https://api.allorigins.win/raw?url=${u}`, 4500);
+          if (!r.ok) return null;
+          const lines = (await r.text()).trim().split('\n');
+          return lines.length > 1 ? pickValidPrice(lines[1].split(',')[6], 5000, 100000) : null;
+        }
       }
     ];
-    for (const fn of ndxSources) {
+    for (const item of ndxSources) {
       try {
-        const px = await fn();
+        const px = await item.fn();
         if (px) {
           result.US100 = Number(px.toFixed(2));
           anyFreshSuccess = true;
+          if (!detectedSource) detectedSource = item.label;
+          activeSources.push(item.label);
           break;
         }
       } catch (_) {}
@@ -245,19 +290,30 @@
       result.fetchedAtMs = Date.now();
       result.liveUpdated = true;
       result.isFresh = true;
-      result.source = detectedSource ? `${detectedSource} Live` : 'Live Feed';
+      const uniqueSources = Array.from(new Set(activeSources));
+      result.source = uniqueSources.length > 0
+        ? `${uniqueSources.slice(0, 2).join(' + ')} Live`
+        : `${detectedSource || 'Live'} Live`;
       saveCache(result);
     } else {
       result.liveUpdated = false;
       result.isFresh = result.fetchedAtMs > 0 && (nowMs - result.fetchedAtMs) <= MAX_REAL_AGE_MS;
-      if (!result.fetchedAtMs) {
-        result.fetchedAtMs = nowMs;
+      if (cached && cached.fetchedAtMs > 0) {
+        result.source = `${cached.source || 'Cache'} (Offline Fallback)`;
+      } else {
+        result.fetchedAtMs = 0;
+        result.source = 'Baseline (Offline)';
       }
-      result.source = cached.source ? `${cached.source} (Fallback)` : 'Fallback Baseline';
     }
 
     return result;
   }
 
-  global.LiamPriceFeed = { fetchAccuratePrices };
+  global.LiamPriceFeed = {
+    BASELINE_PRICES,
+    fetchAccuratePrices,
+    loadCache,
+    getPairDecimals,
+    formatPairPrice
+  };
 })(window);
