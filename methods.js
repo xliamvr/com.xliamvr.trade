@@ -1,13 +1,13 @@
 /**
- * Liamvtrade Quant Terminal — methods.js (v4.0-ohlc-strict)
- * Mesin 6 Metode Analisis ICT / SMC / Liquidity Berbasis Data Candle OHLC Nyata,
+ * Liamvtrade Quant Terminal — methods.js (v4.1-ohlc-npattern)
+ * Mesin Analisis ICT / SMC / Liquidity / Pola N Berbasis Data Candle OHLC Nyata,
  * Detektor Ketat (No Fallback SIGNAL), Gate RR >= 1.5, Gate News ±30m & Actual vs Forecast.
  */
 
 (function (global) {
   'use strict';
 
-  const ENGINE_VERSION = 'v4.0-ohlc-strict';
+  const ENGINE_VERSION = 'v4.1-ohlc-npattern';
   const DEFAULT_MAX_DATA_AGE_MS = 120000;
   const NEWS_LOCK_WINDOW_MS = 30 * 60 * 1000;
   const MIN_RR_TP1 = 1.5;
@@ -69,8 +69,13 @@
   const METHOD_CATALOG = {
     auto: {
       key: 'auto',
-      name: 'Auto Sniper (Multi-Confluence)',
+      name: 'Auto Sniper (Multi-Confluence + Pola N)',
       shortTag: 'AUTO'
+    },
+    n_pattern: {
+      key: 'n_pattern',
+      name: 'Pola N (Impulse-Pullback-Break)',
+      shortTag: 'POLA N'
     },
     sweep: {
       key: 'sweep',
@@ -1073,7 +1078,145 @@
   }
 
   // ============================================================================
-  // 5 DETEKTOR WAJIB
+  // DETEKTOR POLA N (INTEGRASI npattern.js / npattern-bridge.js)
+  // ============================================================================
+
+  function extractExternalNPatternCandidate(ctx) {
+    const { candles, pair, timeframe, atrNow, spreadPrice } = ctx;
+    const npApi = global.LiamNPattern || global.LiamNPatternBridge || null;
+    if (!npApi) return null;
+
+    try {
+      const raw =
+        typeof npApi.detectNPattern === 'function' ? npApi.detectNPattern(candles, { pair, timeframe, atr: atrNow }) :
+        typeof npApi.analyzeNPattern === 'function' ? npApi.analyzeNPattern(candles, { pair, timeframe, atr: atrNow }) :
+        typeof npApi.scanNPattern === 'function' ? npApi.scanNPattern({ pair, timeframe, candles, atr: atrNow }) :
+        null;
+
+      if (!raw || typeof raw !== 'object') return null;
+      const pattern = raw.best || raw.pattern || raw;
+      const dirRaw = String(pattern.direction || pattern.bias || '').trim().toUpperCase();
+      const dir = dirRaw === 'BULLISH' || dirRaw === 'BUY' ? 'BUY'
+        : (dirRaw === 'BEARISH' || dirRaw === 'SELL' ? 'SELL' : null);
+
+      if (!dir) return null;
+
+      const pullbackLow = Number(pattern.pullbackLow ?? pattern.leg2Low ?? pattern.low);
+      const pullbackHigh = Number(pattern.pullbackHigh ?? pattern.leg2High ?? pattern.high);
+      const breakLevel = Number(pattern.breakLevel ?? pattern.neckLevel ?? pattern.leg3Break ?? pattern.entry);
+      const entry = Number.isFinite(Number(pattern.entry)) && Number(pattern.entry) > 0
+        ? Number(pattern.entry)
+        : (dir === 'BUY'
+            ? (Number.isFinite(pullbackHigh) && Number.isFinite(pullbackLow) ? pullbackLow + (pullbackHigh - pullbackLow) * 0.62 : breakLevel)
+            : (Number.isFinite(pullbackHigh) && Number.isFinite(pullbackLow) ? pullbackHigh - (pullbackHigh - pullbackLow) * 0.62 : breakLevel));
+
+      const buffer = Math.max(atrNow * 0.2, spreadPrice || 0);
+      const sl = Number.isFinite(Number(pattern.sl)) && Number(pattern.sl) > 0
+        ? Number(pattern.sl)
+        : (dir === 'BUY'
+            ? (Number.isFinite(pullbackLow) ? pullbackLow - buffer : NaN)
+            : (Number.isFinite(pullbackHigh) ? pullbackHigh + buffer : NaN));
+
+      if (!Number.isFinite(entry) || !Number.isFinite(sl)) return null;
+
+      return {
+        direction: dir,
+        entry,
+        sl,
+        legHigh: Number.isFinite(pullbackHigh) ? pullbackHigh : Math.max(entry, sl),
+        legLow: Number.isFinite(pullbackLow) ? pullbackLow : Math.min(entry, sl),
+        breakLevel: Number.isFinite(breakLevel) ? breakLevel : entry,
+        reason: String(pattern.reason || pattern.summary || 'Impulse-Pullback-Break Pola N tervalidasi')
+      };
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function detectNPatternSetup(ctx) {
+    const { candles, swings, shifts, liquidityLevels, spreadPrice, atrNow, tfCfg, nowMs, pair, htfBias, postReleaseBias } = ctx;
+    const ext = extractExternalNPatternCandidate(ctx);
+
+    let candidate = ext;
+    if (!candidate) {
+      const highs = swings.swingHighs || [];
+      const lows = swings.swingLows || [];
+      if (highs.length < 1 || lows.length < 1) return null;
+
+      const lastHigh = highs[highs.length - 1];
+      const lastLow = lows[lows.length - 1];
+      const lastCandle = candles[candles.length - 1];
+      const buffer = Math.max(atrNow * 0.22, spreadPrice || 0);
+
+      if (lastLow.index < lastHigh.index) {
+        const bullShift = (shifts || []).slice().reverse().find((s) => s.direction === 'BUY' && s.index >= lastHigh.index);
+        if (bullShift) {
+          const retraceMid = lastHigh.price - (lastHigh.price - lastLow.price) * 0.5;
+          const entry = Math.min(lastCandle.close, retraceMid > 0 ? retraceMid : lastCandle.close);
+          candidate = {
+            direction: 'BUY',
+            entry,
+            sl: lastLow.price - buffer,
+            legHigh: lastHigh.price,
+            legLow: lastLow.price,
+            breakLevel: bullShift.level,
+            reason: `Impulse naik → Pullback sehat → Break struktur ${formatPrice(pair, bullShift.level)}`
+          };
+        }
+      } else if (lastHigh.index < lastLow.index) {
+        const bearShift = (shifts || []).slice().reverse().find((s) => s.direction === 'SELL' && s.index >= lastLow.index);
+        if (bearShift) {
+          const retraceMid = lastLow.price + (lastHigh.price - lastLow.price) * 0.5;
+          const entry = Math.max(lastCandle.close, retraceMid > 0 ? retraceMid : lastCandle.close);
+          candidate = {
+            direction: 'SELL',
+            entry,
+            sl: lastHigh.price + buffer,
+            legHigh: lastHigh.price,
+            legLow: lastLow.price,
+            breakLevel: bearShift.level,
+            reason: `Impulse turun → Pullback sehat → Break struktur ${formatPrice(pair, bearShift.level)}`
+          };
+        }
+      }
+    }
+
+    if (!candidate) return null;
+
+    const checklist = [
+      `✔ Pola N ${candidate.direction}: ${candidate.reason}`,
+      `✔ Pullback terukur di area ${formatPrice(pair, candidate.legLow)}–${formatPrice(pair, candidate.legHigh)}`,
+      `✔ Level break / trigger terkonfirmasi di ${formatPrice(pair, candidate.breakLevel)}`
+    ];
+
+    return finalizeSetupWithGates({
+      pair,
+      timeframe: ctx.timeframe,
+      methodKey: 'n_pattern',
+      direction: candidate.direction,
+      entry: candidate.entry,
+      sl: candidate.sl,
+      invalidation: `Temus batas pullback Pola N di ${formatPrice(pair, candidate.sl)}`,
+      trigger: {
+        jenis: `POLA_N_${candidate.direction}_BREAK`,
+        level: candidate.breakLevel,
+        waktuCandle: formatIsoTime(candles[candles.length - 1].ts)
+      },
+      checklist,
+      liquidityLevels,
+      swingHigh: candidate.legHigh,
+      swingLow: candidate.legLow,
+      htfBias,
+      postReleaseBias,
+      spreadPrice,
+      atrNow,
+      tfCfg,
+      nowMs
+    });
+  }
+
+  // ============================================================================
+  // 5 DETEKTOR ICT / SMC / LIQUIDITY
   // ============================================================================
 
   function detectLiquiditySweepSetup(ctx) {
@@ -1449,6 +1592,7 @@
   }
 
   function runSingleDetector(methodKey, ctx) {
+    if (methodKey === 'n_pattern') return detectNPatternSetup(ctx);
     if (methodKey === 'sweep') return detectLiquiditySweepSetup(ctx);
     if (methodKey === 'judas') return detectJudasSwingSetup(ctx);
     if (methodKey === 'smc_ob') return detectSmcObSetup(ctx);
@@ -1458,7 +1602,7 @@
   }
 
   function runAutoSniper(ctx) {
-    const keys = ['sweep', 'judas', 'smc_ob', 'silver_bullet', 'ote'];
+    const keys = ['n_pattern', 'sweep', 'judas', 'smc_ob', 'silver_bullet', 'ote'];
     const validSetups = [];
 
     for (const k of keys) {
@@ -1472,7 +1616,7 @@
       return {
         valid: false,
         reasonCode: 'NO_DETECTOR_MATCH',
-        reasonText: 'Tidak ada detektor (Sweep, Judas, SMC OB, Silver Bullet, FIB OTE) yang memenuhi syarat.'
+        reasonText: 'Tidak ada detektor (Pola N, Sweep, Judas, SMC OB, Silver Bullet, FIB OTE) yang memenuhi syarat.'
       };
     }
 
@@ -1909,7 +2053,6 @@
     };
   }
 
-  // Evaluasi urutan ketat: SL -> TP3 -> TP2 -> TP1 (tanpa BE otomatis)
   function evaluateRunningPositionMetrics(tradeOrSignal, currentPrice, options) {
     const src = tradeOrSignal || {};
     const opts = options || {};
@@ -2073,6 +2216,7 @@
     extractLiquidityLevels,
     detectSweeps,
     computeHtfBias,
+    detectNPatternSetup,
     analyzeDealingRange,
     buildSignalSetup,
     calculatePositionSize,
