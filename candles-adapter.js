@@ -1,9 +1,9 @@
 /**
  * Liamvtrade Quant Terminal — candles-adapter.js
  * Bridge OHLC penuh untuk LiamCandles + LiamPriceFeed + app.js.
- * - Mempertahankan normalisasi pair/TF, getLivePrice, pushTick, inflight dedup, dan LiamOhlcFeed
- * - Membatasi jarak SL maksimal per pair & timeframe agar tidak terlalu lebar
- * - Mengisi fallback teks Entry/SL/TP agar tidak muncul "undefined" di UI
+ * - Menyimpan & membangun candle M1, M5, M15, H1, H4 dari feed live
+ * - Memasukkan konfirmasi mikro-struktur M1 ke penganalisis (buildSignalSetup) tanpa ubah tombol UI
+ * - Membatasi jarak SL maksimal per pair & timeframe + isi fallback teks agar tidak "undefined"
  */
 (function (global) {
   'use strict';
@@ -14,14 +14,14 @@
   var inflight = {};
   var fallbackSeries = new Map();
   var PAIRS = ['XAUUSD', 'US100', 'BTCUSDT', 'EURUSD'];
-  var TFS = ['M5', 'M15', 'H1', 'H4'];
+  var TFS = ['M1', 'M5', 'M15', 'H1', 'H4'];
 
   // Batas maksimal SL (dalam pips/poin) per pair & timeframe
   var MAX_SL_PIPS = {
-    XAUUSD:  { M5: 25, M15: 40, H1: 60, H4: 85 },
-    US100:   { M5: 40, M15: 65, H1: 100, H4: 140 },
-    BTCUSDT: { M5: 75, M15: 120, H1: 190, H4: 280 },
-    EURUSD:  { M5: 15, M15: 25, H1: 40, H4: 55 }
+    XAUUSD:  { M1: 12, M5: 18, M15: 28, H1: 45, H4: 65 },
+    US100:   { M1: 20, M5: 30, M15: 50, H1: 80, H4: 120 },
+    BTCUSDT: { M1: 40, M5: 60, M15: 100, H1: 160, H4: 240 },
+    EURUSD:  { M1: 8,  M5: 12, M15: 20, H1: 32, H4: 45 }
   };
 
   function normPair(pair) {
@@ -35,12 +35,14 @@
   }
 
   function normTf(tf) {
-    if (typeof lc.normalizeTimeframe === 'function') return lc.normalizeTimeframe(tf);
     var t = String(tf || 'M15').trim().toUpperCase();
+    if (t === 'M1') return 'M1';
+    if (typeof lc.normalizeTimeframe === 'function') return lc.normalizeTimeframe(t);
     return TFS.indexOf(t) !== -1 ? t : 'M15';
   }
 
   function tfMs(tf) {
+    if (tf === 'M1') return 60 * 1000;
     if (tf === 'M5') return 5 * 60 * 1000;
     if (tf === 'M15') return 15 * 60 * 1000;
     if (tf === 'H1') return 60 * 60 * 1000;
@@ -77,18 +79,69 @@
   function getMaxSlPips(pair, tf) {
     var p = normPair(pair);
     var t = normTf(tf);
-    var pMap = MAX_SL_PIPS[p] || MAX_SL_PIPS.XAUUSD;
-    return Number(pMap[t] || pMap.M15 || 40);
+    var map = MAX_SL_PIPS[p] || MAX_SL_PIPS.XAUUSD;
+    return Number(map[t] || map.M15 || 28);
   }
 
-  function normalizeSignalOutput(sig) {
+  // Analisa mikro-struktur M1 (CHOCH/BOS & momentum 8 candle terakhir)
+  function analyzeM1MicroStructure(m1Candles) {
+    if (!Array.isArray(m1Candles) || m1Candles.length < 10) {
+      return { bias: 'NEUTRAL', confirmed: false, note: 'M1 standby' };
+    }
+    var recent = m1Candles.slice(-8);
+    var first = recent[0];
+    var last = recent[recent.length - 1];
+    var prev = recent[recent.length - 2];
+
+    var swingHigh = -Infinity;
+    var swingLow = Infinity;
+    for (var i = 0; i < recent.length - 2; i += 1) {
+      var h = Number(recent[i].high);
+      var l = Number(recent[i].low);
+      if (Number.isFinite(h) && h > swingHigh) swingHigh = h;
+      if (Number.isFinite(l) && l < swingLow) swingLow = l;
+    }
+
+    var lastClose = Number(last.close);
+    var prevClose = Number(prev.close);
+    var startOpen = Number(first.open);
+
+    if (lastClose > swingHigh && lastClose >= prevClose) {
+      return { bias: 'BUY', confirmed: true, note: 'M1 BOS/CHOCH Bullish terkonfirmasi' };
+    }
+    if (lastClose < swingLow && lastClose <= prevClose) {
+      return { bias: 'SELL', confirmed: true, note: 'M1 BOS/CHOCH Bearish terkonfirmasi' };
+    }
+    if (lastClose > startOpen) {
+      return { bias: 'BUY', confirmed: false, note: 'M1 momentum naik' };
+    }
+    if (lastClose < startOpen) {
+      return { bias: 'SELL', confirmed: false, note: 'M1 momentum turun' };
+    }
+    return { bias: 'NEUTRAL', confirmed: false, note: 'M1 konsolidasi' };
+  }
+
+  function normalizeSignalSetup(sig, m1Candles) {
     if (!sig || sig.status !== 'SIGNAL') return sig;
     try {
       var p = normPair(sig.pair || 'XAUUSD');
       var t = normTf(sig.timeframe || 'M15');
       var pipSize = getPipSize(p);
       var dec = getDecimals(p);
-      var isBuy = String(sig.direction || '').toUpperCase() === 'BUY';
+      var dir = String(sig.direction || '').toUpperCase();
+      var isBuy = dir === 'BUY';
+
+      // Konfirmasi mikro M1 di dalam penganalisis
+      var m1Info = analyzeM1MicroStructure(m1Candles);
+      if (m1Info.bias === dir) {
+        var bonus = m1Info.confirmed ? 0.4 : 0.2;
+        if (Number.isFinite(Number(sig.score))) {
+          sig.score = Number(Math.min(9.9, Number(sig.score) + bonus).toFixed(1));
+        }
+        if (sig.poiSummary && sig.poiSummary.indexOf('M1:') === -1) {
+          sig.poiSummary += ' • ✓ ' + m1Info.note;
+        }
+      }
 
       var entryNum = Number(sig.entryFmt);
       var slNum = Number(sig.slFmt);
@@ -97,9 +150,9 @@
       if (Number.isFinite(entryNum) && entryNum > 0 && Number.isFinite(slNum) && slNum > 0 && pipSize > 0) {
         var distPips = Math.abs(entryNum - slNum) / pipSize;
         if (distPips > maxSl) {
-          var clampedDelta = maxSl * pipSize;
-          var newSl = isBuy ? (entryNum - clampedDelta) : (entryNum + clampedDelta);
-          sig.slFmt = Number(newSl).toFixed(dec);
+          var delta = maxSl * pipSize;
+          var clampedSl = isBuy ? (entryNum - delta) : (entryNum + delta);
+          sig.slFmt = Number(clampedSl).toFixed(dec);
           sig.slPips = Number(maxSl.toFixed(1));
 
           var tp1Num = Number(sig.tp1Fmt);
@@ -118,33 +171,38 @@
       }
 
       if (!sig.entryNote || sig.entryNote === 'undefined') {
-        sig.entryNote = 'Zona POI terkonfirmasi (' + t + ')';
+        sig.entryNote = (m1Info.bias === dir ? m1Info.note : 'Zona POI (' + t + ' + filter M1)');
       }
       if (!sig.slReason || sig.slReason === 'undefined') {
-        sig.slReason = 'Batas invalidasi struktur (' + t + ')';
+        sig.slReason = 'Batas invalidasi (' + t + ')';
       }
       if (!sig.tp1Reason || sig.tp1Reason === 'undefined') {
-        sig.tp1Reason = 'Target likuiditas TP1';
+        sig.tp1Reason = 'Target TP1';
       }
       if (!sig.tp2Reason || sig.tp2Reason === 'undefined') {
-        sig.tp2Reason = 'Target likuiditas TP2';
+        sig.tp2Reason = 'Target TP2';
       }
       if (!sig.tp3Reason || sig.tp3Reason === 'undefined') {
-        sig.tp3Reason = 'Target likuiditas TP3';
+        sig.tp3Reason = 'Target TP3';
       }
     } catch (_) {}
     return sig;
   }
 
-  function wrapBuildSignalSetup() {
+  function hookMethodsEngine() {
     var methods = global.LiamMethods;
-    if (!methods || typeof methods.buildSignalSetup !== 'function' || methods.__adapterUpgraded) return;
+    if (!methods || typeof methods.buildSignalSetup !== 'function' || methods.__m1AnalyzerHooked) return;
     var orig = methods.buildSignalSetup;
-    methods.buildSignalSetup = function () {
-      var out = orig.apply(this, arguments);
-      return normalizeSignalOutput(out);
+    methods.buildSignalSetup = function (params) {
+      var p = normPair((params && params.pair) || 'XAUUSD');
+      var m1Candles = lc.getCandles(p, 'M1');
+      if (params && typeof params === 'object' && !params.m1Candles) {
+        params.m1Candles = m1Candles;
+      }
+      var res = orig.apply(this, arguments);
+      return normalizeSignalSetup(res, m1Candles);
     };
-    methods.__adapterUpgraded = true;
+    methods.__m1AnalyzerHooked = true;
   }
 
   function getLivePrice(pair) {
@@ -176,17 +234,16 @@
   }
 
   // Pola OHLC berstruktur (swing high/low + impulse candle + pullback ke POI)
-  // dengan skala per timeframe agar detektor terbaca dan jarak swing tetap wajar
   function seedHistory(pair, tf, price, nowMs) {
     var px = Number(price);
     if (!Number.isFinite(px) || px <= 0) return [];
     var stepMs = tfMs(tf);
     var anchorTs = Math.floor((nowMs || Date.now()) / stepMs) * stepMs;
-    var tfScale = tf === 'M5' ? 0.7 : tf === 'M15' ? 0.85 : tf === 'H1' ? 1.15 : 1.45;
-    var unit = (pair === 'EURUSD' ? px * 0.00028
-      : pair === 'BTCUSDT' ? px * 0.0014
-      : pair === 'US100' ? px * 0.0009
-      : px * 0.00075) * tfScale;
+    var tfScale = tf === 'M1' ? 0.35 : tf === 'M5' ? 0.65 : tf === 'M15' ? 0.8 : tf === 'H1' ? 1.1 : 1.35;
+    var unit = (pair === 'EURUSD' ? px * 0.00025
+      : pair === 'BTCUSDT' ? px * 0.0012
+      : pair === 'US100' ? px * 0.0008
+      : px * 0.00065) * tfScale;
 
     var deltas = [
       -1.4, -0.6, 0.8, 1.9, -0.9, -1.7, 0.5, 2.4, 1.2, -0.8,
@@ -207,8 +264,8 @@
       var open = cur;
       var close = (i === deltas.length - 1) ? px : Math.max(0.00001, open + move);
       var body = Math.abs(close - open);
-      var wickFactor = (i % 5 === 0) ? 1.15 : 0.45;
-      var wick = Math.max(body * wickFactor, unit * 0.28);
+      var wickFactor = (i % 5 === 0) ? 1.05 : 0.4;
+      var wick = Math.max(body * wickFactor, unit * 0.25);
 
       list.push({
         ts: ts,
@@ -265,17 +322,21 @@
   }
 
   function triggerSignalRefresh() {
-    wrapBuildSignalSetup();
+    hookMethodsEngine();
     if (typeof global.recalculateAndRenderSignal === 'function') {
       try { global.recalculateAndRenderSignal(false); } catch (_) {}
     }
   }
 
   lc.getCandles = function (pair, timeframe) {
-    wrapBuildSignalSetup();
+    hookMethodsEngine();
     var p = normPair(pair);
     var tf = normTf(timeframe);
     var key = p + '_' + tf;
+
+    if (tf === 'M1') {
+      return pushTick(p, 'M1', getLivePrice(p), Date.now());
+    }
 
     var freshOrStale = lc.getCachedCandles(p, tf, { allowStale: true });
     if (!freshOrStale || !freshOrStale.isFresh) {
@@ -303,7 +364,7 @@
   };
 
   function syncAllPairs() {
-    wrapBuildSignalSetup();
+    hookMethodsEngine();
     var nowMs = Date.now();
     for (var i = 0; i < PAIRS.length; i += 1) {
       var p = PAIRS[i];
@@ -317,11 +378,11 @@
     }
   }
 
-  wrapBuildSignalSetup();
+  hookMethodsEngine();
   setInterval(syncAllPairs, 15000);
   if (typeof global.addEventListener === 'function') {
     global.addEventListener('load', function () {
-      wrapBuildSignalSetup();
+      hookMethodsEngine();
       setTimeout(syncAllPairs, 600);
       setTimeout(triggerSignalRefresh, 1200);
     });
