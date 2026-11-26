@@ -8,7 +8,7 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="LiamvTrade" />
-  <title>Liamvtrade Quant Terminal v3.0 — Institutional ICT/SMC Intelligence</title>
+  <title>Liamvtrade Quant Terminal v3.1 — Institutional ICT/SMC &amp; Pola N Intelligence</title>
   <link rel="manifest" href="./manifest.json" />
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
@@ -628,7 +628,7 @@
     <section id="tab-signals" class="tab-pane space-y-4">
       <div class="glass-card motion-card rounded-2xl p-4 space-y-3">
         <div class="flex items-center justify-between gap-2">
-          <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">ICT / SMC SNIPER ENGINE</span>
+          <span class="text-[10px] font-extrabold tracking-wider uppercase text-sky-400">ICT / SMC &amp; POLA N ENGINE</span>
           <div class="flex items-center gap-1.5">
             <button type="button" onclick="openCalibrationModal()"
               class="px-2.5 py-1.5 rounded-xl bg-amber-500/15 border border-amber-400/40 text-amber-300 text-[11px] font-bold active:scale-95">
@@ -713,7 +713,8 @@
         <div class="flex items-center gap-2">
           <select id="signal-method-select" onchange="selectSignalMethod(this.value)"
             class="flex-1 min-w-0 rounded-xl bg-blue-600 text-white text-xs font-extrabold px-3 py-2.5 border border-blue-400/50 focus:outline-none">
-            <option value="auto">AUTO • Auto Sniper (Multi-Confluence)</option>
+            <option value="auto">AUTO • Auto Sniper (Multi-Confluence + Pola N)</option>
+            <option value="n_pattern">STRUKTUR • Pola N (Impulse-Pullback-Break)</option>
             <option value="judas">ICT • Judas Swing (Session Manipulation)</option>
             <option value="smc_ob">SMC • Order Block + FVG Confluence</option>
             <option value="sweep">LIQ • Liquidity Sweep (Turtle Soup)</option>
@@ -815,7 +816,7 @@
           </p>
           <div id="sig-score-breakdown" class="hidden pt-1.5 border-t border-slate-800/80 grid grid-cols-2 gap-1 text-[10px] font-mono text-slate-400"></div>
 
-          <!-- SLOT METADATA TAMBAHAN (TRIGGER, INVALIDATION, VALID UNTIL, RR TP1, SCORE & CHECKLIST) -->
+          <!-- SLOT METADATA TAMBAHAN (TRIGGER, INVALIDATION, VALID UNTIL, RR TP1, SCORE, CHECKLIST & POLA N) -->
           <div id="sig-signal-meta-extra" class="pt-1.5 border-t border-slate-800/80 grid grid-cols-2 gap-1.5 text-[10px] font-mono text-slate-300">
             <div class="truncate">Trigger: <strong id="sig-trigger-text" class="text-cyan-300">--</strong></div>
             <div class="truncate">RR TP1: <strong id="sig-rr-tp1-text" class="text-emerald-300">--</strong></div>
@@ -823,6 +824,7 @@
             <div class="truncate">Valid Until: <strong id="sig-valid-until-text" class="text-amber-300">--</strong></div>
             <div class="truncate">Score: <strong id="sig-score-extra-text" class="text-sky-300">--</strong></div>
             <div class="truncate">Checklist: <strong id="sig-checklist-text" class="text-slate-200">--</strong></div>
+            <div class="col-span-2 truncate">Pola N: <strong id="sig-npattern-status" class="text-amber-300">Memindai struktur N...</strong></div>
           </div>
         </div>
 
@@ -1183,13 +1185,13 @@
         </div>
 
         <div id="chart-scan-verdict-box" class="rounded-xl bg-slate-900/90 border border-slate-800 p-3 text-xs text-slate-300 leading-relaxed">
-          Ketuk <strong>Scan Struktur</strong> atau <strong>Screening &amp; Mapping</strong> untuk memetakan area Discount/Premium, Liquidity Pool, dan gambar peta teknikal otomatis.
+          Ketuk <strong>Scan Struktur</strong> atau <strong>Screening &amp; Mapping</strong> untuk memetakan area Discount/Premium, Liquidity Pool, Pola N, dan gambar peta teknikal otomatis.
         </div>
 
         <div id="auto-mapping-result-card" class="hidden rounded-2xl bg-slate-950/90 border border-cyan-500/40 p-3.5 space-y-3">
           <div class="flex items-center justify-between gap-2">
             <div>
-              <span class="text-[10px] font-extrabold uppercase tracking-wider text-cyan-400">AUTO-GENERATED ICT/SMC MAPPING</span>
+              <span class="text-[10px] font-extrabold uppercase tracking-wider text-cyan-400">AUTO-GENERATED ICT/SMC &amp; POLA N MAPPING</span>
               <h3 id="mapping-board-title" class="text-sm font-extrabold text-white">Peta Struktur &amp; Zona Likuiditas</h3>
             </div>
             <span id="mapping-verdict-badge" class="px-2.5 py-1 rounded-full bg-slate-800 text-[10px] font-mono font-extrabold text-cyan-300">
@@ -1404,7 +1406,7 @@
     </section>
 
     <footer class="max-w-lg mx-auto pt-2 pb-4 text-center text-[11px] text-slate-400 space-y-0.5">
-      <div class="font-mono font-semibold text-slate-300">Liamvtrade Quant Terminal v3.0</div>
+      <div class="font-mono font-semibold text-slate-300">Liamvtrade Quant Terminal v3.1</div>
       <div>Crafted by <span class="font-semibold text-sky-400">@xliamvr</span> &bull; &copy; 2026 Liamvtrade. All rights reserved.</div>
     </footer>
   </main>
@@ -1601,13 +1603,13 @@
   <div id="modal-guide" data-lenis-prevent class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
     <div class="glass-card w-full max-w-md rounded-2xl p-4 space-y-3 border border-slate-700">
       <div class="flex items-center justify-between">
-        <h3 class="text-base font-extrabold text-white">📘 Panduan Cepat Liamvtrade v3.0</h3>
+        <h3 class="text-base font-extrabold text-white">📘 Panduan Cepat Liamvtrade v3.1</h3>
         <button type="button" onclick="closeModal('modal-guide')" class="w-8 h-8 rounded-full bg-slate-800 text-slate-300 font-bold">✕</button>
       </div>
       <ul class="space-y-2 text-xs text-slate-300 leading-relaxed">
         <li><strong class="text-sky-400">1. Kalibrasi Harga:</strong> Ketuk pill harga live di header atas kapan saja untuk menyamakan harga terminal dengan broker MT5/cTrader/TradingView kamu.</li>
         <li><strong class="text-emerald-400">2. Checklist SOP:</strong> Centang SOP di Beranda untuk menaikkan skor kesiapan sinyal hingga +0.6 sebelum mengeksekusi setup.</li>
-        <li><strong class="text-amber-300">3. Screening &amp; Auto-Mapping:</strong> Buka tab Chart lalu tekan <em>Screening &amp; Mapping</em> untuk memeriksa 4 sudut timeframe (M5–H4) dan menghasilkan gambar peta teknikal otomatis.</li>
+        <li><strong class="text-amber-300">3. Screening, Pola N &amp; Auto-Mapping:</strong> Pilih metode <em>AUTO</em> atau <em>Pola N</em> di tab Signals, atau buka tab Chart lalu tekan <em>Screening &amp; Mapping</em> untuk memeriksa 4 sudut timeframe (M5–H4) dan peta teknikal otomatis.</li>
         <li><strong class="text-rose-400">4. Gerbang NO SETUP:</strong> Terminal mengunci maksimal 1 arah bias dan akan menyatakan <em>NO SETUP</em> apabila syarat struktur atau risiko prop firm belum lolos.</li>
       </ul>
       <button type="button" onclick="closeModal('modal-guide')" class="w-full py-2.5 rounded-xl bg-blue-600 text-white text-xs font-extrabold">
@@ -1616,10 +1618,12 @@
     </div>
   </div>
 
-  <!-- CORE SCRIPTS (URUTAN WAJIB + CANDLES + INTEGRASI PICKER, CALIBRATION & SW) -->
+  <!-- CORE SCRIPTS (URUTAN WAJIB + CANDLES + NPATTERN + INTEGRASI PICKER, CALIBRATION & SW) -->
   <script src="./candles.js"></script>
   <script src="./candles-adapter.js"></script>
+  <script src="./npattern.js"></script>
   <script src="./methods.js"></script>
+  <script src="./npattern-bridge.js"></script>
   <script src="./news.js"></script>
   <script src="./price-feed.js"></script>
   <script src="./app.js"></script>
