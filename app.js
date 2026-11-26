@@ -1,6 +1,7 @@
 /**
- * Liamvtrade Quant Terminal v3.0 — app.js (STEP 1 UPGRADE)
- * - 100% kompatibel dengan index.html v3.0 & modul intelligence-upgrade.js
+ * Liamvtrade Quant Terminal v3.1 — app.js (CONNECTED + POLA N UPGRADE)
+ * - Kompatibel dengan index.html v3.0, intelligence-upgrade.js & methods.js v4.1
+ * - Terhubung ke detektor Pola N (n_pattern) & auto-sniper
  * - Gerbang Ketat NO SETUP / WAIT + 1 Arah Bias Terkunci (Zero Fake Signal Fallback)
  * - Data Integrity Timestamp, Live Feed Verification & Source Badge
  * - Hard Risk Lock saat Max SL Harian tercapai + Anti-Revenge Cooldown 20m
@@ -995,27 +996,49 @@
   }
 
   // =========================================================================
-  // CANDLES & NEWS BRIDGE HELPERS FOR METHODS ENGINE
+  // CANDLES & NEWS BRIDGE HELPERS FOR METHODS ENGINE + POLA N
   // =========================================================================
+  function readCandlesFromSource(bucket, sym, tf) {
+    if (!bucket) return [];
+    if (typeof bucket.getCandles === 'function') {
+      const res = bucket.getCandles(sym, tf);
+      if (Array.isArray(res) && res.length > 0) return res;
+    }
+    if (bucket.cache && typeof bucket.cache === 'object') {
+      const keys = [`${sym}:${tf}`, `${sym}_${tf}`, `${sym}-${tf}`, `${sym}${tf}`];
+      for (const k of keys) {
+        if (Array.isArray(bucket.cache[k]) && bucket.cache[k].length > 0) {
+          return bucket.cache[k];
+        }
+      }
+    }
+    if (Array.isArray(bucket.candles) && bucket.candles.length > 0) {
+      return bucket.candles;
+    }
+    return [];
+  }
+
   function getCandlesForEngine(pair, timeframe) {
     const sym = String(pair || 'XAUUSD').toUpperCase();
     const tf = String(timeframe || 'M15').toUpperCase();
-    const bucket = global.LiamCandles || global.LiamOhlcFeed || global.__LIAM_CANDLES__ || null;
+    const sources = [
+      global.LiamCandles,
+      global.LiamOhlcFeed,
+      global.LiamCandlesAdapter,
+      global.LiamNPatternBridge,
+      global.LiamNPattern,
+      global.__LIAM_CANDLES__
+    ].filter(Boolean);
 
     let candles = [];
     let h1Candles = [];
     let h4Candles = [];
 
-    if (bucket) {
-      if (typeof bucket.getCandles === 'function') {
-        candles = bucket.getCandles(sym, tf) || [];
-        h1Candles = bucket.getCandles(sym, 'H1') || [];
-        h4Candles = bucket.getCandles(sym, 'H4') || [];
-      } else if (bucket.cache && typeof bucket.cache === 'object') {
-        candles = bucket.cache[`${sym}:${tf}`] || bucket.cache[`${sym}_${tf}`] || [];
-        h1Candles = bucket.cache[`${sym}:H1`] || bucket.cache[`${sym}_H1`] || [];
-        h4Candles = bucket.cache[`${sym}:H4`] || bucket.cache[`${sym}_H4`] || [];
-      }
+    for (const src of sources) {
+      if (candles.length === 0) candles = readCandlesFromSource(src, sym, tf);
+      if (h1Candles.length === 0) h1Candles = readCandlesFromSource(src, sym, 'H1');
+      if (h4Candles.length === 0) h4Candles = readCandlesFromSource(src, sym, 'H4');
+      if (candles.length > 0 && h1Candles.length > 0 && h4Candles.length > 0) break;
     }
 
     return {
@@ -2593,7 +2616,8 @@
   function buildBlockedEngineState(pair, timeframe, methodKey, statusCode, reasonCode, reasonText) {
     const spec = getPairSpecSafe(pair);
     const methodLabels = {
-      auto: ['Auto Sniper (Multi-Confluence)', 'AUTO'],
+      auto: ['Auto Sniper (Multi-Confluence + Pola N)', 'AUTO'],
+      n_pattern: ['Pola N (Impulse-Pullback-Break)', 'POLA N'],
       judas: ['ICT Judas Swing (Session Manipulation)', 'JUDAS'],
       smc_ob: ['SMC Order Block + FVG Confluence', 'SMC OB'],
       sweep: ['Liquidity Sweep (Turtle Soup Stop-Hunt)', 'SWEEP'],
@@ -3651,7 +3675,7 @@
     if (entries.length === 0) {
       outEl.innerHTML = `
         <div class="rounded-xl bg-slate-950/80 border border-slate-800 p-3 text-[11px] text-slate-300 leading-relaxed">
-          Belum ada trade selesai di Jurnal untuk di-audit Out-of-Sample. Catat minimal 3–5 trade dengan status TP/SL untuk melihat perbandingan Winrate &amp; Expectancy tiap metode ICT/SMC.
+          Belum ada trade selesai di Jurnal untuk di-audit Out-of-Sample. Catat minimal 3–5 trade dengan status TP/SL untuk melihat perbandingan Winrate &amp; Expectancy tiap metode ICT/SMC &amp; Pola N.
         </div>`;
       return;
     }
@@ -4019,7 +4043,7 @@
     return `${String(wib.getHours()).padStart(2, '0')}:${String(wib.getMinutes()).padStart(2, '0')} WIB`;
   }
 
-  // Expose internal state bridge for intelligence-upgrade.js
+  // Expose internal state bridge for intelligence-upgrade.js & Pola N modules
   global.__LIAM_TERMINAL_BRIDGE__ = {
     getState: () => state,
     getCalibratedPrice,
@@ -4027,6 +4051,7 @@
     formatPriceSafe,
     getActiveAccount,
     getCurrentSignal: () => currentSignalObj,
+    getCandlesForEngine,
     dispatchTelegramMessage,
     showToast
   };
