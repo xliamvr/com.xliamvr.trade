@@ -1247,6 +1247,176 @@
 
     <!-- TAB 5: PROFIL -->
     <section id="tab-profil" class="tab-pane space-y-4">
+
+      <!-- CLOUD SCANNER 24/7 REMOTE SWITCH PANEL -->
+      <div class="glass-card motion-card rounded-2xl p-4 space-y-3.5 border border-cyan-500/40">
+        <div class="flex items-start justify-between gap-2">
+          <div>
+            <span class="text-[10px] font-extrabold tracking-wider uppercase text-cyan-400">CLOUD SCANNER 24/7 • REMOTE SWITCH</span>
+            <h2 class="gsap-scroll-title text-lg font-extrabold text-white">Bot Sinyal Otomatis (App Tertutup)</h2>
+            <p id="cloudSyncStatus" class="text-[11px] font-mono text-emerald-400 mt-0.5">Menghubungkan ke Cloudflare KV...</p>
+          </div>
+          <label class="inline-flex items-center gap-2 cursor-pointer shrink-0 bg-slate-900 border border-slate-700 px-3 py-1.5 rounded-full">
+            <input type="checkbox" id="cloudEnabledToggle" checked onchange="saveCloudSettings(true)" class="w-4 h-4 accent-emerald-500" />
+            <span class="text-xs font-extrabold text-white">AKTIF</span>
+          </label>
+        </div>
+
+        <p class="text-xs text-slate-300 leading-relaxed">
+          Sakelar ini mengatur mesin Cloudflare Worker di cloud. Setelah disimpan, sinyal otomatis terkirim ke Telegram 24/7 meski aplikasi &amp; browser HP ditutup.
+        </p>
+
+        <!-- 1. PILIH PAIR -->
+        <div class="rounded-xl bg-slate-900/85 border border-slate-800 p-3 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[11px] font-extrabold uppercase tracking-wider text-sky-400">1. Pair Dipantau</span>
+            <div class="flex items-center gap-1.5">
+              <button type="button" onclick="toggleAllGroup('data-cloud-pair', true)"
+                class="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-extrabold active:scale-95">
+                ALL ON
+              </button>
+              <button type="button" onclick="toggleAllGroup('data-cloud-pair', false)"
+                class="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-bold active:scale-95">
+                OFF
+              </button>
+            </div>
+          </div>
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <label class="flex items-center justify-between rounded-lg bg-slate-950/80 border border-slate-800 px-3 py-2 cursor-pointer">
+              <span class="font-bold text-white">🥇 XAUUSD</span>
+              <input type="checkbox" data-cloud-pair="XAUUSD" checked class="w-4 h-4 accent-sky-500" />
+            </label>
+            <label class="flex items-center justify-between rounded-lg bg-slate-950/80 border border-slate-800 px-3 py-2 cursor-pointer">
+              <span class="font-bold text-white">📈 US100</span>
+              <input type="checkbox" data-cloud-pair="US100" checked class="w-4 h-4 accent-sky-500" />
+            </label>
+            <label class="flex items-center justify-between rounded-lg bg-slate-950/80 border border-slate-800 px-3 py-2 cursor-pointer">
+              <span class="font-bold text-white">💱 EURUSD</span>
+              <input type="checkbox" data-cloud-pair="EURUSD" checked class="w-4 h-4 accent-sky-500" />
+            </label>
+            <label class="flex items-center justify-between rounded-lg bg-slate-950/80 border border-slate-800 px-3 py-2 cursor-pointer">
+              <span class="font-bold text-white">₿ BTCUSDT</span>
+              <input type="checkbox" data-cloud-pair="BTCUSDT" checked class="w-4 h-4 accent-sky-500" />
+            </label>
+          </div>
+        </div>
+
+        <!-- 2. PILIH TIMEFRAME -->
+        <div class="rounded-xl bg-slate-900/85 border border-slate-800 p-3 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[11px] font-extrabold uppercase tracking-wider text-cyan-400">2. Timeframe Scan</span>
+            <div class="flex items-center gap-1.5">
+              <button type="button" onclick="toggleAllGroup('data-cloud-tf', true)"
+                class="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-extrabold active:scale-95">
+                ALL ON
+              </button>
+              <button type="button" onclick="toggleAllGroup('data-cloud-tf', false)"
+                class="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-bold active:scale-95">
+                OFF
+              </button>
+            </div>
+          </div>
+          <div class="grid grid-cols-4 gap-1.5 text-xs font-mono">
+            <label class="flex flex-col items-center gap-1 rounded-lg bg-slate-950/80 border border-slate-800 py-2 cursor-pointer">
+              <span class="font-extrabold text-white">M5</span>
+              <input type="checkbox" data-cloud-tf="M5" checked class="w-4 h-4 accent-cyan-500" />
+            </label>
+            <label class="flex flex-col items-center gap-1 rounded-lg bg-slate-950/80 border border-slate-800 py-2 cursor-pointer">
+              <span class="font-extrabold text-white">M15</span>
+              <input type="checkbox" data-cloud-tf="M15" checked class="w-4 h-4 accent-cyan-500" />
+            </label>
+            <label class="flex flex-col items-center gap-1 rounded-lg bg-slate-950/80 border border-slate-800 py-2 cursor-pointer">
+              <span class="font-extrabold text-white">H1</span>
+              <input type="checkbox" data-cloud-tf="H1" checked class="w-4 h-4 accent-cyan-500" />
+            </label>
+            <label class="flex flex-col items-center gap-1 rounded-lg bg-slate-950/80 border border-slate-800 py-2 cursor-pointer">
+              <span class="font-extrabold text-white">H4</span>
+              <input type="checkbox" data-cloud-tf="H4" checked class="w-4 h-4 accent-cyan-500" />
+            </label>
+          </div>
+        </div>
+
+        <!-- 3. PILIH METODE ICT/SMC & POLA N -->
+        <div class="rounded-xl bg-slate-900/85 border border-slate-800 p-3 space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-[11px] font-extrabold uppercase tracking-wider text-emerald-400">3. Metode Strategi</span>
+            <div class="flex items-center gap-1.5">
+              <button type="button" onclick="toggleAllGroup('data-cloud-method', true)"
+                class="px-2.5 py-1 rounded-lg bg-blue-600 text-white text-[10px] font-extrabold active:scale-95">
+                ALL ON
+              </button>
+              <button type="button" onclick="toggleAllGroup('data-cloud-method', false)"
+                class="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 text-[10px] font-bold active:scale-95">
+                OFF
+              </button>
+            </div>
+          </div>
+          <div class="space-y-1.5 text-xs">
+            <label class="flex items-center justify-between rounded-lg bg-slate-950/80 border border-slate-800 px-3 py-2 cursor-pointer">
+              <span class="font-bold text-sky-300">AUTO • Auto Sniper (Multi-Confluence + Pola N)</span>
+              <input type="checkbox" data-cloud-method="auto" checked class="w-4 h-4 accent-emerald-500" />
+            </label>
+            <label class="flex items-center justify-between rounded-lg bg-slate-950/80 border border-slate-800 px-3 py-2 cursor-pointer">
+              <span class="text-slate-200">STRUKTUR • Pola N (Impulse-Pullback-Break)</span>
+              <input type="checkbox" data-cloud-method="n_pattern" class="w-4 h-4 accent-emerald-500" />
+            </label>
+            <label class="flex items-center justify-between rounded-lg bg-slate-950/80 border border-slate-800 px-3 py-2 cursor-pointer">
+              <span class="text-slate-200">LIQ • Liquidity Sweep + MSS</span>
+              <input type="checkbox" data-cloud-method="sweep" class="w-4 h-4 accent-emerald-500" />
+            </label>
+            <label class="flex items-center justify-between rounded-lg bg-slate-950/80 border border-slate-800 px-3 py-2 cursor-pointer">
+              <span class="text-slate-200">ICT • Judas Swing (Asia Range)</span>
+              <input type="checkbox" data-cloud-method="judas" class="w-4 h-4 accent-emerald-500" />
+            </label>
+            <label class="flex items-center justify-between rounded-lg bg-slate-950/80 border border-slate-800 px-3 py-2 cursor-pointer">
+              <span class="text-slate-200">SMC • Order Block + FVG Confluence</span>
+              <input type="checkbox" data-cloud-method="smc_ob" class="w-4 h-4 accent-emerald-500" />
+            </label>
+            <label class="flex items-center justify-between rounded-lg bg-slate-950/80 border border-slate-800 px-3 py-2 cursor-pointer">
+              <span class="text-slate-200">ICT • Silver Bullet (Time-Window FVG)</span>
+              <input type="checkbox" data-cloud-method="silver_bullet" class="w-4 h-4 accent-emerald-500" />
+            </label>
+            <label class="flex items-center justify-between rounded-lg bg-slate-950/80 border border-slate-800 px-3 py-2 cursor-pointer">
+              <span class="text-slate-200">FIB • OTE (0.62–0.79 / Entry 0.705)</span>
+              <input type="checkbox" data-cloud-method="ote" class="w-4 h-4 accent-emerald-500" />
+            </label>
+          </div>
+        </div>
+
+        <!-- 4. MIN SCORE & LOT DEFAULT -->
+        <div class="grid grid-cols-2 gap-2">
+          <div>
+            <label for="minScoreInput" class="text-[11px] text-slate-400 block mb-1">Minimal Skor Konfirmasi:</label>
+            <input id="minScoreInput" type="number" step="0.5" min="2" max="10" value="4"
+              class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono font-bold text-white" />
+          </div>
+          <div>
+            <label for="lotInput" class="text-[11px] text-slate-400 block mb-1">Lot Default Notif Tele:</label>
+            <input id="lotInput" type="number" step="0.01" min="0.01" value="0.02"
+              class="w-full rounded-xl bg-slate-900 border border-slate-700 px-3 py-2 text-xs font-mono font-bold text-white" />
+          </div>
+        </div>
+
+        <!-- TOMBOL SIMPAN & TES SCAN -->
+        <div class="grid grid-cols-2 gap-2 pt-0.5">
+          <button type="button" onclick="saveCloudSettings()"
+            class="py-2.5 rounded-xl bg-gradient-to-r from-sky-500 to-cyan-400 text-slate-950 text-xs font-extrabold active:scale-95">
+            ☁️ Simpan &amp; Sinkron Cloud
+          </button>
+          <button type="button" id="btnCloudTestScan" onclick="triggerCloudScanNow()"
+            class="py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-cyan-300 text-xs font-extrabold active:scale-95">
+            ⚡ Tes Scan Sekarang
+          </button>
+        </div>
+
+        <div class="flex items-center justify-between pt-1 text-[10px] text-slate-400">
+          <span>Dilindungi ADMIN_SECRET Cloudflare</span>
+          <button type="button" onclick="resetAdminSecret()" class="text-amber-300 font-bold hover:underline">
+            Ganti Secret
+          </button>
+        </div>
+      </div>
+
       <div class="glass-card motion-card rounded-2xl p-4 space-y-3 border border-amber-500/35">
         <div class="flex items-center justify-between gap-2">
           <div>
@@ -1618,7 +1788,7 @@
     </div>
   </div>
 
-  <!-- CORE SCRIPTS (URUTAN WAJIB + CANDLES + NPATTERN + INTEGRASI PICKER, CALIBRATION & SW) -->
+  <!-- CORE SCRIPTS (URUTAN WAJIB + CANDLES + NPATTERN + INTEGRASI PICKER, CALIBRATION, CLOUD-SYNC & SW) -->
   <script src="./candles.js"></script>
   <script src="./candles-adapter.js"></script>
   <script src="./npattern.js"></script>
@@ -1630,13 +1800,16 @@
   <script src="./intelligence-upgrade.js"></script>
   <script src="./calibration-fix.js"></script>
   <script src="./ui-picker.js"></script>
+  <script src="./cloud-sync.js"></script>
 
   <!-- PROGRESSIVE SCROLL, SW & MOTION ENHANCEMENT -->
   <script>
     (function () {
       if ('serviceWorker' in navigator) {
         window.addEventListener('load', function () {
-          navigator.serviceWorker.register('./sw.js').catch(function () {});
+          navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).then(function (reg) {
+            reg.update().catch(function () {});
+          }).catch(function () {});
         });
       }
 
