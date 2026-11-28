@@ -1,5 +1,13 @@
-const WORKER_URL = "https://liamvtrade-scanner.SUBDOMAIN-KAMU.workers.dev";
-const ADMIN_SECRET = "kode-rahasia-kamu"; // Samakan dengan di Cloudflare
+const WORKER_URL = "https://liamvtrade-scanner.ilhammaulananuralrasyid.workers.dev";
+
+function getAdminSecret() {
+  let secret = localStorage.getItem("liam_admin_secret");
+  if (!secret) {
+    secret = prompt("Masukkan ADMIN_SECRET Cloudflare:");
+    if (secret) localStorage.setItem("liam_admin_secret", secret.trim());
+  }
+  return secret;
+}
 
 // Ambil setting terakhir saat halaman pengaturan dibuka
 async function loadCloudSettings() {
@@ -21,6 +29,9 @@ async function loadCloudSettings() {
 
 // Kirim perubahan sakelar ke Cloud KV
 async function saveCloudSettings() {
+  const adminSecret = getAdminSecret();
+  if (!adminSecret) return;
+
   const pairs = [...document.querySelectorAll("[data-pair]:checked")].map((el) => el.dataset.pair);
   const timeframes = [...document.querySelectorAll("[data-tf]:checked")].map((el) => el.dataset.tf);
   const methods = [...document.querySelectorAll("[data-method]:checked")].map((el) => el.dataset.method);
@@ -38,10 +49,16 @@ async function saveCloudSettings() {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${ADMIN_SECRET}`
+      Authorization: `Bearer ${adminSecret}`
     },
     body: JSON.stringify(payload)
   });
+
+  if (res.status === 401) {
+    localStorage.removeItem("liam_admin_secret");
+    alert("ADMIN_SECRET salah. Silakan simpan ulang dan masukkan kode yang benar.");
+    return;
+  }
 
   if (res.ok) {
     alert("Cloud Scanner tersinkron! Aplikasi aman ditutup.");
