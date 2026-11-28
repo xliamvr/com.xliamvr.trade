@@ -1,20 +1,26 @@
 /*!
- * Liamvtrade — Service Worker & Offline Cache Controller v2.8
+ * Liamvtrade — Service Worker & Offline Cache Controller v3.1
  * Copyright (c) 2026 Ilham Maulana Nur Al Rasyid (@xliamvr)
  * Package ID: com.xliamvr.trade — All Rights Reserved.
  */
 
-const CACHE_NAME = 'liamvtrade-cache-v2.8';
+const CACHE_NAME = 'liamvtrade-cache-v3.1';
 const CORE_ASSETS = [
   './',
   './index.html',
   './style.css',
+  './candles.js',
+  './candles-adapter.js',
+  './npattern.js',
   './methods.js',
+  './npattern-bridge.js',
   './news.js',
   './price-feed.js',
+  './app.js',
   './intelligence-upgrade.js',
   './calibration-fix.js',
-  './app.js',
+  './ui-picker.js',
+  './cloud-sync.js',
   './manifest.json'
 ];
 
@@ -53,6 +59,8 @@ self.addEventListener('fetch', (event) => {
     url.hostname.includes('cryptocompare.com') ||
     url.hostname.includes('coingecko.com') ||
     url.hostname.includes('binance.com') ||
+    url.hostname.includes('binance.vision') ||
+    url.hostname.includes('workers.dev') ||
     url.hostname.includes('coinbase.com') ||
     url.hostname.includes('yahoo.com') ||
     url.hostname.includes('frankfurter.app') ||
@@ -67,8 +75,10 @@ self.addEventListener('fetch', (event) => {
     event.respondWith(
       fetch(req)
         .then((networkRes) => {
-          const clone = networkRes.clone();
-          caches.open(CACHE_NAME).then((cache) => cache.put(req, clone));
+          if (networkRes && networkRes.status === 200) {
+            const clone = networkRes.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(req, clone)).catch(() => {});
+          }
           return networkRes;
         })
         .catch(() => caches.match(req))
