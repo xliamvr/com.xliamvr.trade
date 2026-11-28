@@ -4,3 +4,7 @@ compatibility_date = "2026-11-01"
 
 [triggers]
 crons = ["*/2 * * * *"]
+
+[[kv_namespaces]]
+binding = "LIAM_KV"
+id = "fa40448cc6114582eb23959d2ecf17f9"
