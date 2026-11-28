@@ -11,14 +11,21 @@ const DEFAULT_CONFIG = {
 const PAIR_META = {
   XAUUSD: { source: "twelvedata", symbol: "XAU/USD", pip: 0.1, minSlPips: 20, spreadPips: 2.5, digits: 2 },
   EURUSD: { source: "twelvedata", symbol: "EUR/USD", pip: 0.0001, minSlPips: 10, spreadPips: 1.2, digits: 5 },
+  GBPUSD: { source: "twelvedata", symbol: "GBP/USD", pip: 0.0001, minSlPips: 12, spreadPips: 1.5, digits: 5 },
+  USDJPY: { source: "twelvedata", symbol: "USD/JPY", pip: 0.01, minSlPips: 12, spreadPips: 1.5, digits: 3 },
   NAS100: { source: "twelvedata", symbol: "NDX", pip: 1.0, minSlPips: 20, spreadPips: 2.0, digits: 2 },
-  BTCUSD: { source: "binance", symbol: "BTCUSDT", pip: 10.0, minSlPips: 35, spreadPips: 5.0, digits: 2 }
+  BTCUSD: { source: "binance", symbol: "BTCUSDT", pip: 10.0, minSlPips: 35, spreadPips: 5.0, digits: 2 },
+  ETHUSD: { source: "binance", symbol: "ETHUSDT", pip: 1.0, minSlPips: 15, spreadPips: 2.0, digits: 2 },
+  SOLUSD: { source: "binance", symbol: "SOLUSDT", pip: 0.1, minSlPips: 15, spreadPips: 2.0, digits: 2 }
 };
 
 const TF_MAP = {
+  M1: { td: "1min", bn: "1m", intervalMin: 2 },
   M5: { td: "5min", bn: "5m", intervalMin: 2 },
   M15: { td: "15min", bn: "15m", intervalMin: 6 },
-  H1: { td: "1h", bn: "1h", intervalMin: 30 }
+  M30: { td: "30min", bn: "30m", intervalMin: 10 },
+  H1: { td: "1h", bn: "1h", intervalMin: 30 },
+  H4: { td: "4h", bn: "4h", intervalMin: 60 }
 };
 
 const CORS_HEADERS = {
@@ -55,6 +62,13 @@ export default {
       const updated = { ...current, ...body };
       await env.LIAM_KV.put("config", JSON.stringify(updated));
       return jsonResponse({ ok: true, config: updated });
+    }
+
+    // Cek status ringkas & waktu scan terakhir untuk indikator UI
+    if (url.pathname === "/status" && request.method === "GET") {
+      const cfg = await getConfig(env);
+      const lastScan = await env.LIAM_KV.get("last_scan", "json");
+      return jsonResponse({ ok: true, enabled: cfg.enabled, lastScan });
     }
 
     // Trigger scan manual lewat browser (https://worker-kamu.workers.dev/scan)
@@ -143,16 +157,35 @@ async function runScanner(env, forceAll = false) {
     }
   }
 
+  // Catat waktu scan terakhir untuk status di web UI
+  await env.LIAM_KV.put(
+    "last_scan",
+    JSON.stringify({ time: now.toISOString(), summary: logs.slice(0, 10) }),
+    { expirationTtl: 86400 }
+  );
+
   return logs;
 }
 
-// Penarik data OHLC (Binance gratis 100%, TwelveData untuk emas/forex/indeks)
+// Penarik data OHLC (Binance Vision publik anti-blokir IP, TwelveData untuk emas/forex/indeks)
 async function fetchCandles(meta, tfInfo, env) {
   if (meta.source === "binance") {
     const res = await fetch(
-      `https://api.binance.com/api/v3/klines?symbol=${meta.symbol}&interval=${tfInfo.bn}&limit=60`
+      `https://data-api.binance.vision/api/v3/klines?symbol=${meta.symbol}&interval=${tfInfo.bn}&limit=60`,
+      {
+        headers: {
+          "Accept": "application/json",
+          "User-Agent": "Liamvtrade-Scanner/1.0"
+        }
+      }
     );
+    if (!res.ok) {
+      throw new Error(`Binance HTTP ${res.status}`);
+    }
     const data = await res.json();
+    if (!Array.isArray(data)) {
+      throw new Error(data.msg || "Format data Binance tidak valid");
+    }
     return data.map((c) => ({
       time: c[0],
       open: parseFloat(c[1]),
@@ -165,9 +198,15 @@ async function fetchCandles(meta, tfInfo, env) {
   const res = await fetch(
     `https://api.twelvedata.com/time_series?symbol=${meta.symbol}&interval=${tfInfo.td}&outputsize=60&apikey=${env.TWELVEDATA_API_KEY}`
   );
+  if (!res.ok) {
+    throw new Error(`TwelveData HTTP ${res.status}`);
+  }
   const data = await res.json();
-  if (!data.values) return [];
-  return data.values.reverse().map((c) => ({
+  if (data.status === "error") {
+    throw new Error(data.message || "TwelveData API error");
+  }
+  if (!Array.isArray(data.values)) return [];
+  return data.values.slice().reverse().map((c) => ({
     time: c.datetime,
     open: parseFloat(c.open),
     high: parseFloat(c.high),
@@ -176,9 +215,9 @@ async function fetchCandles(meta, tfInfo, env) {
   }));
 }
 
-// Mesin Deteksi Multi-Metode (Silakan sesuaikan rumus POI v2.9 milikmu di sini)
+// Mesin Deteksi Multi-Metode (Akan diselaraskan dengan rumus asli methods.js)
 function detectSetups(pair, tf, meta, candles, cfg) {
-  const results = [];
+  const candidates = [];
   const last = candles[candles.length - 1];
   const prev1 = candles[candles.length - 2];
   const prev2 = candles[candles.length - 3];
@@ -223,43 +262,50 @@ function detectSetups(pair, tf, meta, candles, cfg) {
     };
   };
 
+  const isAllMethod = cfg.methods.includes("AUTO_SNIPER") || cfg.methods.includes("ALL_METHOD");
+
   // 1. Detektor SMC Order Block (SMC_OB)
-  if (cfg.methods.includes("SMC_OB") || cfg.methods.includes("AUTO_SNIPER")) {
+  if (cfg.methods.includes("SMC_OB") || isAllMethod) {
     const isBullOB = prev2.close < prev2.open && prev1.close > prev2.high && last.close > prev1.close;
     const isBearOB = prev2.close > prev2.open && prev1.close < prev2.low && last.close < prev1.close;
 
     if (isBullOB) {
-      results.push(buildSignal("BUY LIMIT", "SMC_OB", prev2.low, prev2.high, prev2.high, 7.8));
+      candidates.push(buildSignal("BUY LIMIT", "SMC_OB", prev2.low, prev2.high, prev2.high, 7.8));
     } else if (isBearOB) {
-      results.push(buildSignal("SELL LIMIT", "SMC_OB", prev2.low, prev2.high, prev2.low, 7.8));
+      candidates.push(buildSignal("SELL LIMIT", "SMC_OB", prev2.low, prev2.high, prev2.low, 7.8));
     }
   }
 
   // 2. Detektor Fair Value Gap (FVG)
-  if (cfg.methods.includes("FVG") || cfg.methods.includes("AUTO_SNIPER")) {
+  if (cfg.methods.includes("FVG") || isAllMethod) {
     const bullFvg = prev1.low > prev3.high && (prev1.low - prev3.high) > atr * 0.4;
     const bearFvg = prev1.high < prev3.low && (prev3.low - prev1.high) > atr * 0.4;
 
     if (bullFvg) {
-      results.push(buildSignal("BUY LIMIT", "FVG", prev3.high, prev1.low, prev1.low, 7.5));
+      candidates.push(buildSignal("BUY LIMIT", "FVG", prev3.high, prev1.low, prev1.low, 7.5));
     } else if (bearFvg) {
-      results.push(buildSignal("SELL LIMIT", "FVG", prev1.high, prev3.low, prev1.high, 7.5));
+      candidates.push(buildSignal("SELL LIMIT", "FVG", prev1.high, prev3.low, prev1.high, 7.5));
     }
   }
 
   // 3. Detektor Liquidity Sweep (LIQ_SWEEP)
-  if (cfg.methods.includes("LIQ_SWEEP") || cfg.methods.includes("AUTO_SNIPER")) {
+  if (cfg.methods.includes("LIQ_SWEEP") || isAllMethod) {
     const sweepLow = prev1.low < prev2.low && prev1.close > prev2.low && last.close > prev1.high;
     const sweepHigh = prev1.high > prev2.high && prev1.close < prev2.high && last.close < prev1.low;
 
     if (sweepLow) {
-      results.push(buildSignal("BUY LIMIT", "LIQ_SWEEP", prev1.low, prev2.low, prev2.low, 8.2));
+      candidates.push(buildSignal("BUY LIMIT", "LIQ_SWEEP", prev1.low, prev2.low, prev2.low, 8.2));
     } else if (sweepHigh) {
-      results.push(buildSignal("SELL LIMIT", "LIQ_SWEEP", prev2.high, prev1.high, prev2.high, 8.2));
+      candidates.push(buildSignal("SELL LIMIT", "LIQ_SWEEP", prev2.high, prev1.high, prev2.high, 8.2));
     }
   }
 
-  return results;
+  if (candidates.length === 0) return [];
+
+  // Deterministic One-Way Lock: pilih arah dengan skor tertinggi agar tidak bentrok BUY & SELL
+  candidates.sort((a, b) => b.score - a.score);
+  const lockedDirection = candidates[0].direction;
+  return candidates.filter((sig) => sig.direction === lockedDirection);
 }
 
 async function sendTelegram(env, s, lot) {
