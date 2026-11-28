@@ -1,2227 +1,1124 @@
-/**
- * Liamvtrade Quant Terminal — methods.js (v4.1-ohlc-npattern)
- * Mesin Analisis ICT / SMC / Liquidity / Pola N Berbasis Data Candle OHLC Nyata,
- * Detektor Ketat (No Fallback SIGNAL), Gate RR >= 1.5, Gate News ±30m & Actual vs Forecast.
- */
+const DEFAULT_CONFIG = {
+  enabled: true,
+  pairs: ["XAUUSD", "US100", "EURUSD", "BTCUSDT"],
+  timeframes: ["M5", "M15", "H1", "H4"],
+  methods: ["auto"],
+  minScore: 4,
+  lot: 0.02
+};
 
-(function (global) {
-  'use strict';
-
-  const ENGINE_VERSION = 'v4.1-ohlc-npattern';
-  const DEFAULT_MAX_DATA_AGE_MS = 120000;
-  const NEWS_LOCK_WINDOW_MS = 30 * 60 * 1000;
-  const MIN_RR_TP1 = 1.5;
-
-  const PAIR_SPECS = {
-    XAUUSD: {
-      label: 'XAUUSD',
-      decimals: 2,
-      pipSize: 0.1,
-      contractSize: 100,
-      pipValuePerLot: 10,
-      baseAtrM15: 3.2,
-      minSlPips: 8,
-      maxSlPips: { M5: 55, M15: 85, H1: 140, H4: 240 },
-      defaultSpreadPips: 2.5
-    },
-    US100: {
-      label: 'US100',
-      decimals: 2,
-      pipSize: 1.0,
-      contractSize: 1,
-      pipValuePerLot: 1,
-      baseAtrM15: 34.0,
-      minSlPips: 10,
-      maxSlPips: { M5: 70, M15: 110, H1: 180, H4: 300 },
-      defaultSpreadPips: 2.0
-    },
-    BTCUSDT: {
-      label: 'BTCUSDT',
-      decimals: 2,
-      pipSize: 1.0,
-      contractSize: 1,
-      pipValuePerLot: 1,
-      baseAtrM15: 180.0,
-      minSlPips: 20,
-      maxSlPips: { M5: 160, M15: 260, H1: 450, H4: 750 },
-      defaultSpreadPips: 15.0
-    },
-    EURUSD: {
-      label: 'EURUSD',
-      decimals: 5,
-      pipSize: 0.0001,
-      contractSize: 100000,
-      pipValuePerLot: 10,
-      baseAtrM15: 0.0014,
-      minSlPips: 5,
-      maxSlPips: { M5: 25, M15: 40, H1: 70, H4: 120 },
-      defaultSpreadPips: 1.0
-    }
-  };
-
-  const TF_CONFIG = {
-    M5:  { atrMult: 0.45, expiryMin: 25,  candleMs: 5 * 60 * 1000,   label: 'M5 Scalping' },
-    M15: { atrMult: 0.80, expiryMin: 60,  candleMs: 15 * 60 * 1000,  label: 'M15 Intraday' },
-    H1:  { atrMult: 1.55, expiryMin: 180, candleMs: 60 * 60 * 1000,  label: 'H1 Session Swing' },
-    H4:  { atrMult: 2.75, expiryMin: 360, candleMs: 240 * 60 * 1000, label: 'H4 HTF Swing' }
-  };
-
-  const METHOD_CATALOG = {
-    auto: {
-      key: 'auto',
-      name: 'Auto Sniper (Multi-Confluence + Pola N)',
-      shortTag: 'AUTO'
-    },
-    n_pattern: {
-      key: 'n_pattern',
-      name: 'Pola N (Impulse-Pullback-Break)',
-      shortTag: 'POLA N'
-    },
-    sweep: {
-      key: 'sweep',
-      name: 'Liquidity Sweep + MSS',
-      shortTag: 'SWEEP'
-    },
-    judas: {
-      key: 'judas',
-      name: 'ICT Judas Swing (Asia Range Manipulation)',
-      shortTag: 'JUDAS'
-    },
-    smc_ob: {
-      key: 'smc_ob',
-      name: 'SMC Order Block + FVG Confluence',
-      shortTag: 'SMC OB'
-    },
-    silver_bullet: {
-      key: 'silver_bullet',
-      name: 'ICT Silver Bullet (Time-Window FVG)',
-      shortTag: 'SILVER BULLET'
-    },
-    ote: {
-      key: 'ote',
-      name: 'FIB OTE (0.62–0.79 / Entry 0.705)',
-      shortTag: 'FIB OTE'
-    }
-  };
-
-  const lockedSignalCache = new Map();
-  const lockedPairCandleBias = new Map();
-
-  function pruneCacheMap(map, maxSize) {
-    if (map.size <= maxSize) return;
-    const excess = map.size - maxSize;
-    let count = 0;
-    for (const k of map.keys()) {
-      map.delete(k);
-      count += 1;
-      if (count >= excess) break;
-    }
+const PAIR_SPECS = {
+  XAUUSD: {
+    source: "twelvedata",
+    apiSymbol: "XAU/USD",
+    label: "XAUUSD",
+    decimals: 2,
+    pipSize: 0.1,
+    pipValuePerLot: 10,
+    baseAtrM15: 3.2,
+    defaultSpreadPips: 2.5
+  },
+  US100: {
+    source: "twelvedata",
+    apiSymbol: "NDX",
+    label: "US100",
+    decimals: 2,
+    pipSize: 1.0,
+    pipValuePerLot: 1,
+    baseAtrM15: 34.0,
+    defaultSpreadPips: 2.0
+  },
+  BTCUSDT: {
+    source: "binance",
+    apiSymbol: "BTCUSDT",
+    label: "BTCUSDT",
+    decimals: 2,
+    pipSize: 1.0,
+    pipValuePerLot: 1,
+    baseAtrM15: 180.0,
+    defaultSpreadPips: 15.0
+  },
+  EURUSD: {
+    source: "twelvedata",
+    apiSymbol: "EUR/USD",
+    label: "EURUSD",
+    decimals: 5,
+    pipSize: 0.0001,
+    pipValuePerLot: 10,
+    baseAtrM15: 0.0014,
+    defaultSpreadPips: 1.0
   }
+};
 
-  function normalizePair(pair) {
-    const clean = String(pair || 'XAUUSD').trim().toUpperCase();
-    if (clean === 'BTC' || clean === 'BTCUSD') return 'BTCUSDT';
-    if (clean === 'NDX' || clean === 'NASDAQ') return 'US100';
-    if (clean === 'GOLD' || clean === 'XAU') return 'XAUUSD';
-    if (clean === 'EUR') return 'EURUSD';
-    return PAIR_SPECS[clean] ? clean : 'XAUUSD';
-  }
+const TF_MAP = {
+  M5:  { td: "5min",  bn: "5m",  intervalMin: 2,  atrMult: 0.45, expiryMin: 25,  candleMs: 5 * 60 * 1000,   label: "M5 Scalping" },
+  M15: { td: "15min", bn: "15m", intervalMin: 6,  atrMult: 0.80, expiryMin: 60,  candleMs: 15 * 60 * 1000,  label: "M15 Intraday" },
+  H1:  { td: "1h",    bn: "1h",  intervalMin: 30, atrMult: 1.55, expiryMin: 180, candleMs: 60 * 60 * 1000,  label: "H1 Session Swing" },
+  H4:  { td: "4h",    bn: "4h",  intervalMin: 60, atrMult: 2.75, expiryMin: 360, candleMs: 240 * 60 * 1000, label: "H4 HTF Swing" }
+};
 
-  function getPairSpec(pair) {
-    const key = normalizePair(pair);
-    return PAIR_SPECS[key] || PAIR_SPECS.XAUUSD;
-  }
+const METHOD_CATALOG = {
+  auto:          { key: "auto",          name: "Auto Sniper (Multi-Confluence + Pola N)", shortTag: "AUTO" },
+  n_pattern:     { key: "n_pattern",     name: "Pola N (Impulse-Pullback-Break)",        shortTag: "POLA N" },
+  sweep:         { key: "sweep",         name: "Liquidity Sweep + MSS",                  shortTag: "SWEEP" },
+  judas:         { key: "judas",         name: "ICT Judas Swing (Asia Range)",           shortTag: "JUDAS" },
+  smc_ob:        { key: "smc_ob",        name: "SMC Order Block + FVG Confluence",       shortTag: "SMC OB" },
+  silver_bullet: { key: "silver_bullet", name: "ICT Silver Bullet (Time-Window FVG)",    shortTag: "SILVER BULLET" },
+  ote:           { key: "ote",           name: "FIB OTE (0.62–0.79 / Entry 0.705)",      shortTag: "FIB OTE" }
+};
 
-  function formatPrice(pair, value) {
-    const spec = getPairSpec(pair);
-    if (!Number.isFinite(Number(value))) return '--';
-    return Number(value).toFixed(spec.decimals);
-  }
+const MIN_RR_TP1 = 1.5;
 
-  function toPips(pair, priceDiff) {
-    const key = normalizePair(pair);
-    const spec = getPairSpec(key);
-    const raw = Math.abs(Number(priceDiff) || 0) / spec.pipSize;
-    return spec.decimals === 2 && key === 'XAUUSD'
-      ? Number(raw.toFixed(1))
-      : Math.round(raw);
-  }
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization"
+};
 
-  function formatIsoTime(ts) {
-    if (!Number.isFinite(Number(ts)) || Number(ts) <= 0) return 'N/A';
-    return new Date(Number(ts)).toISOString();
-  }
-
-  function hasNonEmptyNumericValue(val) {
-    if (val === undefined || val === null) return false;
-    if (typeof val === 'string' && val.trim() === '') return false;
-    return Number.isFinite(Number(val));
-  }
-
-  function getWibContext(refTimeMs) {
-    const ms = Number.isFinite(refTimeMs) ? refTimeMs : Date.now();
-    const now = new Date(ms);
-    const utcMs = now.getTime() + now.getTimezoneOffset() * 60000;
-    const wib = new Date(utcMs + 7 * 3600000);
-    return {
-      wib,
-      hour: wib.getHours(),
-      minute: wib.getMinutes(),
-      day: wib.getDay(),
-      isWeekend: wib.getDay() === 0 || wib.getDay() === 6
-    };
-  }
-
-  function getNyParts(refTimeMs) {
-    const ms = Number.isFinite(refTimeMs) ? refTimeMs : Date.now();
-    const dateObj = new Date(ms);
-    const parts = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/New_York',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      weekday: 'short',
-      hour: '2-digit',
-      minute: '2-digit',
-      hour12: false
-    }).formatToParts(dateObj);
-
-    const map = {};
-    for (const p of parts) {
-      if (p.type !== 'literal') map[p.type] = p.value;
+export default {
+  async fetch(request, env) {
+    if (request.method === "OPTIONS") {
+      return new Response(null, { headers: CORS_HEADERS });
     }
 
-    return {
-      year: map.year,
-      month: map.month,
-      day: map.day,
-      dateKey: `${map.year}-${map.month}-${map.day}`,
-      nyHour: Number(map.hour) || 0,
-      nyMinute: Number(map.minute) || 0,
-      nyWeekday: map.weekday || 'Mon'
-    };
-  }
+    const url = new URL(request.url);
 
-  function getNySessionContext(refTimeMs) {
-    const ms = Number.isFinite(refTimeMs) ? refTimeMs : Date.now();
-    const p = getNyParts(ms);
-    const nyHour = p.nyHour;
-    const nyMinute = p.nyMinute;
-    const nyWeekday = p.nyWeekday;
-
-    const isWeekend =
-      nyWeekday === 'Sat' ||
-      nyWeekday === 'Sun' ||
-      (nyWeekday === 'Fri' && nyHour >= 17);
-
-    let sessionName = 'Off-Session / NY Close';
-    let sessionBiasHint = 'Konsolidasi / Transisi Sesi';
-
-    const isAsiaSession = nyHour >= 19 || nyHour < 0;
-    const isLondonJudasWindow = nyHour >= 2 && nyHour < 5;
-    const isNyOpenJudasWindow = nyHour >= 7 && nyHour < 9;
-    const isJudasWindow = isLondonJudasWindow || isNyOpenJudasWindow;
-
-    const silverBulletWindow =
-      (nyHour === 3) ? '03:00–04:00 NY' :
-      (nyHour === 10) ? '10:00–11:00 NY' :
-      (nyHour === 14) ? '14:00–15:00 NY' :
-      null;
-    const isSilverBulletWindow = Boolean(silverBulletWindow);
-
-    if (isLondonJudasWindow) {
-      sessionName = 'London Killzone';
-      sessionBiasHint = 'Pembukaan London & Potensi Judas Swing (02–05 NY)';
-    } else if (nyHour >= 7 && nyHour < 11) {
-      sessionName = 'New York AM Killzone';
-      sessionBiasHint = 'Ekspansi Likuiditas NY AM (07–11 NY)';
-    } else if (nyHour >= 13 && nyHour < 16) {
-      sessionName = 'New York PM Session';
-      sessionBiasHint = 'Re-distribusi Sesi US (13–16 NY)';
-    } else if (nyHour >= 19 || nyHour < 2) {
-      sessionName = 'Asia Range';
-      sessionBiasHint = 'Pembentukan Range Asia (19:00–00:00 NY)';
+    if (url.pathname === "/config" && request.method === "GET") {
+      const cfg = await getConfig(env);
+      return jsonResponse(cfg);
     }
 
-    return {
-      year: p.year,
-      month: p.month,
-      day: p.day,
-      dateKey: p.dateKey,
-      nyHour,
-      nyMinute,
-      nyWeekday,
-      isWeekend,
-      sessionName,
-      sessionBiasHint,
-      isAsiaSession,
-      isLondonJudasWindow,
-      isNyOpenJudasWindow,
-      isJudasWindow,
-      isSilverBulletWindow,
-      silverBulletWindow
-    };
-  }
-
-  function getCandleCloseTimestamp(timeframe, refTimeMs, explicitCloseTs) {
-    if (Number.isFinite(Number(explicitCloseTs)) && Number(explicitCloseTs) > 0) {
-      return Number(explicitCloseTs);
-    }
-    const tfCfg = TF_CONFIG[timeframe] || TF_CONFIG.M15;
-    const baseMs = Number.isFinite(refTimeMs) ? refTimeMs : Date.now();
-    const candleOpenTs = Math.floor(baseMs / tfCfg.candleMs) * tfCfg.candleMs;
-    return candleOpenTs + tfCfg.candleMs;
-  }
-
-  function buildDeterministicSignalId(pair, timeframe, methodKey, candleCloseTs) {
-    const cleanPair = normalizePair(pair);
-    return `${cleanPair}_${timeframe}_${methodKey.toUpperCase()}_${candleCloseTs}`;
-  }
-
-  function clearLockedSignal(signalId) {
-    if (signalId) {
-      lockedSignalCache.delete(signalId);
-    } else {
-      lockedSignalCache.clear();
-      lockedPairCandleBias.clear();
-    }
-  }
-
-  // ============================================================================
-  // NORMALISASI & PRIMITIF OHLC NYATA
-  // ============================================================================
-
-  function normalizeCandleArray(rawCandles) {
-    if (!Array.isArray(rawCandles)) return [];
-    const list = [];
-    for (let i = 0; i < rawCandles.length; i += 1) {
-      const c = rawCandles[i];
-      if (!c) continue;
-      let open, high, low, close, ts;
-      if (Array.isArray(c)) {
-        ts = Number(c[0]);
-        open = Number(c[1]);
-        high = Number(c[2]);
-        low = Number(c[3]);
-        close = Number(c[4]);
-      } else {
-        ts = Number(c.timestampMs || c.timeMs || c.ts || c.time || c.openTime || 0);
-        if (ts > 0 && ts < 1e12) ts = ts * 1000;
-        open = Number(c.open !== undefined ? c.open : c.o);
-        high = Number(c.high !== undefined ? c.high : c.h);
-        low = Number(c.low !== undefined ? c.low : c.l);
-        close = Number(c.close !== undefined ? c.close : c.c);
+    if (url.pathname === "/config" && request.method === "POST") {
+      if (env.ADMIN_SECRET) {
+        const auth = request.headers.get("Authorization");
+        if (auth !== `Bearer ${env.ADMIN_SECRET}`) {
+          return jsonResponse({ error: "Unauthorized" }, 401);
+        }
       }
+      const body = await request.json();
+      const current = await getConfig(env);
+      const updated = normalizeConfig({ ...current, ...body });
+      await env.LIAM_KV.put("config", JSON.stringify(updated));
+      return jsonResponse({ ok: true, config: updated });
+    }
 
-      if (!Number.isFinite(open) || !Number.isFinite(high) || !Number.isFinite(low) || !Number.isFinite(close)) {
+    if (url.pathname === "/status" && request.method === "GET") {
+      const cfg = await getConfig(env);
+      const lastScan = await env.LIAM_KV.get("last_scan", "json");
+      return jsonResponse({ ok: true, enabled: cfg.enabled, config: cfg, lastScan });
+    }
+
+    if (url.pathname === "/scan") {
+      const logs = await runScanner(env, true);
+      return jsonResponse({ ok: true, logs });
+    }
+
+    return jsonResponse({ status: "Liamvtrade Quant Cloud Engine Active (v4.1 ICT/SMC)" });
+  },
+
+  async scheduled(event, env, ctx) {
+    ctx.waitUntil(runScanner(env, false));
+  }
+};
+
+function normalizePair(pair) {
+  const clean = String(pair || "XAUUSD").trim().toUpperCase();
+  if (clean === "BTC" || clean === "BTCUSD" || clean === "BTCUSDT") return "BTCUSDT";
+  if (clean === "NDX" || clean === "NASDAQ" || clean === "NAS100" || clean === "US100") return "US100";
+  if (clean === "GOLD" || clean === "XAU" || clean === "XAUUSD") return "XAUUSD";
+  if (clean === "EUR" || clean === "EURUSD") return "EURUSD";
+  return PAIR_SPECS[clean] ? clean : null;
+}
+
+function normalizeMethodKey(m) {
+  const clean = String(m || "").trim().toLowerCase();
+  if (clean === "auto" || clean === "auto_sniper" || clean === "all_method") return "auto";
+  if (clean === "n_pattern" || clean === "pola_n" || clean === "npattern") return "n_pattern";
+  if (clean === "sweep" || clean === "liq_sweep") return "sweep";
+  if (clean === "judas" || clean === "judas_swing") return "judas";
+  if (clean === "smc_ob" || clean === "fvg" || clean === "ob") return "smc_ob";
+  if (clean === "silver_bullet" || clean === "sb") return "silver_bullet";
+  if (clean === "ote" || clean === "fib_ote") return "ote";
+  return METHOD_CATALOG[clean] ? clean : null;
+}
+
+function normalizeConfig(rawCfg) {
+  const merged = { ...DEFAULT_CONFIG, ...(rawCfg || {}) };
+  const pairs = Array.isArray(merged.pairs)
+    ? Array.from(new Set(merged.pairs.map(normalizePair).filter(Boolean)))
+    : DEFAULT_CONFIG.pairs;
+  const timeframes = Array.isArray(merged.timeframes)
+    ? Array.from(new Set(merged.timeframes.map((t) => String(t).toUpperCase()).filter((t) => TF_MAP[t])))
+    : DEFAULT_CONFIG.timeframes;
+  const methods = Array.isArray(merged.methods)
+    ? Array.from(new Set(merged.methods.map(normalizeMethodKey).filter(Boolean)))
+    : DEFAULT_CONFIG.methods;
+
+  return {
+    enabled: Boolean(merged.enabled),
+    pairs: pairs.length ? pairs : [],
+    timeframes: timeframes.length ? timeframes : [],
+    methods: methods.length ? methods : ["auto"],
+    minScore: Number.isFinite(Number(merged.minScore)) ? Number(merged.minScore) : 4,
+    lot: Number.isFinite(Number(merged.lot)) && Number(merged.lot) > 0 ? Number(merged.lot) : 0.02
+  };
+}
+
+async function getConfig(env) {
+  const raw = await env.LIAM_KV.get("config");
+  return normalizeConfig(raw ? JSON.parse(raw) : DEFAULT_CONFIG);
+}
+
+async function runScanner(env, forceAll = false) {
+  const cfg = await getConfig(env);
+  if (!cfg.enabled) return ["Scanner sedang OFF"];
+  if (cfg.pairs.length === 0 || cfg.timeframes.length === 0 || cfg.methods.length === 0) {
+    return ["Tidak ada Pair / TF / Method yang diaktifkan"];
+  }
+
+  const nowMs = Date.now();
+  const now = new Date(nowMs);
+  const wibHour = (now.getUTCHours() + 7) % 24;
+  const nyCtx = getNySessionContext(nowMs);
+  const currentMinute = now.getUTCMinutes();
+  const isLiquidHour = wibHour >= 12 || wibHour <= 3;
+
+  const logs = [];
+
+  for (const pair of cfg.pairs) {
+    const spec = PAIR_SPECS[pair];
+    if (!spec) continue;
+
+    if (spec.source === "twelvedata" && (nyCtx.isWeekend || (!forceAll && !isLiquidHour))) {
+      logs.push(`Skip ${pair} (${nyCtx.isWeekend ? "Market weekend tutup" : "Jam sepi subuh"})`);
+      continue;
+    }
+
+    // Ambil H1 sebagai HTF bias referensi jika tersedia
+    let h1Candles = [];
+    try {
+      h1Candles = await fetchCandles(spec, TF_MAP.H1, env, 80);
+      if (spec.source === "twelvedata") await sleep(1200);
+    } catch (_) {}
+
+    for (const tf of cfg.timeframes) {
+      const tfInfo = TF_MAP[tf];
+      if (!tfInfo) continue;
+
+      if (!forceAll && currentMinute % tfInfo.intervalMin !== 0) {
         continue;
       }
-      if (open <= 0 || high <= 0 || low <= 0 || close <= 0) continue;
-      const realHigh = Math.max(open, high, low, close);
-      const realLow = Math.min(open, high, low, close);
 
-      list.push({
-        index: list.length,
-        ts: Number.isFinite(ts) && ts > 0 ? ts : (i + 1) * 60000,
-        open,
-        high: realHigh,
-        low: realLow,
-        close,
-        body: Math.abs(close - open),
-        range: Math.max(1e-9, realHigh - realLow),
-        isBull: close >= open,
-        isBear: close < open
-      });
+      try {
+        const candles = tf === "H1" && h1Candles.length >= 30
+          ? h1Candles
+          : await fetchCandles(spec, tfInfo, env, 100);
+
+        if (!candles || candles.length < 20) {
+          logs.push(`Skip ${pair} ${tf}: Data candle kurang (${candles ? candles.length : 0})`);
+          continue;
+        }
+
+        const signals = evaluateConfiguredMethods(pair, tf, candles, h1Candles, cfg, nowMs);
+
+        if (signals.length === 0) {
+          logs.push(`${pair} ${tf}: NO_TRADE (Belum ada setup ICT/SMC valid)`);
+        }
+
+        for (const sig of signals) {
+          if (sig.score < cfg.minScore) continue;
+
+          const dedupKey = `dedup:${pair}:${tf}:${sig.selectedMethodKey}:${sig.entryFmt}`;
+          const alreadySent = await env.LIAM_KV.get(dedupKey);
+          if (alreadySent) {
+            logs.push(`Duplikat diabaikan: ${pair} ${tf} ${sig.selectedMethodKey}`);
+            continue;
+          }
+
+          await sendTelegram(env, sig, cfg.lot);
+          await env.LIAM_KV.put(dedupKey, "1", { expirationTtl: 14400 });
+          logs.push(`TERKIRIM: ${pair} ${tf} ${sig.direction} (${sig.selectedMethodKey.toUpperCase()}) @ ${sig.entryFmt} | RR 1:${sig.rrTp1}`);
+        }
+
+        if (spec.source === "twelvedata") {
+          await sleep(1500);
+        }
+      } catch (err) {
+        logs.push(`Error ${pair} ${tf}: ${err.message}`);
+      }
     }
-    list.sort((a, b) => a.ts - b.ts);
-    for (let i = 0; i < list.length; i += 1) {
-      list[i].index = i;
-    }
-    return list;
   }
 
-  function calculateAtrSeries(candles, period) {
-    const p = period || 14;
-    if (!Array.isArray(candles) || candles.length === 0) return [];
-    const trList = [];
-    for (let i = 0; i < candles.length; i += 1) {
-      const c = candles[i];
-      if (i === 0) {
-        trList.push(c.high - c.low);
-      } else {
-        const prevClose = candles[i - 1].close;
-        const tr = Math.max(
-          c.high - c.low,
-          Math.abs(c.high - prevClose),
-          Math.abs(c.low - prevClose)
-        );
-        trList.push(tr);
-      }
-    }
+  await env.LIAM_KV.put(
+    "last_scan",
+    JSON.stringify({ time: now.toISOString(), summary: logs.slice(0, 12) }),
+    { expirationTtl: 86400 }
+  );
 
-    const atrSeries = new Array(candles.length).fill(0);
-    let sum = 0;
-    for (let i = 0; i < trList.length; i += 1) {
-      sum += trList[i];
-      if (i < p) {
-        atrSeries[i] = sum / (i + 1);
-      } else {
-        atrSeries[i] = (atrSeries[i - 1] * (p - 1) + trList[i]) / p;
+  return logs;
+}
+
+function sleep(ms) {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+async function fetchCandles(spec, tfInfo, env, limit = 100) {
+  if (spec.source === "binance") {
+    const res = await fetch(
+      `https://data-api.binance.vision/api/v3/klines?symbol=${spec.apiSymbol}&interval=${tfInfo.bn}&limit=${limit}`,
+      {
+        headers: {
+          "Accept": "application/json",
+          "User-Agent": "Liamvtrade-Quant-Worker/4.1"
+        }
       }
-    }
-    return atrSeries;
+    );
+    if (!res.ok) throw new Error(`Binance HTTP ${res.status}`);
+    const data = await res.json();
+    if (!Array.isArray(data)) throw new Error(data.msg || "Respons Binance tidak valid");
+    return normalizeCandleArray(data);
   }
 
-  function detectFractalSwings(candles, leftBars, rightBars) {
-    const L = leftBars || 3;
-    const R = rightBars || 3;
-    const swingHighs = [];
-    const swingLows = [];
+  const res = await fetch(
+    `https://api.twelvedata.com/time_series?symbol=${spec.apiSymbol}&interval=${tfInfo.td}&outputsize=${limit}&timezone=UTC&apikey=${env.TWELVEDATA_API_KEY}`
+  );
+  if (!res.ok) throw new Error(`TwelveData HTTP ${res.status}`);
+  const data = await res.json();
+  if (data.status === "error") throw new Error(data.message || "TwelveData API error");
+  if (!Array.isArray(data.values)) return [];
 
-    if (!Array.isArray(candles) || candles.length < L + R + 1) {
-      return { swingHighs, swingLows };
-    }
-
-    for (let i = L; i < candles.length - R; i += 1) {
-      const curr = candles[i];
-      let isHigh = true;
-      let isLow = true;
-
-      for (let k = i - L; k <= i + R; k += 1) {
-        if (k === i) continue;
-        if (candles[k].high >= curr.high) isHigh = false;
-        if (candles[k].low <= curr.low) isLow = false;
-      }
-
-      if (isHigh) {
-        swingHighs.push({
-          index: i,
-          ts: curr.ts,
-          price: curr.high,
-          candle: curr
-        });
-      }
-      if (isLow) {
-        swingLows.push({
-          index: i,
-          ts: curr.ts,
-          price: curr.low,
-          candle: curr
-        });
-      }
-    }
-
-    return { swingHighs, swingLows };
-  }
-
-  function isDisplacementCandle(candles, idx, atrSeries) {
-    const c = candles[idx];
-    if (!c) return { valid: false, type: null, reason: '' };
-    const atr = Math.max(1e-9, (atrSeries && atrSeries[idx]) || c.range);
-
-    if (c.body >= 1.5 * atr) {
-      return {
-        valid: true,
-        direction: c.isBull ? 'BUY' : 'SELL',
-        reason: `body candle >= 1.5x ATR (${formatPrice('XAUUSD', c.body)} vs ${(1.5 * atr).toFixed(4)})`
-      };
-    }
-
-    if (idx >= 2) {
-      const c0 = candles[idx - 2];
-      const c1 = candles[idx - 1];
-      const c2 = candles[idx];
-      const allBull = c0.isBull && c1.isBull && c2.isBull;
-      const allBear = c0.isBear && c1.isBear && c2.isBear;
-      if (allBull || allBear) {
-        const totalMove = Math.abs(c2.close - c0.open);
-        if (totalMove >= atr * 0.8) {
-          return {
-            valid: true,
-            direction: allBull ? 'BUY' : 'SELL',
-            reason: `3 candle searah (${allBull ? 'BULLISH' : 'BEARISH'})`
-          };
-        }
-      }
-    }
-
-    return { valid: false, direction: null, reason: '' };
-  }
-
-  function detectFVGs(candles, atrSeries, minAtrRatio) {
-    const ratio = Number.isFinite(minAtrRatio) ? minAtrRatio : 0.3;
-    const fvgs = [];
-    if (!Array.isArray(candles) || candles.length < 3) return fvgs;
-
-    for (let i = 2; i < candles.length; i += 1) {
-      const c1 = candles[i - 2];
-      const c3 = candles[i];
-      const atr = Math.max(1e-9, (atrSeries && atrSeries[i]) || c3.range);
-      const minGap = ratio * atr;
-
-      if (c3.low > c1.high) {
-        const gapSize = c3.low - c1.high;
-        if (gapSize >= minGap) {
-          let mitigated = false;
-          for (let j = i + 1; j < candles.length; j += 1) {
-            if (candles[j].low <= c1.high + gapSize * 0.25) {
-              mitigated = true;
-              break;
-            }
-          }
-          fvgs.push({
-            direction: 'BUY',
-            top: c3.low,
-            bottom: c1.high,
-            ce: (c3.low + c1.high) / 2,
-            size: gapSize,
-            createdIndex: i,
-            ts: c3.ts,
-            mitigated
-          });
-        }
-      }
-
-      if (c3.high < c1.low) {
-        const gapSize = c1.low - c3.high;
-        if (gapSize >= minGap) {
-          let mitigated = false;
-          for (let j = i + 1; j < candles.length; j += 1) {
-            if (candles[j].high >= c3.high - gapSize * 0.25) {
-              mitigated = true;
-              break;
-            }
-          }
-          fvgs.push({
-            direction: 'SELL',
-            top: c1.low,
-            bottom: c3.high,
-            ce: (c1.low + c3.high) / 2,
-            size: gapSize,
-            createdIndex: i,
-            ts: c3.ts,
-            mitigated
-          });
-        }
-      }
-    }
-
-    return fvgs;
-  }
-
-  function detectOrderBlocks(candles, atrSeries, fvgs) {
-    const obs = [];
-    if (!Array.isArray(candles) || candles.length < 4) return obs;
-
-    for (let i = 1; i < candles.length; i += 1) {
-      const disp = isDisplacementCandle(candles, i, atrSeries);
-      if (!disp.valid) continue;
-
-      if (disp.direction === 'BUY') {
-        let obCandle = null;
-        for (let k = i - 1; k >= Math.max(0, i - 6); k -= 1) {
-          if (candles[k].isBear) {
-            obCandle = candles[k];
-            break;
-          }
-        }
-        if (!obCandle) continue;
-
-        const matchingFvg = (fvgs || []).find((f) =>
-          f.direction === 'BUY' &&
-          f.createdIndex >= i - 1 &&
-          f.createdIndex <= i + 2 &&
-          f.bottom <= obCandle.high &&
-          f.top >= obCandle.low
-        );
-
-        let mitigated = false;
-        for (let j = i + 1; j < candles.length; j += 1) {
-          if (candles[j].close < obCandle.low) {
-            mitigated = true;
-            break;
-          }
-        }
-
-        obs.push({
-          direction: 'BUY',
-          top: obCandle.high,
-          bottom: obCandle.low,
-          mid50: (obCandle.high + obCandle.low) / 2,
-          candleIndex: obCandle.index,
-          displacementIndex: i,
-          ts: obCandle.ts,
-          hasFvgOverlap: Boolean(matchingFvg),
-          fvg: matchingFvg || null,
-          mitigated
-        });
-      } else if (disp.direction === 'SELL') {
-        let obCandle = null;
-        for (let k = i - 1; k >= Math.max(0, i - 6); k -= 1) {
-          if (candles[k].isBull) {
-            obCandle = candles[k];
-            break;
-          }
-        }
-        if (!obCandle) continue;
-
-        const matchingFvg = (fvgs || []).find((f) =>
-          f.direction === 'SELL' &&
-          f.createdIndex >= i - 1 &&
-          f.createdIndex <= i + 2 &&
-          f.top >= obCandle.low &&
-          f.bottom <= obCandle.high
-        );
-
-        let mitigated = false;
-        for (let j = i + 1; j < candles.length; j += 1) {
-          if (candles[j].close > obCandle.high) {
-            mitigated = true;
-            break;
-          }
-        }
-
-        obs.push({
-          direction: 'SELL',
-          top: obCandle.high,
-          bottom: obCandle.low,
-          mid50: (obCandle.high + obCandle.low) / 2,
-          candleIndex: obCandle.index,
-          displacementIndex: i,
-          ts: obCandle.ts,
-          hasFvgOverlap: Boolean(matchingFvg),
-          fvg: matchingFvg || null,
-          mitigated
-        });
-      }
-    }
-
-    return obs;
-  }
-
-  function detectStructureShifts(candles, swings) {
-    const events = [];
-    const highs = (swings && swings.swingHighs) || [];
-    const lows = (swings && swings.swingLows) || [];
-
-    for (let i = 1; i < candles.length; i += 1) {
-      const c = candles[i];
-      const prev = candles[i - 1];
-
-      const lastHigh = highs.filter((h) => h.index < i).pop();
-      if (lastHigh && c.close > lastHigh.price && prev.close <= lastHigh.price) {
-        events.push({
-          type: 'BOS_BULL',
-          direction: 'BUY',
-          level: lastHigh.price,
-          index: i,
-          ts: c.ts,
-          swingIndex: lastHigh.index
-        });
-      }
-
-      const lastLow = lows.filter((l) => l.index < i).pop();
-      if (lastLow && c.close < lastLow.price && prev.close >= lastLow.price) {
-        events.push({
-          type: 'BOS_BEAR',
-          direction: 'SELL',
-          level: lastLow.price,
-          index: i,
-          ts: c.ts,
-          swingIndex: lastLow.index
-        });
-      }
-    }
-
-    return events;
-  }
-
-  function extractLiquidityLevels(candles, swings, pair) {
-    const spec = getPairSpec(pair);
-    const eqTol = Math.max(spec.pipSize * 1.5, ((candles[candles.length - 1] && candles[candles.length - 1].range) || spec.pipSize * 5) * 0.08);
-    const levels = [];
-
-    for (const sh of (swings.swingHighs || [])) {
-      levels.push({ kind: 'SWING_HIGH', side: 'HIGH', price: sh.price, index: sh.index, ts: sh.ts, label: `Swing High ${formatPrice(pair, sh.price)}` });
-    }
-    for (const sl of (swings.swingLows || [])) {
-      levels.push({ kind: 'SWING_LOW', side: 'LOW', price: sl.price, index: sl.index, ts: sl.ts, label: `Swing Low ${formatPrice(pair, sl.price)}` });
-    }
-
-    const highs = swings.swingHighs || [];
-    for (let i = 0; i < highs.length; i += 1) {
-      for (let j = i + 1; j < highs.length; j += 1) {
-        if (Math.abs(highs[i].price - highs[j].price) <= eqTol) {
-          const avg = (highs[i].price + highs[j].price) / 2;
-          levels.push({ kind: 'EQH', side: 'HIGH', price: avg, index: highs[j].index, ts: highs[j].ts, label: `Equal Highs ${formatPrice(pair, avg)}` });
-        }
-      }
-    }
-    const lows = swings.swingLows || [];
-    for (let i = 0; i < lows.length; i += 1) {
-      for (let j = i + 1; j < lows.length; j += 1) {
-        if (Math.abs(lows[i].price - lows[j].price) <= eqTol) {
-          const avg = (lows[i].price + lows[j].price) / 2;
-          levels.push({ kind: 'EQL', side: 'LOW', price: avg, index: lows[j].index, ts: lows[j].ts, label: `Equal Lows ${formatPrice(pair, avg)}` });
-        }
-      }
-    }
-
-    const byDate = new Map();
-    const asiaByDate = new Map();
-
-    for (const c of candles) {
-      const ny = getNyParts(c.ts);
-      if (!byDate.has(ny.dateKey)) {
-        byDate.set(ny.dateKey, { high: c.high, low: c.low, ts: c.ts });
-      } else {
-        const d = byDate.get(ny.dateKey);
-        if (c.high > d.high) d.high = c.high;
-        if (c.low < d.low) d.low = c.low;
-      }
-
-      if (ny.nyHour >= 19) {
-        if (!asiaByDate.has(ny.dateKey)) {
-          asiaByDate.set(ny.dateKey, { high: c.high, low: c.low, ts: c.ts, endTs: c.ts });
-        } else {
-          const a = asiaByDate.get(ny.dateKey);
-          if (c.high > a.high) a.high = c.high;
-          if (c.low < a.low) a.low = c.low;
-          a.endTs = c.ts;
-        }
-      }
-    }
-
-    const dateKeys = Array.from(byDate.keys()).sort();
-    if (dateKeys.length >= 2) {
-      const prevKey = dateKeys[dateKeys.length - 2];
-      const prevDay = byDate.get(prevKey);
-      levels.push({ kind: 'PDH', side: 'HIGH', price: prevDay.high, index: candles.length - 1, ts: prevDay.ts, label: `PDH ${formatPrice(pair, prevDay.high)}` });
-      levels.push({ kind: 'PDL', side: 'LOW', price: prevDay.low, index: candles.length - 1, ts: prevDay.ts, label: `PDL ${formatPrice(pair, prevDay.low)}` });
-    }
-
-    const asiaKeys = Array.from(asiaByDate.keys()).sort();
-    let latestAsia = null;
-    if (asiaKeys.length > 0) {
-      const lastAsiaKey = asiaKeys[asiaKeys.length - 1];
-      latestAsia = Object.assign({ dateKey: lastAsiaKey }, asiaByDate.get(lastAsiaKey));
-      levels.push({ kind: 'ASIA_HIGH', side: 'HIGH', price: latestAsia.high, index: candles.length - 1, ts: latestAsia.endTs, label: `Asia High ${formatPrice(pair, latestAsia.high)}` });
-      levels.push({ kind: 'ASIA_LOW', side: 'LOW', price: latestAsia.low, index: candles.length - 1, ts: latestAsia.endTs, label: `Asia Low ${formatPrice(pair, latestAsia.low)}` });
-    }
-
-    return { levels, latestAsia };
-  }
-
-  function detectSweeps(candles, liquidityLevels, pair) {
-    const sweeps = [];
-    if (!Array.isArray(candles) || candles.length < 2) return sweeps;
-
-    for (const lvl of (liquidityLevels || [])) {
-      if (lvl.index >= candles.length - 1) continue;
-
-      for (let startIdx = lvl.index + 1; startIdx < candles.length; startIdx += 1) {
-        const maxWindow = Math.min(candles.length - 1, startIdx + 2);
-
-        if (lvl.side === 'LOW') {
-          let extremeLow = Infinity;
-          let sweepCandle = null;
-          for (let k = startIdx; k <= maxWindow; k += 1) {
-            if (candles[k].low < lvl.price) {
-              if (candles[k].low < extremeLow) extremeLow = candles[k].low;
-              if (candles[k].close >= lvl.price) {
-                sweepCandle = candles[k];
-                break;
-              }
-            }
-          }
-          if (sweepCandle && Number.isFinite(extremeLow)) {
-            sweeps.push({
-              side: 'LOW',
-              direction: 'BUY',
-              level: lvl.price,
-              levelLabel: lvl.label,
-              levelKind: lvl.kind,
-              extremePrice: extremeLow,
-              candleIndex: sweepCandle.index,
-              ts: sweepCandle.ts,
-              timeIso: formatIsoTime(sweepCandle.ts)
-            });
-            break;
-          }
-        } else if (lvl.side === 'HIGH') {
-          let extremeHigh = -Infinity;
-          let sweepCandle = null;
-          for (let k = startIdx; k <= maxWindow; k += 1) {
-            if (candles[k].high > lvl.price) {
-              if (candles[k].high > extremeHigh) extremeHigh = candles[k].high;
-              if (candles[k].close <= lvl.price) {
-                sweepCandle = candles[k];
-                break;
-              }
-            }
-          }
-          if (sweepCandle && Number.isFinite(extremeHigh)) {
-            sweeps.push({
-              side: 'HIGH',
-              direction: 'SELL',
-              level: lvl.price,
-              levelLabel: lvl.label,
-              levelKind: lvl.kind,
-              extremePrice: extremeHigh,
-              candleIndex: sweepCandle.index,
-              ts: sweepCandle.ts,
-              timeIso: formatIsoTime(sweepCandle.ts)
-            });
-            break;
-          }
-        }
-      }
-    }
-
-    sweeps.sort((a, b) => a.candleIndex - b.candleIndex);
-    return sweeps;
-  }
-
-  function computeHtfBias(h4Candles, h1Candles, entryCandles) {
-    const h4Norm = normalizeCandleArray(h4Candles);
-    const h1Norm = normalizeCandleArray(h1Candles);
-    const src = h4Norm.length >= 10 ? h4Norm : (h1Norm.length >= 10 ? h1Norm : entryCandles);
-    const tfTag = h4Norm.length >= 10 ? 'H4' : (h1Norm.length >= 10 ? 'H1' : 'TF');
-
-    const swings = detectFractalSwings(src, 3, 3);
-    const breaks = detectStructureShifts(src, swings);
-    const lastBos = breaks.length > 0 ? breaks[breaks.length - 1] : null;
-
-    const recentSlice = src.slice(-50);
-    const rangeHigh = recentSlice.length ? Math.max.apply(null, recentSlice.map((c) => c.high)) : 0;
-    const rangeLow = recentSlice.length ? Math.min.apply(null, recentSlice.map((c) => c.low)) : 0;
-    const eq = (rangeHigh + rangeLow) / 2;
-    const lastPrice = src.length ? src[src.length - 1].close : eq;
-    const zone = rangeHigh > rangeLow ? (lastPrice <= eq ? 'DISCOUNT' : 'PREMIUM') : 'EQUILIBRIUM';
-
-    let direction = null;
-    if (lastBos) {
-      direction = lastBos.direction;
-    } else if (src.length >= 2) {
-      direction = lastPrice >= src[src.length - 2].close ? 'BUY' : 'SELL';
-    }
-
+  const formatted = data.values.slice().reverse().map((c) => {
+    const parsedTs = Date.parse(String(c.datetime || "").replace(" ", "T") + "Z");
     return {
-      direction,
-      tfTag,
-      lastBos,
-      rangeHigh,
-      rangeLow,
-      equilibrium: eq,
-      zone
+      ts: Number.isFinite(parsedTs) ? parsedTs : Date.now(),
+      open: parseFloat(c.open),
+      high: parseFloat(c.high),
+      low: parseFloat(c.low),
+      close: parseFloat(c.close)
     };
+  });
+  return normalizeCandleArray(formatted);
+}
+
+// ============================================================================
+// PORTING MESIN ANALISIS v4.1-ohlc-npattern DARI methods.js
+// ============================================================================
+
+function formatPrice(pair, value) {
+  const spec = PAIR_SPECS[pair] || PAIR_SPECS.XAUUSD;
+  if (!Number.isFinite(Number(value))) return "--";
+  return Number(value).toFixed(spec.decimals);
+}
+
+function toPips(pair, priceDiff) {
+  const spec = PAIR_SPECS[pair] || PAIR_SPECS.XAUUSD;
+  const raw = Math.abs(Number(priceDiff) || 0) / spec.pipSize;
+  return spec.decimals === 2 && pair === "XAUUSD"
+    ? Number(raw.toFixed(1))
+    : Math.round(raw);
+}
+
+function formatIsoTime(ts) {
+  if (!Number.isFinite(Number(ts)) || Number(ts) <= 0) return "N/A";
+  return new Date(Number(ts)).toISOString();
+}
+
+function getNyParts(refTimeMs) {
+  const ms = Number.isFinite(refTimeMs) ? refTimeMs : Date.now();
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    weekday: "short",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false
+  }).formatToParts(new Date(ms));
+
+  const map = {};
+  for (const p of parts) {
+    if (p.type !== "literal") map[p.type] = p.value;
   }
 
-  // ============================================================================
-  // EVALUASI NEWS (ACTUAL VS FORECAST PER PAIR & GATE ±30 MENIT)
-  // ============================================================================
+  return {
+    dateKey: `${map.year}-${map.month}-${map.day}`,
+    nyHour: Number(map.hour) || 0,
+    nyMinute: Number(map.minute) || 0,
+    nyWeekday: map.weekday || "Mon"
+  };
+}
 
-  function inferNewsDirectionFromActualForecast(event, pair) {
-    if (!event) return null;
-    const explicitDir = String(event.direction || event.bias || '').trim().toUpperCase();
-    if (explicitDir === 'BUY' || explicitDir === 'BULLISH') return 'BUY';
-    if (explicitDir === 'SELL' || explicitDir === 'BEARISH') return 'SELL';
+function getNySessionContext(refTimeMs) {
+  const p = getNyParts(refTimeMs);
+  const { nyHour, nyMinute, nyWeekday, dateKey } = p;
 
-    if (!hasNonEmptyNumericValue(event.actual) || !hasNonEmptyNumericValue(event.forecast)) {
-      return null;
+  const isWeekend =
+    nyWeekday === "Sat" ||
+    nyWeekday === "Sun" ||
+    (nyWeekday === "Fri" && nyHour >= 17);
+
+  let sessionName = "Off-Session / NY Close";
+  const isLondonJudasWindow = nyHour >= 2 && nyHour < 5;
+  const isNyOpenJudasWindow = nyHour >= 7 && nyHour < 9;
+  const isJudasWindow = isLondonJudasWindow || isNyOpenJudasWindow;
+
+  const silverBulletWindow =
+    nyHour === 3 ? "03:00–04:00 NY" :
+    nyHour === 10 ? "10:00–11:00 NY" :
+    nyHour === 14 ? "14:00–15:00 NY" :
+    null;
+
+  if (isLondonJudasWindow) sessionName = "London Killzone";
+  else if (nyHour >= 7 && nyHour < 11) sessionName = "New York AM Killzone";
+  else if (nyHour >= 13 && nyHour < 16) sessionName = "New York PM Session";
+  else if (nyHour >= 19 || nyHour < 2) sessionName = "Asia Range";
+
+  return {
+    dateKey,
+    nyHour,
+    nyMinute,
+    nyWeekday,
+    isWeekend,
+    sessionName,
+    isJudasWindow,
+    isSilverBulletWindow: Boolean(silverBulletWindow),
+    silverBulletWindow
+  };
+}
+
+function normalizeCandleArray(rawCandles) {
+  if (!Array.isArray(rawCandles)) return [];
+  const list = [];
+  for (let i = 0; i < rawCandles.length; i += 1) {
+    const c = rawCandles[i];
+    if (!c) continue;
+    let open, high, low, close, ts;
+    if (Array.isArray(c)) {
+      ts = Number(c[0]);
+      open = Number(c[1]);
+      high = Number(c[2]);
+      low = Number(c[3]);
+      close = Number(c[4]);
+    } else {
+      ts = Number(c.ts || c.time || 0);
+      if (ts > 0 && ts < 1e12) ts *= 1000;
+      open = Number(c.open);
+      high = Number(c.high);
+      low = Number(c.low);
+      close = Number(c.close);
+    }
+    if (!Number.isFinite(open) || !Number.isFinite(high) || !Number.isFinite(low) || !Number.isFinite(close)) continue;
+    if (open <= 0 || high <= 0 || low <= 0 || close <= 0) continue;
+    const realHigh = Math.max(open, high, low, close);
+    const realLow = Math.min(open, high, low, close);
+    list.push({
+      index: list.length,
+      ts: Number.isFinite(ts) && ts > 0 ? ts : (i + 1) * 60000,
+      open,
+      high: realHigh,
+      low: realLow,
+      close,
+      body: Math.abs(close - open),
+      range: Math.max(1e-9, realHigh - realLow),
+      isBull: close >= open,
+      isBear: close < open
+    });
+  }
+  list.sort((a, b) => a.ts - b.ts);
+  for (let i = 0; i < list.length; i += 1) list[i].index = i;
+  return list;
+}
+
+function calculateAtrSeries(candles, period = 14) {
+  const trList = candles.map((c, i) => {
+    if (i === 0) return c.high - c.low;
+    const prevClose = candles[i - 1].close;
+    return Math.max(c.high - c.low, Math.abs(c.high - prevClose), Math.abs(c.low - prevClose));
+  });
+  const atrSeries = new Array(candles.length).fill(0);
+  let sum = 0;
+  for (let i = 0; i < trList.length; i += 1) {
+    sum += trList[i];
+    atrSeries[i] = i < period ? sum / (i + 1) : (atrSeries[i - 1] * (period - 1) + trList[i]) / period;
+  }
+  return atrSeries;
+}
+
+function detectFractalSwings(candles, leftBars = 3, rightBars = 3) {
+  const swingHighs = [];
+  const swingLows = [];
+  if (candles.length < leftBars + rightBars + 1) return { swingHighs, swingLows };
+
+  for (let i = leftBars; i < candles.length - rightBars; i += 1) {
+    const curr = candles[i];
+    let isHigh = true;
+    let isLow = true;
+    for (let k = i - leftBars; k <= i + rightBars; k += 1) {
+      if (k === i) continue;
+      if (candles[k].high >= curr.high) isHigh = false;
+      if (candles[k].low <= curr.low) isLow = false;
+    }
+    if (isHigh) swingHighs.push({ index: i, ts: curr.ts, price: curr.high });
+    if (isLow) swingLows.push({ index: i, ts: curr.ts, price: curr.low });
+  }
+  return { swingHighs, swingLows };
+}
+
+function isDisplacementCandle(candles, idx, atrSeries) {
+  const c = candles[idx];
+  if (!c) return { valid: false, direction: null };
+  const atr = Math.max(1e-9, atrSeries[idx] || c.range);
+  if (c.body >= 1.5 * atr) {
+    return { valid: true, direction: c.isBull ? "BUY" : "SELL" };
+  }
+  if (idx >= 2) {
+    const c0 = candles[idx - 2];
+    const c1 = candles[idx - 1];
+    const allBull = c0.isBull && c1.isBull && c.isBull;
+    const allBear = c0.isBear && c1.isBear && c.isBear;
+    if ((allBull || allBear) && Math.abs(c.close - c0.open) >= atr * 0.8) {
+      return { valid: true, direction: allBull ? "BUY" : "SELL" };
+    }
+  }
+  return { valid: false, direction: null };
+}
+
+function detectFVGs(candles, atrSeries, minAtrRatio = 0.3) {
+  const fvgs = [];
+  for (let i = 2; i < candles.length; i += 1) {
+    const c1 = candles[i - 2];
+    const c3 = candles[i];
+    const atr = Math.max(1e-9, atrSeries[i] || c3.range);
+    const minGap = minAtrRatio * atr;
+
+    if (c3.low > c1.high && c3.low - c1.high >= minGap) {
+      const gapSize = c3.low - c1.high;
+      let mitigated = false;
+      for (let j = i + 1; j < candles.length; j += 1) {
+        if (candles[j].low <= c1.high + gapSize * 0.25) { mitigated = true; break; }
+      }
+      fvgs.push({ direction: "BUY", top: c3.low, bottom: c1.high, ce: (c3.low + c1.high) / 2, createdIndex: i, ts: c3.ts, mitigated });
     }
 
-    const actual = Number(event.actual);
-    const forecast = Number(event.forecast);
-    if (!Number.isFinite(actual) || !Number.isFinite(forecast)) return null;
-    if (actual === forecast) return null;
+    if (c3.high < c1.low && c1.low - c3.high >= minGap) {
+      const gapSize = c1.low - c3.high;
+      let mitigated = false;
+      for (let j = i + 1; j < candles.length; j += 1) {
+        if (candles[j].high >= c3.high - gapSize * 0.25) { mitigated = true; break; }
+      }
+      fvgs.push({ direction: "SELL", top: c1.low, bottom: c3.high, ce: (c1.low + c3.high) / 2, createdIndex: i, ts: c3.ts, mitigated });
+    }
+  }
+  return fvgs;
+}
 
-    const cleanPair = normalizePair(pair);
-    const title = String(event.title || event.name || '').toUpperCase();
-    const isAbove = actual > forecast;
+function detectOrderBlocks(candles, atrSeries, fvgs) {
+  const obs = [];
+  for (let i = 1; i < candles.length; i += 1) {
+    const disp = isDisplacementCandle(candles, i, atrSeries);
+    if (!disp.valid) continue;
 
-    if (title.includes('CPI')) {
-      if (cleanPair === 'XAUUSD' || cleanPair === 'US100' || cleanPair === 'EURUSD') {
-        return isAbove ? 'SELL' : 'BUY';
+    if (disp.direction === "BUY") {
+      let obCandle = null;
+      for (let k = i - 1; k >= Math.max(0, i - 6); k -= 1) {
+        if (candles[k].isBear) { obCandle = candles[k]; break; }
+      }
+      if (!obCandle) continue;
+      const matchingFvg = fvgs.find((f) => f.direction === "BUY" && f.createdIndex >= i - 1 && f.createdIndex <= i + 2 && f.bottom <= obCandle.high && f.top >= obCandle.low);
+      let mitigated = false;
+      for (let j = i + 1; j < candles.length; j += 1) {
+        if (candles[j].close < obCandle.low) { mitigated = true; break; }
+      }
+      obs.push({ direction: "BUY", top: obCandle.high, bottom: obCandle.low, mid50: (obCandle.high + obCandle.low) / 2, displacementIndex: i, ts: obCandle.ts, hasFvgOverlap: Boolean(matchingFvg), fvg: matchingFvg || null, mitigated });
+    } else {
+      let obCandle = null;
+      for (let k = i - 1; k >= Math.max(0, i - 6); k -= 1) {
+        if (candles[k].isBull) { obCandle = candles[k]; break; }
+      }
+      if (!obCandle) continue;
+      const matchingFvg = fvgs.find((f) => f.direction === "SELL" && f.createdIndex >= i - 1 && f.createdIndex <= i + 2 && f.top >= obCandle.low && f.bottom <= obCandle.high);
+      let mitigated = false;
+      for (let j = i + 1; j < candles.length; j += 1) {
+        if (candles[j].close > obCandle.high) { mitigated = true; break; }
+      }
+      obs.push({ direction: "SELL", top: obCandle.high, bottom: obCandle.low, mid50: (obCandle.high + obCandle.low) / 2, displacementIndex: i, ts: obCandle.ts, hasFvgOverlap: Boolean(matchingFvg), fvg: matchingFvg || null, mitigated });
+    }
+  }
+  return obs;
+}
+
+function detectStructureShifts(candles, swings) {
+  const events = [];
+  for (let i = 1; i < candles.length; i += 1) {
+    const c = candles[i];
+    const prev = candles[i - 1];
+    const lastHigh = swings.swingHighs.filter((h) => h.index < i).pop();
+    if (lastHigh && c.close > lastHigh.price && prev.close <= lastHigh.price) {
+      events.push({ type: "BOS_BULL", direction: "BUY", level: lastHigh.price, index: i, ts: c.ts });
+    }
+    const lastLow = swings.swingLows.filter((l) => l.index < i).pop();
+    if (lastLow && c.close < lastLow.price && prev.close >= lastLow.price) {
+      events.push({ type: "BOS_BEAR", direction: "SELL", level: lastLow.price, index: i, ts: c.ts });
+    }
+  }
+  return events;
+}
+
+function extractLiquidityLevels(candles, swings, pair) {
+  const spec = PAIR_SPECS[pair] || PAIR_SPECS.XAUUSD;
+  const eqTol = Math.max(spec.pipSize * 1.5, ((candles[candles.length - 1] && candles[candles.length - 1].range) || spec.pipSize * 5) * 0.08);
+  const levels = [];
+
+  for (const sh of swings.swingHighs) levels.push({ kind: "SWING_HIGH", side: "HIGH", price: sh.price, index: sh.index, ts: sh.ts, label: `Swing High ${formatPrice(pair, sh.price)}` });
+  for (const sl of swings.swingLows) levels.push({ kind: "SWING_LOW", side: "LOW", price: sl.price, index: sl.index, ts: sl.ts, label: `Swing Low ${formatPrice(pair, sl.price)}` });
+
+  for (let i = 0; i < swings.swingHighs.length; i += 1) {
+    for (let j = i + 1; j < swings.swingHighs.length; j += 1) {
+      if (Math.abs(swings.swingHighs[i].price - swings.swingHighs[j].price) <= eqTol) {
+        const avg = (swings.swingHighs[i].price + swings.swingHighs[j].price) / 2;
+        levels.push({ kind: "EQH", side: "HIGH", price: avg, index: swings.swingHighs[j].index, ts: swings.swingHighs[j].ts, label: `Equal Highs ${formatPrice(pair, avg)}` });
       }
     }
-
-    if (cleanPair === 'XAUUSD' || cleanPair === 'EURUSD') {
-      return isAbove ? 'SELL' : 'BUY';
+  }
+  for (let i = 0; i < swings.swingLows.length; i += 1) {
+    for (let j = i + 1; j < swings.swingLows.length; j += 1) {
+      if (Math.abs(swings.swingLows[i].price - swings.swingLows[j].price) <= eqTol) {
+        const avg = (swings.swingLows[i].price + swings.swingLows[j].price) / 2;
+        levels.push({ kind: "EQL", side: "LOW", price: avg, index: swings.swingLows[j].index, ts: swings.swingLows[j].ts, label: `Equal Lows ${formatPrice(pair, avg)}` });
+      }
     }
-    if (cleanPair === 'US100') {
-      return isAbove ? 'SELL' : 'BUY';
-    }
-    if (cleanPair === 'BTCUSDT') {
-      return isAbove ? 'SELL' : 'BUY';
-    }
-
-    return null;
   }
 
-  function evaluateNewsGate(opts, nowMs) {
-    const events = Array.isArray(opts.highImpactEvents) ? opts.highImpactEvents : [];
-    const pair = normalizePair(opts.pair);
-
-    const nearEvent = events.find((ev) => {
-      const evTs = Number(ev && (ev.timestampMs || ev.timeMs || ev.ts));
-      return Number.isFinite(evTs) && Math.abs(nowMs - evTs) <= NEWS_LOCK_WINDOW_MS;
-    });
-
-    if (Boolean(opts.newsLockActive) || Boolean(nearEvent)) {
-      const evTitle = nearEvent && nearEvent.title ? ` (${nearEvent.title})` : '';
-      return {
-        status: 'WAIT',
-        reasonCode: 'NEWS_LOCK_30M',
-        message: `WAIT: News high impact dalam ±30 menit${evTitle}. Dilarang entry pre-news / sekitar rilis.`,
-        postReleaseBias: null,
-        postReleaseReason: null
-      };
+  const byDate = new Map();
+  const asiaByDate = new Map();
+  for (const c of candles) {
+    const ny = getNyParts(c.ts);
+    if (!byDate.has(ny.dateKey)) byDate.set(ny.dateKey, { high: c.high, low: c.low, ts: c.ts });
+    else {
+      const d = byDate.get(ny.dateKey);
+      if (c.high > d.high) d.high = c.high;
+      if (c.low < d.low) d.low = c.low;
     }
+    if (ny.nyHour >= 19) {
+      if (!asiaByDate.has(ny.dateKey)) asiaByDate.set(ny.dateKey, { high: c.high, low: c.low, ts: c.ts, endTs: c.ts });
+      else {
+        const a = asiaByDate.get(ny.dateKey);
+        if (c.high > a.high) a.high = c.high;
+        if (c.low < a.low) a.low = c.low;
+        a.endTs = c.ts;
+      }
+    }
+  }
 
-    let postReleaseBias = null;
-    let postReleaseReason = null;
+  const dateKeys = Array.from(byDate.keys()).sort();
+  if (dateKeys.length >= 2) {
+    const prevDay = byDate.get(dateKeys[dateKeys.length - 2]);
+    levels.push({ kind: "PDH", side: "HIGH", price: prevDay.high, index: candles.length - 1, ts: prevDay.ts, label: `PDH ${formatPrice(pair, prevDay.high)}` });
+    levels.push({ kind: "PDL", side: "LOW", price: prevDay.low, index: candles.length - 1, ts: prevDay.ts, label: `PDL ${formatPrice(pair, prevDay.low)}` });
+  }
 
-    for (let i = events.length - 1; i >= 0; i -= 1) {
-      const ev = events[i];
-      const evTs = Number(ev && (ev.timestampMs || ev.timeMs || ev.ts));
-      if (!Number.isFinite(evTs)) continue;
-      const diffMs = nowMs - evTs;
-      if (
-        diffMs > 0 &&
-        diffMs <= 45 * 60 * 1000 &&
-        hasNonEmptyNumericValue(ev.actual) &&
-        hasNonEmptyNumericValue(ev.forecast)
-      ) {
-        const inferred = inferNewsDirectionFromActualForecast(ev, pair);
-        if (inferred) {
-          postReleaseBias = inferred;
-          postReleaseReason = `Rilis ${ev.title || 'Event'}: actual (${Number(ev.actual)}) vs forecast (${Number(ev.forecast)}) → ${inferred} pada ${pair}`;
+  const asiaKeys = Array.from(asiaByDate.keys()).sort();
+  let latestAsia = null;
+  if (asiaKeys.length > 0) {
+    const lastAsiaKey = asiaKeys[asiaKeys.length - 1];
+    latestAsia = { dateKey: lastAsiaKey, ...asiaByDate.get(lastAsiaKey) };
+    levels.push({ kind: "ASIA_HIGH", side: "HIGH", price: latestAsia.high, index: candles.length - 1, ts: latestAsia.endTs, label: `Asia High ${formatPrice(pair, latestAsia.high)}` });
+    levels.push({ kind: "ASIA_LOW", side: "LOW", price: latestAsia.low, index: candles.length - 1, ts: latestAsia.endTs, label: `Asia Low ${formatPrice(pair, latestAsia.low)}` });
+  }
+
+  return { levels, latestAsia };
+}
+
+function detectSweeps(candles, liquidityLevels) {
+  const sweeps = [];
+  for (const lvl of liquidityLevels) {
+    if (lvl.index >= candles.length - 1) continue;
+    for (let startIdx = lvl.index + 1; startIdx < candles.length; startIdx += 1) {
+      const maxWindow = Math.min(candles.length - 1, startIdx + 2);
+      if (lvl.side === "LOW") {
+        let extremeLow = Infinity;
+        let sweepCandle = null;
+        for (let k = startIdx; k <= maxWindow; k += 1) {
+          if (candles[k].low < lvl.price) {
+            if (candles[k].low < extremeLow) extremeLow = candles[k].low;
+            if (candles[k].close >= lvl.price) { sweepCandle = candles[k]; break; }
+          }
+        }
+        if (sweepCandle && Number.isFinite(extremeLow)) {
+          sweeps.push({ side: "LOW", direction: "BUY", level: lvl.price, levelLabel: lvl.label, extremePrice: extremeLow, candleIndex: sweepCandle.index, ts: sweepCandle.ts, timeIso: formatIsoTime(sweepCandle.ts) });
+          break;
+        }
+      } else {
+        let extremeHigh = -Infinity;
+        let sweepCandle = null;
+        for (let k = startIdx; k <= maxWindow; k += 1) {
+          if (candles[k].high > lvl.price) {
+            if (candles[k].high > extremeHigh) extremeHigh = candles[k].high;
+            if (candles[k].close <= lvl.price) { sweepCandle = candles[k]; break; }
+          }
+        }
+        if (sweepCandle && Number.isFinite(extremeHigh)) {
+          sweeps.push({ side: "HIGH", direction: "SELL", level: lvl.price, levelLabel: lvl.label, extremePrice: extremeHigh, candleIndex: sweepCandle.index, ts: sweepCandle.ts, timeIso: formatIsoTime(sweepCandle.ts) });
           break;
         }
       }
     }
-
-    const explicitNewsBias = String(opts.newsBias || '').trim().toUpperCase();
-    if (!postReleaseBias && (explicitNewsBias === 'BUY' || explicitNewsBias === 'SELL')) {
-      postReleaseBias = explicitNewsBias;
-      postReleaseReason = `Bias news terkonfirmasi: ${explicitNewsBias}`;
-    }
-
-    return {
-      status: 'OK',
-      reasonCode: 'NEWS_CLEAR',
-      message: null,
-      postReleaseBias,
-      postReleaseReason
-    };
   }
+  sweeps.sort((a, b) => a.candleIndex - b.candleIndex);
+  return sweeps;
+}
 
-  // ============================================================================
-  // PERHITUNGAN RR & TARGET LIKUIDITAS NYATA
-  // ============================================================================
+function computeHtfBias(h1Candles, entryCandles) {
+  const src = h1Candles && h1Candles.length >= 15 ? h1Candles : entryCandles;
+  const tfTag = h1Candles && h1Candles.length >= 15 ? "H1" : "TF";
+  const swings = detectFractalSwings(src, 3, 3);
+  const breaks = detectStructureShifts(src, swings);
+  const lastBos = breaks.length > 0 ? breaks[breaks.length - 1] : null;
+  const recentSlice = src.slice(-50);
+  const rangeHigh = Math.max(...recentSlice.map((c) => c.high));
+  const rangeLow = Math.min(...recentSlice.map((c) => c.low));
+  const eq = (rangeHigh + rangeLow) / 2;
+  const lastPrice = src[src.length - 1].close;
+  const zone = rangeHigh > rangeLow ? (lastPrice <= eq ? "DISCOUNT" : "PREMIUM") : "EQUILIBRIUM";
+  const direction = lastBos ? lastBos.direction : (lastPrice >= src[src.length - 2].close ? "BUY" : "SELL");
+  return { direction, tfTag, rangeHigh, rangeLow, zone };
+}
 
-  function buildRealLiquidityTargets(direction, entry, sl, liquidityLevels, fallbackSwingHigh, fallbackSwingLow, pair) {
-    const riskDist = Math.abs(entry - sl);
-    if (!Number.isFinite(riskDist) || riskDist <= 0) return [];
+function buildRealLiquidityTargets(direction, entry, sl, liquidityLevels, fallbackSwingHigh, fallbackSwingLow, pair) {
+  const riskDist = Math.abs(entry - sl);
+  if (!Number.isFinite(riskDist) || riskDist <= 0) return [];
+  const candidates = [];
 
-    const candidates = [];
-    for (const lvl of (liquidityLevels || [])) {
-      if (direction === 'BUY' && lvl.price > entry + riskDist * 1.5) {
-        candidates.push({ price: lvl.price, label: lvl.label });
-      } else if (direction === 'SELL' && lvl.price < entry - riskDist * 1.5) {
-        candidates.push({ price: lvl.price, label: lvl.label });
-      }
-    }
-
-    if (direction === 'BUY') {
-      if (Number.isFinite(fallbackSwingHigh) && fallbackSwingHigh > entry + riskDist * 1.5) {
-        candidates.push({ price: fallbackSwingHigh, label: `Swing High ${formatPrice(pair, fallbackSwingHigh)}` });
-      }
-      candidates.sort((a, b) => a.price - b.price);
-    } else {
-      if (Number.isFinite(fallbackSwingLow) && fallbackSwingLow < entry - riskDist * 1.5) {
-        candidates.push({ price: fallbackSwingLow, label: `Swing Low ${formatPrice(pair, fallbackSwingLow)}` });
-      }
-      candidates.sort((a, b) => b.price - a.price);
-    }
-
-    const uniqueTargets = [];
-    const minStep = riskDist * 0.4;
-    for (const c of candidates) {
-      const tooClose = uniqueTargets.some((u) => Math.abs(u.price - c.price) < minStep);
-      if (!tooClose) {
-        const rr = Math.abs(c.price - entry) / riskDist;
-        uniqueTargets.push({
-          price: c.price,
-          label: c.label,
-          rr: Number(rr.toFixed(2))
-        });
-      }
-      if (uniqueTargets.length >= 3) break;
-    }
-
-    return uniqueTargets;
-  }
-
-  function finalizeSetupWithGates(params) {
-    const {
-      pair,
-      timeframe,
-      methodKey,
-      direction,
-      entry,
-      sl,
-      invalidation,
-      trigger,
-      checklist,
-      liquidityLevels,
-      swingHigh,
-      swingLow,
-      htfBias,
-      postReleaseBias,
-      spreadPrice,
-      atrNow,
-      tfCfg,
-      nowMs
-    } = params;
-
-    if (!Number.isFinite(entry) || !Number.isFinite(sl) || entry <= 0 || sl <= 0) {
-      return { valid: false, reasonCode: 'INVALID_PRICE_LEVELS', reasonText: 'Level entry atau SL tidak valid.' };
-    }
-
-    if (direction === 'BUY' && !(sl < entry)) {
-      return { valid: false, reasonCode: 'INVALID_SL_SIDE', reasonText: 'Untuk BUY, SL harus berada di bawah entry.' };
-    }
-    if (direction === 'SELL' && !(sl > entry)) {
-      return { valid: false, reasonCode: 'INVALID_SL_SIDE', reasonText: 'Untuk SELL, SL harus berada di atas entry.' };
-    }
-
-    const isReversalSweep = methodKey === 'sweep' || methodKey === 'judas';
-    const effectiveBias = postReleaseBias || (htfBias && htfBias.direction);
-    if (effectiveBias && effectiveBias !== direction && !isReversalSweep) {
-      return {
-        valid: false,
-        reasonCode: 'HTF_BIAS_MISMATCH',
-        reasonText: `Arah ${direction} bertentangan dengan bias HTF/News (${effectiveBias}) dan bukan setup reversal sweep + MSS.`
-      };
-    }
-
-    const targets = buildRealLiquidityTargets(direction, entry, sl, liquidityLevels, swingHigh, swingLow, pair);
-    if (targets.length === 0) {
-      return {
-        valid: false,
-        reasonCode: 'NO_REAL_LIQUIDITY_TP',
-        reasonText: 'Tidak ditemukan likuiditas nyata (PDH/PDL, Asia range, atau swing) dengan RR >= 1:1.5.'
-      };
-    }
-
-    const rrTp1 = targets[0].rr;
-    if (rrTp1 < MIN_RR_TP1) {
-      return {
-        valid: false,
-        reasonCode: 'RR_BELOW_1_5',
-        reasonText: `RR ke TP1 (${rrTp1}) di bawah batas minimum 1:${MIN_RR_TP1}.`
-      };
-    }
-
-    const finalChecklist = checklist.slice();
-    if (postReleaseBias === direction) {
-      finalChecklist.push(`✔ Konfirmasi rilis news searah ${direction}`);
-    } else if (htfBias && htfBias.direction === direction) {
-      finalChecklist.push(`✔ Searah bias ${htfBias.tfTag} (${direction}, zona ${htfBias.zone})`);
-    }
-    finalChecklist.push(`✔ RR ke TP1 ${rrTp1} (>= 1.5) menuju ${targets[0].label}`);
-
-    const score = finalChecklist.length;
-    const slPips = toPips(pair, entry - sl);
-    const tpPrices = targets.map((t) => t.price);
-    const tp1 = tpPrices[0];
-    const tp2 = tpPrices[1] !== undefined ? tpPrices[1] : tp1;
-    const tp3 = tpPrices[2] !== undefined ? tpPrices[2] : tp2;
-    const validUntilTs = nowMs + tfCfg.expiryMin * 60 * 1000;
-
-    return {
-      valid: true,
-      methodKey,
-      direction,
-      orderType: direction === 'BUY' ? 'BUY LIMIT' : 'SELL LIMIT',
-      trigger,
-      checklist: finalChecklist,
-      score,
-      entry,
-      entryFmt: formatPrice(pair, entry),
-      sl,
-      slFmt: formatPrice(pair, sl),
-      slPips,
-      tp: tpPrices,
-      tpTargets: targets,
-      tp1,
-      tp1Fmt: formatPrice(pair, tp1),
-      tp1Pips: toPips(pair, tp1 - entry),
-      tp2,
-      tp2Fmt: formatPrice(pair, tp2),
-      tp2Pips: toPips(pair, tp2 - entry),
-      tp3,
-      tp3Fmt: formatPrice(pair, tp3),
-      tp3Pips: toPips(pair, tp3 - entry),
-      rrTp1,
-      invalidation,
-      validUntil: formatIsoTime(validUntilTs),
-      validUntilTs,
-      zoneLow: Math.min(entry, sl),
-      zoneHigh: Math.max(entry, sl),
-      zoneRangeFormatted: `${formatPrice(pair, Math.min(entry, sl))} – ${formatPrice(pair, Math.max(entry, sl))}`,
-      spreadPips: toPips(pair, spreadPrice || 0),
-      atrNow
-    };
-  }
-
-  // ============================================================================
-  // DETEKTOR POLA N (INTEGRASI npattern.js / npattern-bridge.js)
-  // ============================================================================
-
-  function extractExternalNPatternCandidate(ctx) {
-    const { candles, pair, timeframe, atrNow, spreadPrice } = ctx;
-    const npApi = global.LiamNPattern || global.LiamNPatternBridge || null;
-    if (!npApi) return null;
-
-    try {
-      const raw =
-        typeof npApi.detectNPattern === 'function' ? npApi.detectNPattern(candles, { pair, timeframe, atr: atrNow }) :
-        typeof npApi.analyzeNPattern === 'function' ? npApi.analyzeNPattern(candles, { pair, timeframe, atr: atrNow }) :
-        typeof npApi.scanNPattern === 'function' ? npApi.scanNPattern({ pair, timeframe, candles, atr: atrNow }) :
-        null;
-
-      if (!raw || typeof raw !== 'object') return null;
-      const pattern = raw.best || raw.pattern || raw;
-      const dirRaw = String(pattern.direction || pattern.bias || '').trim().toUpperCase();
-      const dir = dirRaw === 'BULLISH' || dirRaw === 'BUY' ? 'BUY'
-        : (dirRaw === 'BEARISH' || dirRaw === 'SELL' ? 'SELL' : null);
-
-      if (!dir) return null;
-
-      const pullbackLow = Number(pattern.pullbackLow ?? pattern.leg2Low ?? pattern.low);
-      const pullbackHigh = Number(pattern.pullbackHigh ?? pattern.leg2High ?? pattern.high);
-      const breakLevel = Number(pattern.breakLevel ?? pattern.neckLevel ?? pattern.leg3Break ?? pattern.entry);
-      const entry = Number.isFinite(Number(pattern.entry)) && Number(pattern.entry) > 0
-        ? Number(pattern.entry)
-        : (dir === 'BUY'
-            ? (Number.isFinite(pullbackHigh) && Number.isFinite(pullbackLow) ? pullbackLow + (pullbackHigh - pullbackLow) * 0.62 : breakLevel)
-            : (Number.isFinite(pullbackHigh) && Number.isFinite(pullbackLow) ? pullbackHigh - (pullbackHigh - pullbackLow) * 0.62 : breakLevel));
-
-      const buffer = Math.max(atrNow * 0.2, spreadPrice || 0);
-      const sl = Number.isFinite(Number(pattern.sl)) && Number(pattern.sl) > 0
-        ? Number(pattern.sl)
-        : (dir === 'BUY'
-            ? (Number.isFinite(pullbackLow) ? pullbackLow - buffer : NaN)
-            : (Number.isFinite(pullbackHigh) ? pullbackHigh + buffer : NaN));
-
-      if (!Number.isFinite(entry) || !Number.isFinite(sl)) return null;
-
-      return {
-        direction: dir,
-        entry,
-        sl,
-        legHigh: Number.isFinite(pullbackHigh) ? pullbackHigh : Math.max(entry, sl),
-        legLow: Number.isFinite(pullbackLow) ? pullbackLow : Math.min(entry, sl),
-        breakLevel: Number.isFinite(breakLevel) ? breakLevel : entry,
-        reason: String(pattern.reason || pattern.summary || 'Impulse-Pullback-Break Pola N tervalidasi')
-      };
-    } catch (_) {
-      return null;
+  for (const lvl of liquidityLevels) {
+    if (direction === "BUY" && lvl.price > entry + riskDist * MIN_RR_TP1) {
+      candidates.push({ price: lvl.price, label: lvl.label });
+    } else if (direction === "SELL" && lvl.price < entry - riskDist * MIN_RR_TP1) {
+      candidates.push({ price: lvl.price, label: lvl.label });
     }
   }
 
-  function detectNPatternSetup(ctx) {
-    const { candles, swings, shifts, liquidityLevels, spreadPrice, atrNow, tfCfg, nowMs, pair, htfBias, postReleaseBias } = ctx;
-    const ext = extractExternalNPatternCandidate(ctx);
-
-    let candidate = ext;
-    if (!candidate) {
-      const highs = swings.swingHighs || [];
-      const lows = swings.swingLows || [];
-      if (highs.length < 1 || lows.length < 1) return null;
-
-      const lastHigh = highs[highs.length - 1];
-      const lastLow = lows[lows.length - 1];
-      const lastCandle = candles[candles.length - 1];
-      const buffer = Math.max(atrNow * 0.22, spreadPrice || 0);
-
-      if (lastLow.index < lastHigh.index) {
-        const bullShift = (shifts || []).slice().reverse().find((s) => s.direction === 'BUY' && s.index >= lastHigh.index);
-        if (bullShift) {
-          const retraceMid = lastHigh.price - (lastHigh.price - lastLow.price) * 0.5;
-          const entry = Math.min(lastCandle.close, retraceMid > 0 ? retraceMid : lastCandle.close);
-          candidate = {
-            direction: 'BUY',
-            entry,
-            sl: lastLow.price - buffer,
-            legHigh: lastHigh.price,
-            legLow: lastLow.price,
-            breakLevel: bullShift.level,
-            reason: `Impulse naik → Pullback sehat → Break struktur ${formatPrice(pair, bullShift.level)}`
-          };
-        }
-      } else if (lastHigh.index < lastLow.index) {
-        const bearShift = (shifts || []).slice().reverse().find((s) => s.direction === 'SELL' && s.index >= lastLow.index);
-        if (bearShift) {
-          const retraceMid = lastLow.price + (lastHigh.price - lastLow.price) * 0.5;
-          const entry = Math.max(lastCandle.close, retraceMid > 0 ? retraceMid : lastCandle.close);
-          candidate = {
-            direction: 'SELL',
-            entry,
-            sl: lastHigh.price + buffer,
-            legHigh: lastHigh.price,
-            legLow: lastLow.price,
-            breakLevel: bearShift.level,
-            reason: `Impulse turun → Pullback sehat → Break struktur ${formatPrice(pair, bearShift.level)}`
-          };
-        }
-      }
+  if (direction === "BUY") {
+    if (Number.isFinite(fallbackSwingHigh) && fallbackSwingHigh > entry + riskDist * MIN_RR_TP1) {
+      candidates.push({ price: fallbackSwingHigh, label: `Swing High ${formatPrice(pair, fallbackSwingHigh)}` });
     }
+    candidates.sort((a, b) => a.price - b.price);
+  } else {
+    if (Number.isFinite(fallbackSwingLow) && fallbackSwingLow < entry - riskDist * MIN_RR_TP1) {
+      candidates.push({ price: fallbackSwingLow, label: `Swing Low ${formatPrice(pair, fallbackSwingLow)}` });
+    }
+    candidates.sort((a, b) => b.price - a.price);
+  }
 
-    if (!candidate) return null;
+  const uniqueTargets = [];
+  const minStep = riskDist * 0.4;
+  for (const c of candidates) {
+    if (!uniqueTargets.some((u) => Math.abs(u.price - c.price) < minStep)) {
+      const rr = Math.abs(c.price - entry) / riskDist;
+      uniqueTargets.push({ price: c.price, label: c.label, rr: Number(rr.toFixed(2)) });
+    }
+    if (uniqueTargets.length >= 3) break;
+  }
+  return uniqueTargets;
+}
 
-    const checklist = [
+function finalizeSetupWithGates(params) {
+  const { pair, timeframe, methodKey, direction, entry, sl, invalidation, trigger, checklist, liquidityLevels, swingHigh, swingLow, htfBias, nyCtx } = params;
+  if (!Number.isFinite(entry) || !Number.isFinite(sl) || entry <= 0 || sl <= 0) return null;
+  if (direction === "BUY" && !(sl < entry)) return null;
+  if (direction === "SELL" && !(sl > entry)) return null;
+
+  const isReversalSweep = methodKey === "sweep" || methodKey === "judas";
+  if (htfBias && htfBias.direction && htfBias.direction !== direction && !isReversalSweep) return null;
+
+  const targets = buildRealLiquidityTargets(direction, entry, sl, liquidityLevels, swingHigh, swingLow, pair);
+  if (targets.length === 0 || targets[0].rr < MIN_RR_TP1) return null;
+
+  const finalChecklist = checklist.slice();
+  if (htfBias && htfBias.direction === direction) {
+    finalChecklist.push(`✔ Searah bias ${htfBias.tfTag} (${direction}, zona ${htfBias.zone})`);
+  }
+  finalChecklist.push(`✔ RR ke TP1 1:${targets[0].rr} (>= 1.5) menuju ${targets[0].label}`);
+
+  const tp1 = targets[0].price;
+  const tp2 = targets[1] ? targets[1].price : tp1;
+  const tp3 = targets[2] ? targets[2].price : tp2;
+
+  return {
+    valid: true,
+    pair,
+    tf: timeframe,
+    methodKey,
+    selectedMethodKey: methodKey,
+    direction,
+    orderType: direction === "BUY" ? "BUY LIMIT" : "SELL LIMIT",
+    sessionName: nyCtx.sessionName,
+    trigger,
+    invalidation,
+    checklist: finalChecklist,
+    score: finalChecklist.length,
+    entry,
+    entryFmt: formatPrice(pair, entry),
+    sl,
+    slFmt: formatPrice(pair, sl),
+    slPips: toPips(pair, entry - sl),
+    tp1,
+    tp1Fmt: formatPrice(pair, tp1),
+    tp1Pips: toPips(pair, tp1 - entry),
+    tp1Label: targets[0].label,
+    tp2,
+    tp2Fmt: formatPrice(pair, tp2),
+    tp2Pips: toPips(pair, tp2 - entry),
+    tp3,
+    tp3Fmt: formatPrice(pair, tp3),
+    tp3Pips: toPips(pair, tp3 - entry),
+    rrTp1: targets[0].rr
+  };
+}
+
+// 1. Detektor Pola N (Impulse-Pullback-Break)
+function detectNPatternSetup(ctx) {
+  const { candles, swings, shifts, liquidityLevels, spreadPrice, atrNow, pair, timeframe, htfBias, nyCtx } = ctx;
+  const highs = swings.swingHighs;
+  const lows = swings.swingLows;
+  if (highs.length < 1 || lows.length < 1) return null;
+
+  const lastHigh = highs[highs.length - 1];
+  const lastLow = lows[lows.length - 1];
+  const lastCandle = candles[candles.length - 1];
+  const buffer = Math.max(atrNow * 0.22, spreadPrice);
+
+  let candidate = null;
+  if (lastLow.index < lastHigh.index) {
+    const bullShift = shifts.slice().reverse().find((s) => s.direction === "BUY" && s.index >= lastHigh.index);
+    if (bullShift) {
+      const retraceMid = lastHigh.price - (lastHigh.price - lastLow.price) * 0.5;
+      candidate = {
+        direction: "BUY",
+        entry: Math.min(lastCandle.close, retraceMid > 0 ? retraceMid : lastCandle.close),
+        sl: lastLow.price - buffer,
+        legHigh: lastHigh.price,
+        legLow: lastLow.price,
+        breakLevel: bullShift.level,
+        reason: `Impulse naik → Pullback sehat → Break struktur ${formatPrice(pair, bullShift.level)}`
+      };
+    }
+  } else if (lastHigh.index < lastLow.index) {
+    const bearShift = shifts.slice().reverse().find((s) => s.direction === "SELL" && s.index >= lastLow.index);
+    if (bearShift) {
+      const retraceMid = lastLow.price + (lastHigh.price - lastLow.price) * 0.5;
+      candidate = {
+        direction: "SELL",
+        entry: Math.max(lastCandle.close, retraceMid > 0 ? retraceMid : lastCandle.close),
+        sl: lastHigh.price + buffer,
+        legHigh: lastHigh.price,
+        legLow: lastLow.price,
+        breakLevel: bearShift.level,
+        reason: `Impulse turun → Pullback sehat → Break struktur ${formatPrice(pair, bearShift.level)}`
+      };
+    }
+  }
+  if (!candidate) return null;
+
+  return finalizeSetupWithGates({
+    pair, timeframe, methodKey: "n_pattern", direction: candidate.direction,
+    entry: candidate.entry, sl: candidate.sl,
+    invalidation: `Tembus batas pullback Pola N di ${formatPrice(pair, candidate.sl)}`,
+    trigger: `POLA_N_${candidate.direction}_BREAK @ ${formatPrice(pair, candidate.breakLevel)}`,
+    checklist: [
       `✔ Pola N ${candidate.direction}: ${candidate.reason}`,
-      `✔ Pullback terukur di area ${formatPrice(pair, candidate.legLow)}–${formatPrice(pair, candidate.legHigh)}`,
-      `✔ Level break / trigger terkonfirmasi di ${formatPrice(pair, candidate.breakLevel)}`
-    ];
+      `✔ Pullback terukur di area ${formatPrice(pair, candidate.legLow)}–${formatPrice(pair, candidate.legHigh)}`
+    ],
+    liquidityLevels, swingHigh: candidate.legHigh, swingLow: candidate.legLow, htfBias, nyCtx
+  });
+}
 
-    return finalizeSetupWithGates({
-      pair,
-      timeframe: ctx.timeframe,
-      methodKey: 'n_pattern',
-      direction: candidate.direction,
-      entry: candidate.entry,
-      sl: candidate.sl,
-      invalidation: `Temus batas pullback Pola N di ${formatPrice(pair, candidate.sl)}`,
-      trigger: {
-        jenis: `POLA_N_${candidate.direction}_BREAK`,
-        level: candidate.breakLevel,
-        waktuCandle: formatIsoTime(candles[candles.length - 1].ts)
-      },
-      checklist,
-      liquidityLevels,
-      swingHigh: candidate.legHigh,
-      swingLow: candidate.legLow,
-      htfBias,
-      postReleaseBias,
-      spreadPrice,
-      atrNow,
-      tfCfg,
-      nowMs
-    });
-  }
+// 2. Detektor Liquidity Sweep + MSS
+function detectLiquiditySweepSetup(ctx) {
+  const { candles, swings, sweeps, shifts, fvgList, obList, liquidityLevels, spreadPrice, atrNow, pair, timeframe, htfBias, nyCtx } = ctx;
+  if (sweeps.length === 0) return null;
+  const recentSweep = sweeps[sweeps.length - 1];
+  if (candles.length - 1 - recentSweep.candleIndex > 12) return null;
 
-  // ============================================================================
-  // 5 DETEKTOR ICT / SMC / LIQUIDITY
-  // ============================================================================
+  const dir = recentSweep.direction;
+  const mssAfter = shifts.find((s) => s.direction === dir && s.index >= recentSweep.candleIndex);
+  if (!mssAfter) return null;
 
-  function detectLiquiditySweepSetup(ctx) {
-    const { candles, swings, sweeps, shifts, fvgList, obList, liquidityLevels, spreadPrice, atrNow, tfCfg, nowMs, pair, htfBias, postReleaseBias } = ctx;
-    if (!sweeps || sweeps.length === 0) return null;
+  const fvgAfter = fvgList.slice().reverse().find((f) => f.direction === dir && !f.mitigated && f.createdIndex >= recentSweep.candleIndex);
+  const obAfter = obList.slice().reverse().find((o) => o.direction === dir && !o.mitigated && o.displacementIndex >= recentSweep.candleIndex);
+  if (!fvgAfter && !obAfter) return null;
 
-    const recentSweep = sweeps[sweeps.length - 1];
-    if (candles.length - 1 - recentSweep.candleIndex > 12) return null;
+  const entry = fvgAfter ? fvgAfter.ce : obAfter.mid50;
+  const buffer = atrNow * 0.25 + spreadPrice;
+  const sl = dir === "BUY"
+    ? Math.min(recentSweep.extremePrice, obAfter ? obAfter.bottom : recentSweep.extremePrice) - buffer
+    : Math.max(recentSweep.extremePrice, obAfter ? obAfter.top : recentSweep.extremePrice) + buffer;
 
-    const dir = recentSweep.direction;
-    const mssAfter = (shifts || []).find((s) => s.direction === dir && s.index >= recentSweep.candleIndex);
-    if (!mssAfter) return null;
-
-    const fvgAfter = (fvgList || []).slice().reverse().find((f) => f.direction === dir && !f.mitigated && f.createdIndex >= recentSweep.candleIndex);
-    const obAfter = (obList || []).slice().reverse().find((o) => o.direction === dir && !o.mitigated && o.displacementIndex >= recentSweep.candleIndex);
-    if (!fvgAfter && !obAfter) return null;
-
-    const poi = fvgAfter || obAfter;
-    const entry = fvgAfter ? fvgAfter.ce : obAfter.mid50;
-    const buffer = atrNow * 0.25 + spreadPrice;
-    const sl = dir === 'BUY'
-      ? Math.min(recentSweep.extremePrice, obAfter ? obAfter.bottom : recentSweep.extremePrice) - buffer
-      : Math.max(recentSweep.extremePrice, obAfter ? obAfter.top : recentSweep.extremePrice) + buffer;
-
-    const checklist = [
+  return finalizeSetupWithGates({
+    pair, timeframe, methodKey: "sweep", direction: dir, entry, sl,
+    invalidation: `Close di luar ekstrem sweep ${formatPrice(pair, recentSweep.extremePrice)}`,
+    trigger: `SWEEP_${recentSweep.side}_AND_MSS @ ${formatPrice(pair, mssAfter.level)}`,
+    checklist: [
       `✔ Sweep ${recentSweep.side} (${recentSweep.levelLabel}) lalu close balik`,
       `✔ MSS terkonfirmasi di ${formatPrice(pair, mssAfter.level)}`,
-      fvgAfter
-        ? `✔ FVG unmitigated ${formatPrice(pair, fvgAfter.bottom)}–${formatPrice(pair, fvgAfter.top)}`
-        : `✔ OB unmitigated ${formatPrice(pair, obAfter.bottom)}–${formatPrice(pair, obAfter.top)}`
-    ];
+      fvgAfter ? `✔ FVG unmitigated ${formatPrice(pair, fvgAfter.bottom)}–${formatPrice(pair, fvgAfter.top)}` : `✔ OB unmitigated ${formatPrice(pair, obAfter.bottom)}–${formatPrice(pair, obAfter.top)}`
+    ],
+    liquidityLevels,
+    swingHigh: swings.swingHighs.length ? swings.swingHighs[swings.swingHighs.length - 1].price : null,
+    swingLow: swings.swingLows.length ? swings.swingLows[swings.swingLows.length - 1].price : null,
+    htfBias, nyCtx
+  });
+}
 
-    const eqPrice = (swings.swingHighs.length && swings.swingLows.length)
-      ? (swings.swingHighs[swings.swingHighs.length - 1].price + swings.swingLows[swings.swingLows.length - 1].price) / 2
-      : entry;
+// 3. Detektor ICT Judas Swing
+function detectJudasSwingSetup(ctx) {
+  const { candles, latestAsia, nyCtx, shifts, fvgList, obList, liquidityLevels, spreadPrice, atrNow, pair, timeframe, htfBias } = ctx;
+  if (!nyCtx.isJudasWindow || !latestAsia || !(latestAsia.high > latestAsia.low)) return null;
 
-    const extraLevels = (liquidityLevels || []).concat([{
-      kind: 'EQ',
-      side: dir === 'BUY' ? 'HIGH' : 'LOW',
-      price: eqPrice,
-      label: `Equilibrium ${formatPrice(pair, eqPrice)}`
-    }]);
-
-    return finalizeSetupWithGates({
-      pair,
-      timeframe: ctx.timeframe,
-      methodKey: 'sweep',
-      direction: dir,
-      entry,
-      sl,
-      invalidation: `Close di luar ekstrem sweep ${formatPrice(pair, recentSweep.extremePrice)}`,
-      trigger: {
-        jenis: `SWEEP_${recentSweep.side}_AND_MSS`,
-        level: recentSweep.level,
-        waktuCandle: recentSweep.timeIso
-      },
-      checklist,
-      liquidityLevels: extraLevels,
-      swingHigh: swings.swingHighs.length ? swings.swingHighs[swings.swingHighs.length - 1].price : null,
-      swingLow: swings.swingLows.length ? swings.swingLows[swings.swingLows.length - 1].price : null,
-      htfBias,
-      postReleaseBias,
-      spreadPrice,
-      atrNow,
-      tfCfg,
-      nowMs,
-      poiMeta: poi
-    });
-  }
-
-  function detectJudasSwingSetup(ctx) {
-    const { candles, latestAsia, nyCtx, shifts, fvgList, obList, liquidityLevels, spreadPrice, atrNow, tfCfg, nowMs, pair, htfBias, postReleaseBias } = ctx;
-    if (!nyCtx.isJudasWindow) return null;
-    if (!latestAsia || !(latestAsia.high > latestAsia.low)) return null;
-
-    let judasSweep = null;
-    for (let i = 0; i < candles.length; i += 1) {
-      const p = getNyParts(candles[i].ts);
-      const inJudas = (p.nyHour >= 2 && p.nyHour < 5) || (p.nyHour >= 7 && p.nyHour < 9);
-      if (!inJudas) continue;
-
-      if (candles[i].high > latestAsia.high && candles[i].close <= latestAsia.high) {
-        judasSweep = {
-          side: 'HIGH',
-          direction: 'SELL',
-          level: latestAsia.high,
-          extreme: candles[i].high,
-          index: i,
-          ts: candles[i].ts
-        };
-      } else if (candles[i].low < latestAsia.low && candles[i].close >= latestAsia.low) {
-        judasSweep = {
-          side: 'LOW',
-          direction: 'BUY',
-          level: latestAsia.low,
-          extreme: candles[i].low,
-          index: i,
-          ts: candles[i].ts
-        };
-      }
+  let judasSweep = null;
+  for (let i = 0; i < candles.length; i += 1) {
+    const p = getNyParts(candles[i].ts);
+    const inJudas = (p.nyHour >= 2 && p.nyHour < 5) || (p.nyHour >= 7 && p.nyHour < 9);
+    if (!inJudas) continue;
+    if (candles[i].high > latestAsia.high && candles[i].close <= latestAsia.high) {
+      judasSweep = { side: "HIGH", direction: "SELL", level: latestAsia.high, extreme: candles[i].high, index: i };
+    } else if (candles[i].low < latestAsia.low && candles[i].close >= latestAsia.low) {
+      judasSweep = { side: "LOW", direction: "BUY", level: latestAsia.low, extreme: candles[i].low, index: i };
     }
-
-    if (!judasSweep) return null;
-    const dir = judasSweep.direction;
-
-    const mssAfter = (shifts || []).find((s) => s.direction === dir && s.index >= judasSweep.index);
-    if (!mssAfter) return null;
-
-    const retestZone = (fvgList || []).slice().reverse().find((f) => f.direction === dir && !f.mitigated && f.createdIndex >= judasSweep.index)
-      || (obList || []).slice().reverse().find((o) => o.direction === dir && !o.mitigated && o.displacementIndex >= judasSweep.index);
-    if (!retestZone) return null;
-
-    const entry = retestZone.ce !== undefined ? retestZone.ce : retestZone.mid50;
-    const buffer = atrNow * 0.2 + spreadPrice;
-    const sl = dir === 'BUY' ? judasSweep.extreme - buffer : judasSweep.extreme + buffer;
-
-    const asiaOppositeLevel = {
-      kind: 'ASIA_OPPOSITE',
-      side: dir === 'BUY' ? 'HIGH' : 'LOW',
-      price: dir === 'BUY' ? latestAsia.high : latestAsia.low,
-      label: `Asia ${dir === 'BUY' ? 'High' : 'Low'} ${formatPrice(pair, dir === 'BUY' ? latestAsia.high : latestAsia.low)}`
-    };
-
-    const pdLevels = (liquidityLevels || []).filter((l) => l.kind === 'PDH' || l.kind === 'PDL');
-    const orderedTargets = [asiaOppositeLevel].concat(pdLevels).concat(liquidityLevels || []);
-
-    const checklist = [
-      `✔ Range Asia (${formatPrice(pair, latestAsia.low)}–${formatPrice(pair, latestAsia.high)}) terbentuk`,
-      `✔ Judas sweep Asia ${judasSweep.side} di ${formatPrice(pair, judasSweep.extreme)} (${nyCtx.sessionName})`,
-      `✔ MSS searah ${dir} & zona retest unmitigated tersedia`
-    ];
-
-    return finalizeSetupWithGates({
-      pair,
-      timeframe: ctx.timeframe,
-      methodKey: 'judas',
-      direction: dir,
-      entry,
-      sl,
-      invalidation: `Temus ekstrem Judas ${formatPrice(pair, judasSweep.extreme)}`,
-      trigger: {
-        jenis: `JUDAS_ASIA_${judasSweep.side}_SWEEP`,
-        level: judasSweep.level,
-        waktuCandle: formatIsoTime(judasSweep.ts)
-      },
-      checklist,
-      liquidityLevels: orderedTargets,
-      swingHigh: latestAsia.high,
-      swingLow: latestAsia.low,
-      htfBias,
-      postReleaseBias,
-      spreadPrice,
-      atrNow,
-      tfCfg,
-      nowMs
-    });
   }
+  if (!judasSweep) return null;
 
-  function detectSmcObSetup(ctx) {
-    const { obList, shifts, liquidityLevels, spreadPrice, atrNow, tfCfg, nowMs, pair, htfBias, postReleaseBias } = ctx;
-    if (!htfBias || !htfBias.direction) return null;
-    const dir = htfBias.direction;
+  const dir = judasSweep.direction;
+  const mssAfter = shifts.find((s) => s.direction === dir && s.index >= judasSweep.index);
+  if (!mssAfter) return null;
 
-    const validBos = (shifts || []).slice().reverse().find((s) => s.direction === dir);
-    if (!validBos) return null;
+  const retestZone = fvgList.slice().reverse().find((f) => f.direction === dir && !f.mitigated && f.createdIndex >= judasSweep.index)
+    || obList.slice().reverse().find((o) => o.direction === dir && !o.mitigated && o.displacementIndex >= judasSweep.index);
+  if (!retestZone) return null;
 
-    const validOb = (obList || []).slice().reverse().find((o) =>
-      o.direction === dir &&
-      !o.mitigated &&
-      o.hasFvgOverlap &&
-      o.fvg &&
-      !o.fvg.mitigated
-    );
-    if (!validOb) return null;
+  const entry = retestZone.ce !== undefined ? retestZone.ce : retestZone.mid50;
+  const buffer = atrNow * 0.2 + spreadPrice;
+  const sl = dir === "BUY" ? judasSweep.extreme - buffer : judasSweep.extreme + buffer;
 
-    const overlapTop = Math.min(validOb.top, validOb.fvg.top);
-    const overlapBottom = Math.max(validOb.bottom, validOb.fvg.bottom);
-    const entry = overlapTop >= overlapBottom
-      ? (overlapTop + overlapBottom) / 2
-      : validOb.mid50;
+  return finalizeSetupWithGates({
+    pair, timeframe, methodKey: "judas", direction: dir, entry, sl,
+    invalidation: `Tembus ekstrem Judas ${formatPrice(pair, judasSweep.extreme)}`,
+    trigger: `JUDAS_ASIA_${judasSweep.side}_SWEEP @ ${formatPrice(pair, judasSweep.level)}`,
+    checklist: [
+      `✔ Range Asia (${formatPrice(pair, latestAsia.low)}–${formatPrice(pair, latestAsia.high)})`,
+      `✔ Judas sweep Asia ${judasSweep.side} (${nyCtx.sessionName}) & MSS searah ${dir}`
+    ],
+    liquidityLevels, swingHigh: latestAsia.high, swingLow: latestAsia.low, htfBias, nyCtx
+  });
+}
 
-    const buffer = atrNow * 0.2 + spreadPrice;
-    const sl = dir === 'BUY' ? validOb.bottom - buffer : validOb.top + buffer;
+// 4. Detektor SMC Order Block + FVG Confluence
+function detectSmcObSetup(ctx) {
+  const { obList, shifts, liquidityLevels, spreadPrice, atrNow, pair, timeframe, htfBias, nyCtx } = ctx;
+  if (!htfBias || !htfBias.direction) return null;
+  const dir = htfBias.direction;
 
-    const checklist = [
+  const validBos = shifts.slice().reverse().find((s) => s.direction === dir);
+  if (!validBos) return null;
+
+  const validOb = obList.slice().reverse().find((o) => o.direction === dir && !o.mitigated && o.hasFvgOverlap && o.fvg && !o.fvg.mitigated);
+  if (!validOb) return null;
+
+  const overlapTop = Math.min(validOb.top, validOb.fvg.top);
+  const overlapBottom = Math.max(validOb.bottom, validOb.fvg.bottom);
+  const entry = overlapTop >= overlapBottom ? (overlapTop + overlapBottom) / 2 : validOb.mid50;
+  const buffer = atrNow * 0.2 + spreadPrice;
+  const sl = dir === "BUY" ? validOb.bottom - buffer : validOb.top + buffer;
+
+  return finalizeSetupWithGates({
+    pair, timeframe, methodKey: "smc_ob", direction: dir, entry, sl,
+    invalidation: `Close melewati wick OB ${formatPrice(pair, dir === "BUY" ? validOb.bottom : validOb.top)}`,
+    trigger: `SMC_OB_FVG_OVERLAP @ ${formatPrice(pair, entry)}`,
+    checklist: [
       `✔ Bias HTF ${htfBias.tfTag} ${dir} & BOS di ${formatPrice(pair, validBos.level)}`,
-      `✔ OB ${formatPrice(pair, validOb.bottom)}–${formatPrice(pair, validOb.top)} overlap dengan FVG`,
-      `✔ Zona OB & FVG masih unmitigated`
-    ];
+      `✔ OB ${formatPrice(pair, validOb.bottom)}–${formatPrice(pair, validOb.top)} overlap FVG unmitigated`
+    ],
+    liquidityLevels, swingHigh: htfBias.rangeHigh, swingLow: htfBias.rangeLow, htfBias, nyCtx
+  });
+}
 
-    return finalizeSetupWithGates({
-      pair,
-      timeframe: ctx.timeframe,
-      methodKey: 'smc_ob',
-      direction: dir,
-      entry,
-      sl,
-      invalidation: `Close melewati wick OB ${formatPrice(pair, dir === 'BUY' ? validOb.bottom : validOb.top)}`,
-      trigger: {
-        jenis: 'SMC_OB_FVG_OVERLAP',
-        level: entry,
-        waktuCandle: formatIsoTime(validOb.ts)
-      },
-      checklist,
-      liquidityLevels,
-      swingHigh: htfBias.rangeHigh,
-      swingLow: htfBias.rangeLow,
-      htfBias,
-      postReleaseBias,
-      spreadPrice,
-      atrNow,
-      tfCfg,
-      nowMs
-    });
-  }
+// 5. Detektor ICT Silver Bullet
+function detectSilverBulletSetup(ctx) {
+  const { candles, nyCtx, sweeps, shifts, fvgList, liquidityLevels, pair, timeframe, htfBias } = ctx;
+  if (!nyCtx.isSilverBulletWindow) return null;
 
-  function detectSilverBulletSetup(ctx) {
-    const { candles, nyCtx, sweeps, shifts, fvgList, liquidityLevels, atrNow, tfCfg, nowMs, pair, htfBias, postReleaseBias } = ctx;
-    if (!nyCtx.isSilverBulletWindow) return null;
+  const recentSweep = sweeps.slice().reverse().find((sw) => candles.length - 1 - sw.candleIndex <= 20);
+  if (!recentSweep) return null;
 
-    const recentSweep = (sweeps || []).slice().reverse().find((sw) => candles.length - 1 - sw.candleIndex <= 20);
-    if (!recentSweep) return null;
+  const dir = recentSweep.direction;
+  const mssAfter = shifts.find((s) => s.direction === dir && s.index >= recentSweep.candleIndex);
+  if (!mssAfter) return null;
 
-    const dir = recentSweep.direction;
-    const mssAfter = (shifts || []).find((s) => s.direction === dir && s.index >= recentSweep.candleIndex);
-    if (!mssAfter) return null;
+  const windowFvg = fvgList.slice().reverse().find((f) => {
+    if (f.direction !== dir || f.mitigated || f.createdIndex < mssAfter.index) return false;
+    const p = getNyParts(f.ts);
+    return p.nyHour === 3 || p.nyHour === 10 || p.nyHour === 14;
+  });
+  if (!windowFvg) return null;
 
-    const windowFvg = (fvgList || []).slice().reverse().find((f) => {
-      if (f.direction !== dir || f.mitigated || f.createdIndex < mssAfter.index) return false;
-      const p = getNyParts(f.ts);
-      return (p.nyHour === 3 || p.nyHour === 10 || p.nyHour === 14);
-    });
-    if (!windowFvg) return null;
+  const firstFvgCandle = candles[Math.max(0, windowFvg.createdIndex - 2)];
+  const sl = dir === "BUY" ? firstFvgCandle.low : firstFvgCandle.high;
 
-    const firstFvgCandle = candles[Math.max(0, windowFvg.createdIndex - 2)];
-    const sl = dir === 'BUY' ? firstFvgCandle.low : firstFvgCandle.high;
-    const entry = windowFvg.ce;
-
-    const checklist = [
+  return finalizeSetupWithGates({
+    pair, timeframe, methodKey: "silver_bullet", direction: dir, entry: windowFvg.ce, sl,
+    invalidation: `Tembus balik candle pertama FVG di ${formatPrice(pair, sl)}`,
+    trigger: `SILVER_BULLET_${nyCtx.silverBulletWindow}`,
+    checklist: [
       `✔ Jendela Silver Bullet aktif (${nyCtx.silverBulletWindow})`,
-      `✔ Sweep ${recentSweep.side} (${recentSweep.levelLabel}) & MSS terkonfirmasi`,
-      `✔ FVG terbentuk di dalam jendela (${formatPrice(pair, windowFvg.bottom)}–${formatPrice(pair, windowFvg.top)})`
-    ];
+      `✔ Sweep ${recentSweep.side} + MSS & FVG (${formatPrice(pair, windowFvg.bottom)}–${formatPrice(pair, windowFvg.top)})`
+    ],
+    liquidityLevels,
+    swingHigh: Math.max(...candles.slice(-30).map((c) => c.high)),
+    swingLow: Math.min(...candles.slice(-30).map((c) => c.low)),
+    htfBias, nyCtx
+  });
+}
 
-    return finalizeSetupWithGates({
-      pair,
-      timeframe: ctx.timeframe,
-      methodKey: 'silver_bullet',
-      direction: dir,
-      entry,
-      sl,
-      invalidation: `Temus balik candle pertama FVG di ${formatPrice(pair, sl)}`,
-      trigger: {
-        jenis: 'SILVER_BULLET_WINDOW_FVG',
-        level: windowFvg.ce,
-        waktuCandle: formatIsoTime(windowFvg.ts)
-      },
-      checklist,
-      liquidityLevels,
-      swingHigh: Math.max.apply(null, candles.slice(-30).map((c) => c.high)),
-      swingLow: Math.min.apply(null, candles.slice(-30).map((c) => c.low)),
-      htfBias,
-      postReleaseBias,
-      spreadPrice: ctx.spreadPrice,
-      atrNow,
-      tfCfg,
-      nowMs
-    });
+// 6. Detektor FIB OTE (0.62 - 0.79 / Entry 0.705)
+function detectFibOteSetup(ctx) {
+  const { candles, swings, shifts, fvgList, obList, liquidityLevels, atrNow, pair, timeframe, htfBias, nyCtx } = ctx;
+  if (swings.swingHighs.length === 0 || swings.swingLows.length === 0) return null;
+
+  const lastHigh = swings.swingHighs[swings.swingHighs.length - 1];
+  const lastLow = swings.swingLows[swings.swingLows.length - 1];
+  const currentPrice = candles[candles.length - 1].close;
+
+  let dir = null, legLow = null, legHigh = null;
+  if (lastLow.index < lastHigh.index && shifts.some((s) => s.direction === "BUY" && s.index >= lastLow.index)) {
+    dir = "BUY"; legLow = lastLow.price; legHigh = lastHigh.price;
+  } else if (lastHigh.index < lastLow.index && shifts.some((s) => s.direction === "SELL" && s.index >= lastHigh.index)) {
+    dir = "SELL"; legHigh = lastHigh.price; legLow = lastLow.price;
+  }
+  if (!dir || !(legHigh > legLow)) return null;
+
+  const legRange = legHigh - legLow;
+  const fib062 = dir === "BUY" ? legHigh - legRange * 0.62 : legLow + legRange * 0.62;
+  const fib079 = dir === "BUY" ? legHigh - legRange * 0.79 : legLow + legRange * 0.79;
+  const entry0705 = dir === "BUY" ? legHigh - legRange * 0.705 : legLow + legRange * 0.705;
+  const sl = dir === "BUY" ? legLow : legHigh;
+
+  const zoneMin = Math.min(fib062, fib079);
+  const zoneMax = Math.max(fib062, fib079);
+  if (currentPrice < zoneMin - atrNow * 0.15 || currentPrice > zoneMax + atrNow * 0.15) return null;
+
+  const checklist = [
+    `✔ Leg impuls ${dir} (${formatPrice(pair, legLow)}–${formatPrice(pair, legHigh)}) setelah MSS`,
+    `✔ Harga di zona Fib OTE 0.62–0.79, entry presisi 0.705 (${formatPrice(pair, entry0705)})`
+  ];
+  if (fvgList.some((f) => !f.mitigated && f.top >= zoneMin && f.bottom <= zoneMax) || obList.some((o) => !o.mitigated && o.top >= zoneMin && o.bottom <= zoneMax)) {
+    checklist.push("✔ Bonus konfluensi FVG/OB di dalam zona OTE");
   }
 
-  function detectFibOteSetup(ctx) {
-    const { candles, swings, shifts, fvgList, obList, liquidityLevels, atrNow, tfCfg, nowMs, pair, htfBias, postReleaseBias } = ctx;
-    const highs = swings.swingHighs || [];
-    const lows = swings.swingLows || [];
-    if (highs.length === 0 || lows.length === 0) return null;
-
-    const lastHigh = highs[highs.length - 1];
-    const lastLow = lows[lows.length - 1];
-    const lastCandle = candles[candles.length - 1];
-    const currentPrice = lastCandle.close;
-
-    let dir = null;
-    let legLow = null;
-    let legHigh = null;
-
-    if (lastLow.index < lastHigh.index) {
-      const mssBull = (shifts || []).find((s) => s.direction === 'BUY' && s.index >= lastLow.index);
-      if (mssBull) {
-        dir = 'BUY';
-        legLow = lastLow.price;
-        legHigh = lastHigh.price;
-      }
-    } else if (lastHigh.index < lastLow.index) {
-      const mssBear = (shifts || []).find((s) => s.direction === 'SELL' && s.index >= lastHigh.index);
-      if (mssBear) {
-        dir = 'SELL';
-        legHigh = lastHigh.price;
-        legLow = lastLow.price;
-      }
-    }
-
-    if (!dir || !(legHigh > legLow)) return null;
-    const legRange = legHigh - legLow;
-
-    let fib062, fib079, entry0705, sl, extLevels;
-    if (dir === 'BUY') {
-      fib062 = legHigh - legRange * 0.62;
-      fib079 = legHigh - legRange * 0.79;
-      entry0705 = legHigh - legRange * 0.705;
-      sl = legLow;
-      const ext027 = legHigh + legRange * 0.27;
-      const ext062 = legHigh + legRange * 0.62;
-      extLevels = [
-        { kind: 'FIB_EXT_027', side: 'HIGH', price: ext027, label: `Fib Ext -0.27 (${formatPrice(pair, ext027)})` },
-        { kind: 'FIB_EXT_062', side: 'HIGH', price: ext062, label: `Fib Ext -0.62 (${formatPrice(pair, ext062)})` }
-      ];
-    } else {
-      fib062 = legLow + legRange * 0.62;
-      fib079 = legLow + legRange * 0.79;
-      entry0705 = legLow + legRange * 0.705;
-      sl = legHigh;
-      const ext027 = legLow - legRange * 0.27;
-      const ext062 = legLow - legRange * 0.62;
-      extLevels = [
-        { kind: 'FIB_EXT_027', side: 'LOW', price: ext027, label: `Fib Ext -0.27 (${formatPrice(pair, ext027)})` },
-        { kind: 'FIB_EXT_062', side: 'LOW', price: ext062, label: `Fib Ext -0.62 (${formatPrice(pair, ext062)})` }
-      ];
-    }
-
-    const zoneMin = Math.min(fib062, fib079);
-    const zoneMax = Math.max(fib062, fib079);
-    const inOteZone = currentPrice >= zoneMin - atrNow * 0.15 && currentPrice <= zoneMax + atrNow * 0.15;
-    if (!inOteZone) return null;
-
-    const checklist = [
-      `✔ Leg impuls ${dir} (${formatPrice(pair, legLow)}–${formatPrice(pair, legHigh)}) setelah MSS`,
-      `✔ Harga berada di zona Fib OTE 0.62–0.79 (${formatPrice(pair, zoneMin)}–${formatPrice(pair, zoneMax)})`,
-      `✔ Entry presisi di level 0.705 (${formatPrice(pair, entry0705)})`
-    ];
-
-    const hasPoiInZone = (fvgList || []).some((f) => !f.mitigated && f.top >= zoneMin && f.bottom <= zoneMax)
-      || (obList || []).some((o) => !o.mitigated && o.top >= zoneMin && o.bottom <= zoneMax);
-    if (hasPoiInZone) {
-      checklist.push('✔ Bonus konfluensi FVG/OB di dalam zona OTE');
-    }
-
-    const combinedLiquidity = extLevels.concat(liquidityLevels || []);
-
-    return finalizeSetupWithGates({
-      pair,
-      timeframe: ctx.timeframe,
-      methodKey: 'ote',
-      direction: dir,
-      entry: entry0705,
-      sl,
-      invalidation: `Temus titik 0 leg impuls di ${formatPrice(pair, sl)}`,
-      trigger: {
-        jenis: 'FIB_OTE_0705',
-        level: entry0705,
-        waktuCandle: formatIsoTime(lastCandle.ts)
-      },
-      checklist,
-      liquidityLevels: combinedLiquidity,
-      swingHigh: legHigh,
-      swingLow: legLow,
-      htfBias,
-      postReleaseBias,
-      spreadPrice: ctx.spreadPrice,
-      atrNow,
-      tfCfg,
-      nowMs
-    });
-  }
-
-  function runSingleDetector(methodKey, ctx) {
-    if (methodKey === 'n_pattern') return detectNPatternSetup(ctx);
-    if (methodKey === 'sweep') return detectLiquiditySweepSetup(ctx);
-    if (methodKey === 'judas') return detectJudasSwingSetup(ctx);
-    if (methodKey === 'smc_ob') return detectSmcObSetup(ctx);
-    if (methodKey === 'silver_bullet') return detectSilverBulletSetup(ctx);
-    if (methodKey === 'ote') return detectFibOteSetup(ctx);
-    return null;
-  }
-
-  function runAutoSniper(ctx) {
-    const keys = ['n_pattern', 'sweep', 'judas', 'smc_ob', 'silver_bullet', 'ote'];
-    const validSetups = [];
-
-    for (const k of keys) {
-      const s = runSingleDetector(k, ctx);
-      if (s && s.valid) {
-        validSetups.push(s);
-      }
-    }
-
-    if (validSetups.length === 0) {
-      return {
-        valid: false,
-        reasonCode: 'NO_DETECTOR_MATCH',
-        reasonText: 'Tidak ada detektor (Pola N, Sweep, Judas, SMC OB, Silver Bullet, FIB OTE) yang memenuhi syarat.'
-      };
-    }
-
-    const dirs = new Set(validSetups.map((s) => s.direction));
-    if (dirs.size > 1) {
-      return {
-        valid: false,
-        reasonCode: 'CONFLICTING_DETECTOR_DIRECTIONS',
-        reasonText: 'Arah antar detektor yang valid saling bertentangan (BUY vs SELL) → NO_TRADE.'
-      };
-    }
-
-    validSetups.sort((a, b) => b.score - a.score);
-    const best = Object.assign({}, validSetups[0]);
-
-    if (validSetups.length >= 2) {
-      const tol = Math.max(ctx.atrNow * 0.4, ctx.spreadPrice * 3);
-      const hasOverlap = validSetups.slice(1).some((other) => Math.abs(other.entry - best.entry) <= tol);
-      if (hasOverlap) {
-        best.score += 1;
-        best.checklist = best.checklist.concat([
-          `✔ Bonus konfluensi: >= 2 metode searah dengan zona overlap (terpilih: ${best.methodKey.toUpperCase()})`
-        ]);
-      }
-    }
-
-    best.selectedMethodKey = best.methodKey;
-    best.methodKey = 'auto';
-    best.checklist.unshift(`✔ Auto Sniper memilih metode terbaik: ${best.selectedMethodKey.toUpperCase()}`);
-    best.score = best.checklist.length;
-    return best;
-  }
-
-  // ============================================================================
-  // KOMPATIBILITAS HELPER (DEALING RANGE, LOT, RUNNING TRADE, MANUAL TP)
-  // ============================================================================
-
-  function analyzeDealingRange(pair, livePrice, timeframe, deterministicSeed, marketContext) {
-    const cleanPair = normalizePair(pair);
-    const spec = getPairSpec(cleanPair);
-    const tfCfg = TF_CONFIG[timeframe] || TF_CONFIG.M15;
-    const ctx = marketContext || {};
-    const nyCtx = getNySessionContext(ctx.nowMs);
-    const seed = Number.isFinite(Number(deterministicSeed)) ? Number(deterministicSeed) : 1;
-
-    const hasRealAtr = Number.isFinite(Number(ctx.realAtr)) && Number(ctx.realAtr) > 0;
-    const unitAtr = hasRealAtr
-      ? Number(ctx.realAtr)
-      : Math.max(spec.pipSize * 4, spec.baseAtrM15 * tfCfg.atrMult);
-
-    const hasRealSwing =
-      Number.isFinite(Number(ctx.recentHigh)) &&
-      Number.isFinite(Number(ctx.recentLow)) &&
-      Number(ctx.recentHigh) > Number(ctx.recentLow);
-
-    let swingLow;
-    let swingHigh;
-    let totalRange;
-
-    if (hasRealSwing) {
-      swingLow = Number(ctx.recentLow);
-      swingHigh = Number(ctx.recentHigh);
-      totalRange = Math.max(unitAtr * 1.1, swingHigh - swingLow);
-    } else {
-      const rangeSpreadFactor = 1.6 + (Math.abs(Math.cos(seed + 0.7)) * 0.25);
-      totalRange = unitAtr * rangeSpreadFactor;
-      swingLow = livePrice - totalRange * 0.5;
-      swingHigh = swingLow + totalRange;
-    }
-
-    const equilibrium = swingLow + totalRange * 0.5;
-    const pdPercent = Math.round(
-      Math.min(95, Math.max(5, ((livePrice - swingLow) / Math.max(spec.pipSize, totalRange)) * 100))
-    );
-
-    const biasKey = `${cleanPair}_${timeframe}_${ctx.candleCloseTs || 0}`;
-    let direction = lockedPairCandleBias.get(biasKey) || (livePrice <= equilibrium ? 'BUY' : 'SELL');
-    if (!lockedPairCandleBias.has(biasKey)) {
-      lockedPairCandleBias.set(biasKey, direction);
-      pruneCacheMap(lockedPairCandleBias, 300);
-    }
-
-    return {
-      pair: cleanPair,
-      timeframe,
-      livePrice,
-      unitAtr,
-      hasRealAtr,
-      hasRealSwing,
-      swingHigh,
-      swingHighFmt: formatPrice(cleanPair, swingHigh),
-      swingLow,
-      swingLowFmt: formatPrice(cleanPair, swingLow),
-      totalRange,
-      equilibrium,
-      equilibriumFmt: formatPrice(cleanPair, equilibrium),
-      pdPercent,
-      direction,
-      nyCtx
-    };
-  }
-
-  function createNoTradeResult(baseMeta, reasonCode, detectedFacts, extra) {
-    return Object.assign({}, baseMeta, {
-      status: 'NO_TRADE',
-      isExecutable: false,
-      reasonCode,
-      direction: null,
-      orderType: 'NO TRADE',
-      entry: null,
-      sl: null,
-      tp: [],
-      rrTp1: null,
-      invalidation: null,
-      validUntil: null,
-      trigger: null,
-      checklist: [],
-      score: 0,
-      detectedFacts: Array.isArray(detectedFacts) ? detectedFacts : []
-    }, extra || {});
-  }
-
-  function createWaitResult(baseMeta, reasonCode, detectedFacts, extra) {
-    return Object.assign({}, baseMeta, {
-      status: 'WAIT',
-      isExecutable: false,
-      reasonCode,
-      direction: null,
-      orderType: 'WAIT',
-      entry: null,
-      sl: null,
-      tp: [],
-      rrTp1: null,
-      invalidation: null,
-      validUntil: null,
-      trigger: null,
-      checklist: [],
-      score: 0,
-      detectedFacts: Array.isArray(detectedFacts) ? detectedFacts : []
-    }, extra || {});
-  }
-
-  function buildSignalSetup(options) {
-    const opts = options || {};
-    const pair = normalizePair(opts.pair || 'XAUUSD');
-    const timeframe = TF_CONFIG[opts.timeframe] ? opts.timeframe : 'M15';
-    const methodKey = METHOD_CATALOG[opts.method] ? opts.method : 'auto';
-    const forceReanalyze = Boolean(opts.forceReanalyze);
-
-    const nowMs = Number.isFinite(Number(opts.nowMs)) ? Number(opts.nowMs) : Date.now();
-    const candleCloseTs = getCandleCloseTimestamp(timeframe, nowMs, opts.candleCloseTs);
-    const signalId = buildDeterministicSignalId(pair, timeframe, methodKey, candleCloseTs);
-
-    if (!forceReanalyze && lockedSignalCache.has(signalId)) {
-      return Object.assign({}, lockedSignalCache.get(signalId), {
-        lockedFromCache: true
-      });
-    }
-
-    const spec = getPairSpec(pair);
-    const tfCfg = TF_CONFIG[timeframe];
-    const methodMeta = METHOD_CATALOG[methodKey];
-    const nyCtx = getNySessionContext(nowMs);
-    const candles = normalizeCandleArray(opts.candles || opts.ohlc);
-
-    const lastCandle = candles.length > 0 ? candles[candles.length - 1] : null;
-    const livePrice = Number.isFinite(Number(opts.livePrice)) && Number(opts.livePrice) > 0
-      ? Number(opts.livePrice)
-      : (lastCandle ? lastCandle.close : NaN);
-
-    const maxDataAgeMs = Number.isFinite(Number(opts.maxDataAgeMs))
-      ? Number(opts.maxDataAgeMs)
-      : DEFAULT_MAX_DATA_AGE_MS;
-
-    const baseMeta = {
-      engineVersion: ENGINE_VERSION,
-      signalId,
-      candleCloseTs,
-      candleCloseIso: formatIsoTime(candleCloseTs),
-      pair,
-      timeframe,
-      methodKey,
-      methodLabel: methodMeta.name,
-      methodShortTag: methodMeta.shortTag,
-      sessionName: nyCtx.sessionName,
-      nyTimeLabel: `${String(nyCtx.nyHour).padStart(2, '0')}:${String(nyCtx.nyMinute).padStart(2, '0')} NY (${nyCtx.nyWeekday})`,
-      livePrice: Number.isFinite(livePrice) ? livePrice : null
-    };
-
-    if (opts.feedVerifiedLive === false) {
-      const res = createNoTradeResult(baseMeta, 'UNVERIFIED_FEED', [
-        'Feed harga live belum terverifikasi sebagai data live nyata.'
-      ], { poiSummary: 'NO_TRADE: Feed live belum terverifikasi.' });
-      lockedSignalCache.set(signalId, res);
-      pruneCacheMap(lockedSignalCache, 400);
-      return res;
-    }
-
-    if (nyCtx.isWeekend && pair !== 'BTCUSDT') {
-      const res = createNoTradeResult(baseMeta, 'WEEKEND_MARKET_CLOSED', [
-        `Pasar tutup akhir pekan (${baseMeta.nyTimeLabel}).`
-      ], { poiSummary: 'NO_TRADE: Pasar tutup akhir pekan.' });
-      lockedSignalCache.set(signalId, res);
-      pruneCacheMap(lockedSignalCache, 400);
-      return res;
-    }
-
-    if (!Number.isFinite(livePrice) || livePrice <= 0) {
-      const res = createNoTradeResult(baseMeta, 'INVALID_LIVE_PRICE', [
-        'Harga live / data candle OHLC tidak tersedia.'
-      ], { poiSummary: 'NO_TRADE: Harga live tidak valid.' });
-      lockedSignalCache.set(signalId, res);
-      pruneCacheMap(lockedSignalCache, 400);
-      return res;
-    }
-
-    const lastUpdateNum = Number(opts.lastUpdateTs !== undefined && opts.lastUpdateTs !== null ? opts.lastUpdateTs : (lastCandle ? lastCandle.ts : NaN));
-    if (!Number.isFinite(lastUpdateNum) || lastUpdateNum <= 0) {
-      const res = createNoTradeResult(baseMeta, 'MISSING_LAST_UPDATE_TS', [
-        'Timestamp data OHLC/live tidak tersedia.'
-      ], { poiSummary: 'NO_TRADE: Timestamp data tidak valid.' });
-      lockedSignalCache.set(signalId, res);
-      pruneCacheMap(lockedSignalCache, 400);
-      return res;
-    }
-
-    const dataAgeMs = nowMs - lastUpdateNum;
-    if (dataAgeMs < 0 || dataAgeMs > maxDataAgeMs) {
-      const res = createNoTradeResult(baseMeta, 'STALE_PRICE_DATA', [
-        `Data berusia ${Math.max(0, Math.round(dataAgeMs / 1000))} detik (batas ${Math.round(maxDataAgeMs / 1000)} detik).`
-      ], { dataAgeMs, poiSummary: 'NO_TRADE: Data basi.' });
-      lockedSignalCache.set(signalId, res);
-      pruneCacheMap(lockedSignalCache, 400);
-      return res;
-    }
-
-    const newsGate = evaluateNewsGate(opts, nowMs);
-    if (newsGate.status === 'WAIT') {
-      const res = createWaitResult(baseMeta, newsGate.reasonCode, [newsGate.message], {
-        poiSummary: newsGate.message
-      });
-      lockedSignalCache.set(signalId, res);
-      pruneCacheMap(lockedSignalCache, 400);
-      return res;
-    }
-
-    if (candles.length < 15) {
-      const res = createNoTradeResult(baseMeta, 'INSUFFICIENT_OHLC_CANDLES', [
-        `Jumlah candle OHLC (${candles.length}) kurang untuk deteksi swing/struktur nyata.`
-      ], { poiSummary: 'NO_TRADE: Data candle OHLC belum mencukupi.' });
-      lockedSignalCache.set(signalId, res);
-      pruneCacheMap(lockedSignalCache, 400);
-      return res;
-    }
-
-    const atrSeries = calculateAtrSeries(candles, 14);
-    const atrNow = Math.max(spec.pipSize, atrSeries[atrSeries.length - 1] || spec.baseAtrM15 * tfCfg.atrMult);
-    const spreadPips = Number.isFinite(Number(opts.spreadPips)) && Number(opts.spreadPips) >= 0
-      ? Number(opts.spreadPips)
-      : spec.defaultSpreadPips;
-    const spreadPrice = spreadPips * spec.pipSize;
-
-    const swings = detectFractalSwings(candles, 3, 3);
-    const shifts = detectStructureShifts(candles, swings);
-    const fvgList = detectFVGs(candles, atrSeries, 0.3);
-    const obList = detectOrderBlocks(candles, atrSeries, fvgList);
-    const liqInfo = extractLiquidityLevels(candles, swings, pair);
-    const sweeps = detectSweeps(candles, liqInfo.levels, pair);
-    const htfBias = computeHtfBias(opts.h4Candles, opts.h1Candles, candles);
-
-    const detectorCtx = {
-      pair,
-      timeframe,
-      candles,
-      atrSeries,
-      atrNow,
-      spreadPrice,
-      swings,
-      shifts,
-      fvgList,
-      obList,
-      liquidityLevels: liqInfo.levels,
-      latestAsia: liqInfo.latestAsia,
-      sweeps,
-      htfBias,
-      postReleaseBias: newsGate.postReleaseBias,
-      nyCtx,
-      tfCfg,
-      nowMs
-    };
-
-    const evaluated = methodKey === 'auto'
-      ? runAutoSniper(detectorCtx)
-      : runSingleDetector(methodKey, detectorCtx);
-
-    if (!evaluated || !evaluated.valid) {
-      const reasonCode = (evaluated && evaluated.reasonCode) || 'NO_VALID_SETUP';
-      const reasonText = (evaluated && evaluated.reasonText) || 'Syarat detektor tidak terpenuhi.';
-      const res = createNoTradeResult(baseMeta, reasonCode, [reasonText], {
-        poiSummary: `NO_TRADE: ${reasonText}`
-      });
-      lockedSignalCache.set(signalId, res);
-      pruneCacheMap(lockedSignalCache, 400);
-      return res;
-    }
-
-    const activeMethodKey = evaluated.methodKey;
-    const activeMeta = METHOD_CATALOG[activeMethodKey] || methodMeta;
-    const chosenSubTag = evaluated.selectedMethodKey
-      ? `${activeMeta.shortTag} → ${evaluated.selectedMethodKey.toUpperCase()}`
-      : activeMeta.shortTag;
-
-    const result = Object.assign({}, baseMeta, {
-      status: 'SIGNAL',
-      isExecutable: true,
-      reasonCode: 'VALID_SETUP',
-      methodKey: activeMethodKey,
-      selectedMethodKey: evaluated.selectedMethodKey || activeMethodKey,
-      methodLabel: evaluated.selectedMethodKey
-        ? `${activeMeta.name} (${evaluated.selectedMethodKey.toUpperCase()})`
-        : activeMeta.name,
-      methodShortTag: chosenSubTag,
-      direction: evaluated.direction,
-      orderType: evaluated.orderType,
-      trigger: evaluated.trigger,
-      checklist: evaluated.checklist,
-      score: evaluated.score,
-      entry: evaluated.entry,
-      entryFmt: evaluated.entryFmt,
-      sl: evaluated.sl,
-      slFmt: evaluated.slFmt,
-      slPips: evaluated.slPips,
-      spreadPips: evaluated.spreadPips,
-      tp: evaluated.tp,
-      tpTargets: evaluated.tpTargets,
-      tp1: evaluated.tp1,
-      tp1Fmt: evaluated.tp1Fmt,
-      tp1Pips: evaluated.tp1Pips,
-      tp2: evaluated.tp2,
-      tp2Fmt: evaluated.tp2Fmt,
-      tp2Pips: evaluated.tp2Pips,
-      tp3: evaluated.tp3,
-      tp3Fmt: evaluated.tp3Fmt,
-      tp3Pips: evaluated.tp3Pips,
-      rrTp1: evaluated.rrTp1,
-      invalidation: evaluated.invalidation,
-      validUntil: evaluated.validUntil,
-      validUntilTs: evaluated.validUntilTs,
-      zoneLow: evaluated.zoneLow,
-      zoneHigh: evaluated.zoneHigh,
-      zoneRangeFormatted: evaluated.zoneRangeFormatted,
-      expiryMinutes: tfCfg.expiryMin,
-      poiSummary: evaluated.checklist.join(' • '),
-      detectedFacts: evaluated.checklist.concat(
-        newsGate.postReleaseReason ? [newsGate.postReleaseReason] : []
-      ),
-      pipValuePerLot: spec.pipValuePerLot
-    });
-
-    lockedSignalCache.set(signalId, result);
-    pruneCacheMap(lockedSignalCache, 400);
-    return result;
-  }
-
-  function calculatePositionSize(account, signal) {
-    if (!signal || signal.status !== 'SIGNAL') {
-      return {
-        lot: 0,
-        isBlocked: true,
-        blockReason: 'Sinyal tidak dalam status eksekusi (SIGNAL).',
-        actualRiskDollar: 0,
-        tp1Dollar: 0,
-        tp2Dollar: 0,
-        tp3Dollar: 0
-      };
-    }
-
-    const equity = Number(account && (account.equity !== undefined ? account.equity : account.balance));
-    const riskPct = Number(account && account.riskPct);
-    const hardMaxLot = Number(account && account.maxLot);
-
-    if (!Number.isFinite(equity) || equity <= 0 || !Number.isFinite(riskPct) || riskPct <= 0) {
-      return {
-        lot: 0,
-        isBlocked: true,
-        blockReason: 'Equity atau persentase risiko akun belum terisi valid.',
-        actualRiskDollar: 0,
-        tp1Dollar: 0,
-        tp2Dollar: 0,
-        tp3Dollar: 0
-      };
-    }
-
-    const spec = getPairSpec(signal.pair);
-    const slPips = Math.max(1, Number(signal.slPips) || 1);
-    const targetRiskDollar = equity * (riskPct / 100);
-    const rawLot = targetRiskDollar / (slPips * spec.pipValuePerLot);
-
-    let finalLot = Math.floor(rawLot * 100) / 100;
-    let wasCapped = false;
-
-    if (Number.isFinite(hardMaxLot) && hardMaxLot > 0 && finalLot > hardMaxLot) {
-      finalLot = Math.floor(hardMaxLot * 100) / 100;
-      wasCapped = true;
-    }
-
-    if (finalLot < 0.01) {
-      return {
-        lot: 0,
-        isBlocked: true,
-        blockReason: 'Ukuran lot di bawah 0.01; dipaksa 0.01 akan melewati batas risiko target.',
-        targetRiskDollar: Number(targetRiskDollar.toFixed(2)),
-        actualRiskDollar: 0,
-        tp1Dollar: 0,
-        tp2Dollar: 0,
-        tp3Dollar: 0
-      };
-    }
-
-    const actualRiskDollar = finalLot * slPips * spec.pipValuePerLot;
-    const tp1Dollar = finalLot * (Number(signal.tp1Pips) || 0) * spec.pipValuePerLot;
-    const tp2Dollar = finalLot * (Number(signal.tp2Pips) || 0) * spec.pipValuePerLot;
-    const tp3Dollar = finalLot * (Number(signal.tp3Pips) || 0) * spec.pipValuePerLot;
-
-    return {
-      lot: Number(finalLot.toFixed(2)),
-      isBlocked: false,
-      wasCapped,
-      targetRiskDollar: Number(targetRiskDollar.toFixed(2)),
-      actualRiskDollar: Number(actualRiskDollar.toFixed(2)),
-      tp1Dollar: Number(tp1Dollar.toFixed(2)),
-      tp2Dollar: Number(tp2Dollar.toFixed(2)),
-      tp3Dollar: Number(tp3Dollar.toFixed(2))
-    };
-  }
-
-  function evaluateRunningPositionMetrics(tradeOrSignal, currentPrice, options) {
-    const src = tradeOrSignal || {};
-    const opts = options || {};
-    const pair = normalizePair(src.pair || opts.pair || 'XAUUSD');
-    const spec = getPairSpec(pair);
-    const direction = (src.direction || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : 'BUY';
-    const entry = Number(src.entry);
-    const sl = Number(src.sl);
-    const tp1 = Number(src.tp1);
-    const tp2 = Number(src.tp2);
-    const tp3 = Number(src.tp3);
-    const price = Number(currentPrice);
-    const lot = Number.isFinite(Number(opts.lot)) ? Number(opts.lot) : (Number(src.lot) || 0.01);
-    const pipValPerLot = Number(src.pipValuePerLot) || spec.pipValuePerLot;
-
-    const forcedStatus = (opts.forcedStatus || src.status || '').toUpperCase();
-    if (['TP1', 'TP2', 'TP3', 'BE', 'SL', 'CUT', 'CANCEL'].includes(forcedStatus)) {
-      const closedPips = Number.isFinite(Number(opts.closedPips))
-        ? Number(opts.closedPips)
-        : (forcedStatus === 'BE' || forcedStatus === 'CANCEL' ? 0 : (forcedStatus === 'SL' ? -Math.abs(Number(src.slPips) || 0) : Math.abs(Number(src.tp1Pips) || 0)));
-      const closedUsd = Number.isFinite(Number(opts.closedUsd))
-        ? Number(opts.closedUsd)
-        : Number((closedPips * pipValPerLot * lot).toFixed(2));
-      return {
-        isTriggered: true,
-        isClosed: true,
-        status: forcedStatus,
-        deltaPips: closedPips,
-        floatingUsd: closedUsd
-      };
-    }
-
-    if (!Number.isFinite(entry) || !Number.isFinite(price)) {
-      return { isTriggered: false, isClosed: false, status: 'MENUNGGU LIMIT', deltaPips: 0, floatingUsd: 0 };
-    }
-
-    const isTriggered = direction === 'BUY'
-      ? (price <= entry || Boolean(opts.isTriggered))
-      : (price >= entry || Boolean(opts.isTriggered));
-
-    if (!isTriggered) {
-      return { isTriggered: false, isClosed: false, status: 'MENUNGGU LIMIT', deltaPips: 0, floatingUsd: 0 };
-    }
-
-    const signedDiff = direction === 'BUY' ? (price - entry) : (entry - price);
-    const absPips = toPips(pair, signedDiff);
-    const deltaPips = signedDiff >= 0 ? absPips : -absPips;
-    const floatingUsd = Number((deltaPips * pipValPerLot * lot).toFixed(2));
-
-    let status = 'RUNNING';
-    if (Number.isFinite(sl) && (direction === 'BUY' ? price <= sl : price >= sl)) {
-      status = 'SL';
-    } else if (Number.isFinite(tp3) && (direction === 'BUY' ? price >= tp3 : price <= tp3)) {
-      status = 'TP3';
-    } else if (Number.isFinite(tp2) && (direction === 'BUY' ? price >= tp2 : price <= tp2)) {
-      status = 'TP2';
-    } else if (Number.isFinite(tp1) && (direction === 'BUY' ? price >= tp1 : price <= tp1)) {
-      status = 'TP1';
-    }
-
-    return {
-      isTriggered: true,
-      isClosed: ['SL', 'TP3', 'TP2', 'TP1'].includes(status),
-      status,
-      deltaPips,
-      floatingUsd
-    };
-  }
-
-  function calculateManualTpMetrics(tradeOrSignal, manualTpPrice, lot) {
-    const src = tradeOrSignal || {};
-    const pair = normalizePair(src.pair || 'XAUUSD');
-    const spec = getPairSpec(pair);
-    const direction = (src.direction || 'BUY').toUpperCase() === 'SELL' ? 'SELL' : 'BUY';
-    const entry = Number(src.entry);
-    const tpVal = Number(manualTpPrice);
-    const safeLot = Number.isFinite(Number(lot)) && Number(lot) > 0 ? Number(lot) : (Number(src.lot) || 0.01);
-    const pipValPerLot = Number(src.pipValuePerLot) || spec.pipValuePerLot;
-
-    if (!Number.isFinite(entry) || !Number.isFinite(tpVal)) {
-      return { valid: false, tpPips: 0, tpDollar: 0 };
-    }
-
-    const signedMove = direction === 'BUY' ? (tpVal - entry) : (entry - tpVal);
-    const absPips = toPips(pair, signedMove);
-    const tpPips = signedMove >= 0 ? absPips : -absPips;
-    const tpDollar = Number((tpPips * pipValPerLot * safeLot).toFixed(2));
-
-    return {
-      valid: true,
-      tpPips,
-      tpDollar,
-      tpFmt: formatPrice(pair, tpVal)
-    };
-  }
-
-  function evaluateNewsLockStatus(options) {
-    const opts = options || {};
-    const nowMs = Number.isFinite(Number(opts.nowMs)) ? Number(opts.nowMs) : Date.now();
-    const lockWindowMs = Number.isFinite(Number(opts.lockWindowMs)) ? Number(opts.lockWindowMs) : NEWS_LOCK_WINDOW_MS;
-    const highImpactEvents = Array.isArray(opts.highImpactEvents) ? opts.highImpactEvents : [];
-
-    const matchedEvent = highImpactEvents.find((ev) => {
-      const evTs = Number(ev && (ev.timestampMs || ev.timeMs || ev.ts));
-      return Number.isFinite(evTs) && Math.abs(nowMs - evTs) <= lockWindowMs;
-    });
-
-    const isLocked = Boolean(opts.newsLockActive) || Boolean(matchedEvent);
-    const direction = (opts.direction || '').toUpperCase();
-    const rawNewsBias = (opts.newsBias || '').toUpperCase();
-    const hasConflict = Boolean(direction && (rawNewsBias === 'BUY' || rawNewsBias === 'SELL') && rawNewsBias !== direction);
-
-    let severity = 'NONE';
-    let warningTitle = '';
-    let warningMessage = '';
-
-    if (isLocked) {
-      severity = 'LOCK';
-      const evTitle = matchedEvent && matchedEvent.title ? ` — ${matchedEvent.title}` : '';
-      warningTitle = `⚠️ NEWS LOCK AKTIF${evTitle}`;
-      warningMessage = `Waspada volatilitas tinggi & pelebaran spread di sekitar jendela news ±${Math.round(lockWindowMs / 60000)} menit.`;
-    } else if (hasConflict) {
-      severity = 'CONFLICT';
-      warningTitle = '⚠️ KONFLIK BIAS NEWS';
-      warningMessage = `Bias kalender news (${rawNewsBias}) berbeda dengan arah setup (${direction}).`;
-    }
-
-    return {
-      isLocked,
-      hasConflict,
-      severity,
-      matchedEvent: matchedEvent || null,
-      warningTitle,
-      warningMessage
-    };
-  }
-
-  global.LiamMethods = {
-    ENGINE_VERSION,
-    DEFAULT_MAX_DATA_AGE_MS,
-    NEWS_LOCK_WINDOW_MS,
-    MIN_RR_TP1,
-    PAIR_SPECS,
-    TF_CONFIG,
-    METHOD_CATALOG,
-    normalizePair,
-    getPairSpec,
-    formatPrice,
-    toPips,
-    getWibContext,
-    getNySessionContext,
-    getCandleCloseTimestamp,
-    buildDeterministicSignalId,
-    clearLockedSignal,
-    normalizeCandleArray,
-    calculateAtrSeries,
-    detectFractalSwings,
-    detectFVGs,
-    detectOrderBlocks,
-    detectStructureShifts,
-    extractLiquidityLevels,
-    detectSweeps,
-    computeHtfBias,
-    detectNPatternSetup,
-    analyzeDealingRange,
-    buildSignalSetup,
-    calculatePositionSize,
-    evaluateRunningPositionMetrics,
-    calculateManualTpMetrics,
-    evaluateNewsLockStatus
+  return finalizeSetupWithGates({
+    pair, timeframe, methodKey: "ote", direction: dir, entry: entry0705, sl,
+    invalidation: `Tembus titik 0 leg impuls di ${formatPrice(pair, sl)}`,
+    trigger: `FIB_OTE_0705 @ ${formatPrice(pair, entry0705)}`,
+    checklist, liquidityLevels, swingHigh: legHigh, swingLow: legLow, htfBias, nyCtx
+  });
+}
+
+function evaluateConfiguredMethods(pair, timeframe, candles, h1Candles, cfg, nowMs) {
+  const spec = PAIR_SPECS[pair];
+  const tfInfo = TF_MAP[timeframe];
+  const nyCtx = getNySessionContext(nowMs);
+  const atrSeries = calculateAtrSeries(candles, 14);
+  const atrNow = Math.max(spec.pipSize, atrSeries[atrSeries.length - 1] || spec.baseAtrM15 * tfInfo.atrMult);
+  const spreadPrice = spec.defaultSpreadPips * spec.pipSize;
+
+  const swings = detectFractalSwings(candles, 3, 3);
+  const shifts = detectStructureShifts(candles, swings);
+  const fvgList = detectFVGs(candles, atrSeries, 0.3);
+  const obList = detectOrderBlocks(candles, atrSeries, fvgList);
+  const liqInfo = extractLiquidityLevels(candles, swings, pair);
+  const sweeps = detectSweeps(candles, liqInfo.levels);
+  const htfBias = computeHtfBias(h1Candles, candles);
+
+  const ctx = {
+    pair, timeframe, candles, atrNow, spreadPrice,
+    swings, shifts, fvgList, obList,
+    liquidityLevels: liqInfo.levels, latestAsia: liqInfo.latestAsia,
+    sweeps, htfBias, nyCtx
   };
-})(window);
+
+  const detectors = {
+    n_pattern: () => detectNPatternSetup(ctx),
+    sweep: () => detectLiquiditySweepSetup(ctx),
+    judas: () => detectJudasSwingSetup(ctx),
+    smc_ob: () => detectSmcObSetup(ctx),
+    silver_bullet: () => detectSilverBulletSetup(ctx),
+    ote: () => detectFibOteSetup(ctx)
+  };
+
+  const keysToRun = cfg.methods.includes("auto")
+    ? Object.keys(detectors)
+    : cfg.methods.filter((k) => detectors[k]);
+
+  const validSetups = [];
+  for (const k of keysToRun) {
+    const res = detectors[k]();
+    if (res && res.valid) validSetups.push(res);
+  }
+
+  if (validSetups.length === 0) return [];
+
+  // Kunci satu arah (One-Way Lock): tolak jika sinyal antar metode bentrok BUY vs SELL
+  const dirs = new Set(validSetups.map((s) => s.direction));
+  if (dirs.size > 1) return [];
+
+  validSetups.sort((a, b) => b.score - a.score);
+  const best = { ...validSetups[0] };
+
+  if (cfg.methods.includes("auto")) {
+    if (validSetups.length >= 2) {
+      best.score += 1;
+      best.checklist.push(`✔ Konfluensi ${validSetups.length} metode searah (${validSetups.map((s) => s.selectedMethodKey.toUpperCase()).join(" + ")})`);
+    }
+    best.methodKey = "auto";
+    return [best];
+  }
+
+  return validSetups;
+}
+
+async function sendTelegram(env, s, lot) {
+  const methodTitle = s.methodKey === "auto"
+    ? `AUTO → ${s.selectedMethodKey.toUpperCase()}`
+    : s.selectedMethodKey.toUpperCase();
+
+  const text = [
+    `🎯 <b>XLIAMVR SNIPER SIGNAL (v4.1)</b>`,
+    `📈 Pair: <b>${s.pair}</b> • TF: <b>${s.tf}</b> • Sesi: <b>${s.sessionName}</b>`,
+    `🧭 Arah: <b>${s.orderType}</b> (${methodTitle})`,
+    `📊 Score: <b>${s.score}</b> • RR TP1: <b>1:${s.rrTp1}</b>`,
+    `📍 Entry: <code>${s.entryFmt}</code>`,
+    `🛑 SL: <code>${s.slFmt}</code> (-${s.slPips} pips)`,
+    `✅ TP1: <code>${s.tp1Fmt}</code> (+${s.tp1Pips} pips • ${s.tp1Label})`,
+    `✅ TP2: <code>${s.tp2Fmt}</code> (+${s.tp2Pips} pips)`,
+    `✅ TP3: <code>${s.tp3Fmt}</code> (+${s.tp3Pips} pips)`,
+    `⚡ Trigger: <code>${s.trigger}</code>`,
+    `📝 <b>Konfirmasi:</b>\n${s.checklist.join("\n")}`,
+    `⚖️ Lot: <b>${lot}</b>`
+  ].join("\n");
+
+  await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN}/sendMessage`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      chat_id: env.TELEGRAM_CHAT_ID,
+      text,
+      parse_mode: "HTML"
+    })
+  });
+}
+
+function jsonResponse(data, status = 200) {
+  return new Response(JSON.stringify(data, null, 2), {
+    status,
+    headers: { "Content-Type": "application/json", ...CORS_HEADERS }
+  });
+}
